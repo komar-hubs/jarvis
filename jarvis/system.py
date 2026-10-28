@@ -722,10 +722,9 @@ def _endpoint():
     dev = AudioUtilities.GetSpeakers()
     if hasattr(dev, "EndpointVolume"):
         return dev.EndpointVolume
-    from ctypes import POINTER, cast
     from comtypes import CLSCTX_ALL
-    iface = dev.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-    return cast(iface, POINTER(IAudioEndpointVolume))
+    # QueryInterface keeps the reference count right (ctypes.cast led to a double Release, see PeakMeter)
+    return dev.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None).QueryInterface(IAudioEndpointVolume)
 
 
 def _mic_endpoint(name=""):
@@ -938,15 +937,36 @@ def idle_seconds():
 def audio_peak():
     """Current output level 0..1 of the default speakers (what is playing right now, Jarvis included). Local: a
     Windows meter read, no network."""
-    import comtypes
-    from ctypes import POINTER, cast
-    from comtypes import CLSCTX_ALL
-    from pycaw.pycaw import AudioUtilities, IAudioMeterInformation
-    comtypes.CoInitialize()
-    dev = AudioUtilities.GetSpeakers()
-    raw = getattr(dev, "_dev", dev)
-    meter = cast(raw.Activate(IAudioMeterInformation._iid_, CLSCTX_ALL, None), POINTER(IAudioMeterInformation))
-    return float(meter.GetPeakValue())
+    m = PeakMeter()
+    try:
+        return m.peak()
+    finally:
+        m.close()
+
+
+class PeakMeter:
+    """The speakers' level for a fast loop (the quick panel's reactor, ~15 reads a second). audio_peak() builds new
+    COM objects on every call, and the garbage collector then released them from other threads: an access
+    violation that took the whole process down. Here one meter is opened and released in the thread that uses it."""
+
+    def __init__(self):
+        import comtypes
+        from comtypes import CLSCTX_ALL
+        from pycaw.pycaw import AudioUtilities, IAudioMeterInformation
+        comtypes.CoInitialize()
+        self._enum = AudioUtilities.GetDeviceEnumerator()
+        self._dev = self._enum.GetDefaultAudioEndpoint(0, 1)   # eRender, eMultimedia
+        # QueryInterface, not ctypes.cast: cast makes a second pointer without AddRef, and both Release it later
+        self._m = self._dev.Activate(IAudioMeterInformation._iid_, CLSCTX_ALL, None).QueryInterface(IAudioMeterInformation)
+
+    def peak(self):
+        return float(self._m.GetPeakValue())
+
+    def close(self):
+        """Call from the same thread: the references drop here, so Release runs here."""
+        import gc
+        self._m = self._dev = self._enum = None
+        gc.collect()
 
 
 def audio_output_name():

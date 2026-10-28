@@ -189,7 +189,8 @@ function cmdEdit(id) {
   const ed = $("#cmd-editor");
   ed.innerHTML = `
     <div class="row"><div class="field" style="flex:1"><label>Название</label><input id="ce-name" value="${esc(c.name)}"></div>
-      <label class="switch" style="margin-top:14px"><input type="checkbox" id="ce-en" ${c.enabled ? "checked" : ""}><span></span>Включена</label></div>
+      <label class="switch" style="margin-top:14px"><input type="checkbox" id="ce-en" ${c.enabled ? "checked" : ""}><span></span>Включена</label>
+      <label class="switch" style="margin-top:14px" title="Кнопка на быстрой панели (Ctrl+Alt+Q) поверх любых окон и игр"><input type="checkbox" id="ce-quick" ${c.quick ? "checked" : ""}><span></span>В быстрой панели</label></div>
     <div class="field"><label>Фразы-триггеры (Enter — добавить). Название тоже срабатывает.</label><div id="ce-trig"></div></div>
     <div class="field"><label>Ответ Джарвиса (необязательно)</label><input id="ce-reply" value="${esc(c.reply || "")}" placeholder="Как пожелаете, сэр. Запускаю протокол."></div>
     <div class="field"><label>Цепочка действий</label><div class="steps" id="ce-steps"></div></div>
@@ -262,6 +263,7 @@ async function cmdSave(run) {
   c.name = $("#ce-name").value.trim() || "Без названия";
   c.reply = $("#ce-reply").value;
   c.enabled = $("#ce-en").checked;
+  c.quick = $("#ce-quick").checked;
   const isNew = c._new; delete c._new;
   if (isNew) delete c.id;
   const saved = await rpc("command_save", { cmd: c });
@@ -460,7 +462,7 @@ async function loadSettings() {
     <label>Фильтр шума (VAD)</label>${sel("s-vad", [[0, "0 — чувствительно"], [1, "1"], [2, "2 — оптимально"], [3, "3 — строго"]], c.stt.vad)}
     <label>Звук активации</label>${sw_("s-chime", c.stt.chime)}
     <label>Отладка</label>${sw_("s-ign", c.stt.show_ignored, "показывать в журнале всё услышанное")}
-    <label>Горячие клавиши</label><span style="font-size:14px"><code>${esc(c.stt.ptt_hotkey)}</code> слушать · <code>${esc(c.stt.show_hotkey)}</code> окно</span>
+    <label>Горячие клавиши</label><span style="font-size:14px"><code>${esc(c.stt.ptt_hotkey)}</code> слушать · <code>${esc(c.stt.show_hotkey)}</code> окно · <code>${esc((c.quick || {}).hotkey || "ctrl+alt+q")}</code> быстрая панель</span>
   </div></div>
 
   <div class="panel"><h3>Искусственный интеллект</h3><div class="sgrid">

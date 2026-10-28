@@ -54,6 +54,7 @@ async function maintLoad() {
   mediaRow();
   personaPanel();
   phonePanel();
+  overlaysPanel();
 }
 async function mediaRow() {
   const row = $("#media-row"); if (!row) return;

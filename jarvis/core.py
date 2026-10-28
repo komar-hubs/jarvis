@@ -206,6 +206,8 @@ class Core:
         self.backup = Backup(self)         # zip of settings, commands, plugins, notes; weekly automatic copy
         from .phone import Phone
         self.phone = Phone(self)           # Android through KDE Connect: notifications, calls, "найди телефон", SMS
+        from .quick import Quick
+        self.quick = Quick(self)           # the quick panel over any window (Ctrl+Alt+Q)
         from .extras import Extras
         self.extras = Extras(self)   # before the router: it registers voice rules of its own
         self.router = Router(self)
@@ -1760,7 +1762,8 @@ class Core:
     def rpc(self, method, p):
         fn = next((getattr(o, "rpc_" + method) for o in (self, self.extras, self.mail, self.sentinel, self.initiative,
                                                           self.people, self.watchers, self.background, self.plugins,
-                                                          self.automations, self.notebook, self.backup, self.persona, self.phone)
+                                                          self.automations, self.notebook, self.backup, self.persona, self.phone,
+                                                          self.quick)
                    if hasattr(o, "rpc_" + method)), None)
         if not fn:
             raise ValueError(f"unknown method {method}")

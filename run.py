@@ -273,7 +273,84 @@ def main():
             S.focus_window(h)  # focus (with the Alt trick): a click anywhere else then closes it (blur)
             tray_menu.evaluate_js("opened();")
 
-    core.ui_hooks = {"show": show, "hide": window.hide, "quit": shutdown, "menu_hide": menu_hide}
+    # quick panel (ui/quick.html): a full-screen HUD over any program or game on a global hotkey
+    quick = None
+    try:
+        quick = webview.create_window(
+            "JARVIS QUICK", f"{url}ui/quick.html?t={core.cfg.get('token')}", width=1280, height=720, frameless=True,
+            easy_drag=False, on_top=True, hidden=True, resizable=False, background_color="#02060b")
+    except Exception as e:
+        core.log(f"Быстрая панель: {e}", "warn")
+    # Every opening gets a number. The page passes it back when it asks to close, and a close with an old number is
+    # ignored: a hidden WebView2 page holds its timers back (up to a minute), so a close left over from the previous
+    # opening used to fire right when the panel opened again ("мелькает и закрывается").
+    qs = {"open": False, "gen": 0, "toggled": 0.0}
+    qlock = threading.Lock()
+
+    def quick_hide(gen=None, host=True):
+        if not quick:
+            return
+        with qlock:
+            if gen is not None and gen != qs["gen"]:
+                return
+            if not qs["open"]:
+                return
+            qs["open"] = False
+            core.quick.visible = False
+        if host:   # closed from here (hotkey, voice): the page stops its timers before it hides
+            try:
+                quick.evaluate_js(f"hostClosed({qs['gen']});")
+            except Exception:
+                pass
+        quick.hide()
+
+    def quick_show():
+        if not quick:
+            return
+        import json as _json
+        import win32api
+        import win32con
+        import win32gui
+        from jarvis import system as S
+        with qlock:
+            if qs["open"]:
+                return
+            qs["open"] = True
+            qs["gen"] += 1
+            gen = qs["gen"]
+        try:   # the whole monitor under the cursor, taskbar included
+            mon = win32api.MonitorFromPoint(win32api.GetCursorPos(), 2)
+            l, t, r, b = win32api.GetMonitorInfo(mon)["Monitor"]
+        except Exception:
+            l, t, r, b = 0, 0, win32api.GetSystemMetrics(0), win32api.GetSystemMetrics(1)
+        shot = core.quick.snapshot((l, t, r, b))   # before the panel covers the screen
+        quick.evaluate_js(f"prepare({_json.dumps(shot)}, {gen});")
+        quick.show()
+        core.quick.visible = True
+        h = win32gui.FindWindow(None, "JARVIS QUICK")
+        if h:   # physical pixels straight through WinAPI: pywebview's own sizes are DPI-scaled
+            win32gui.SetWindowPos(h, win32con.HWND_TOPMOST, l, t, r - l, b - t, win32con.SWP_SHOWWINDOW)
+            for _ in range(5):   # Windows sometimes refuses the first SetForegroundWindow from a background thread
+                S.focus_window(h)
+                if win32gui.GetForegroundWindow() == h:
+                    break
+                time.sleep(0.05)
+        quick.evaluate_js(f"opened({gen});")
+
+    def quick_toggle():
+        # holding the keys a bit long makes Windows repeat the hotkey: open → close in a blink. One toggle per 0.6 s.
+        now = time.time()
+        if now - qs["toggled"] < 0.6:
+            return
+        qs["toggled"] = now
+        try:
+            quick_hide() if qs["open"] else quick_show()
+        except Exception as e:
+            qs["open"] = False
+            core.log(f"Быстрая панель: {e}", "warn")
+
+    core.ui_hooks = {"show": show, "hide": window.hide, "quit": shutdown, "menu_hide": menu_hide,
+                     "quick_show": quick_show, "quick_hide": quick_hide}
 
     # tray
     try:
@@ -309,6 +386,8 @@ def main():
         keyboard.add_hotkey(core.cfg.get("stt.ptt_hotkey", "ctrl+alt+j"), lambda: core.rpc_listen())
         keyboard.add_hotkey(core.cfg.get("stt.show_hotkey", "ctrl+alt+space"),
                             lambda: show() if not window_visible() else window.hide())
+        if quick:
+            keyboard.add_hotkey(core.cfg.get("quick.hotkey", "ctrl+alt+q"), quick_toggle)
     except Exception as e:
         core.log(f"Горячие клавиши: {e}", "warn")
 
@@ -376,8 +455,9 @@ def main():
                 or core.conversation or time.time() < core.follow_until  # "говорите без имени" must be visible
             if busy:
                 last_active = time.time()
-            try:
-                main_front = win32gui.GetWindowText(win32gui.GetForegroundWindow()) == "J.A.R.V.I.S."
+            try:   # InternalGetWindowText: GetWindowText would send WM_GETTEXT to our own window and could hang it
+                from jarvis import system as S
+                main_front = S.active_title() == "J.A.R.V.I.S."
             except Exception:
                 main_front = False
             want = time.time() - last_active < 3.5 and not main_front and core.cfg.get("overlay", True)

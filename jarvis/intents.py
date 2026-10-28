@@ -434,7 +434,7 @@ class Router:
         R = self.rule
         cfg = core.cfg
         from . import (automation, background, backup, extras, mail, messenger, mouse, notes, people, persona, phone, plugins,
-                       sentinel, skills, teach, watchers)
+                       quick, sentinel, skills, teach, watchers)
 
         def addr():
             return cfg.get("user.address", "сэр") or "сэр"
@@ -451,6 +451,7 @@ class Router:
         automation.register(R, core)  # "мои автоматизации", "выключи автоматизацию …"
         backup.register(R, core)     # "сделай резервную копию"
         persona.register(R, core)    # "позови Пятницу" / "верни Джарвиса"
+        quick.register(R, core)      # "открой быструю панель"
         mail.register(R, core)    # e-mail (jarvis/mail.py)
         sentinel.register(R, core)  # "что случилось", autostart, initiative level (jarvis/sentinel.py)
         watchers.register(R, core)  # "скажи, когда выйдет новое видео у …" (jarvis/watchers.py)
