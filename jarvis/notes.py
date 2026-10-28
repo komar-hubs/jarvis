@@ -3,7 +3,6 @@
 
 Older versions kept voice notes as tasks tagged "заметка"; they are moved here once, on the first start."""
 import datetime as dt
-import re
 import threading
 import uuid
 

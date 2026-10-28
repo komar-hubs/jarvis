@@ -20,12 +20,12 @@ from .audio import Player
 from .bridges import AGENTS, TOOL_MARK, Bridges
 from .updater import Updater, current_version
 from .commands import ACTION_TYPES, SOURCE_TYPES, ChainRunner, Commands
-from .config import DATA, PROVIDERS, VOICES, Config, JsonStore
+from .config import DATA, PROVIDERS, Config, JsonStore
 from .intents import Router, normalize, wake_split
 from .llm import LLMError, list_models, stream_chat
-from .planner import MONTHS, Planner, parse_duration, parse_when, plural, say_duration, say_when
+from .planner import MONTHS, Planner, parse_duration, parse_when, plural, say_duration
 from .stt import Listener, cuda_available, list_mics, mic_access_problem
-from .tts import TTS, REF_DEFAULT, XttsEngine, ensure_reference
+from .tts import TTS, REF_DEFAULT, XttsEngine
 
 STOP_WORDS = {"стоп", "хватит", "замолчи", "тихо", "стой", "достаточно", "заткнись", "отмена", "отставить", "выключи"}
 
@@ -96,10 +96,14 @@ TOOLS_DOC = """Инструменты (поле "tool" и аргументы):
 Отслеживание (сообщу сам, когда случится):
 - watch {"kind": "youtube|twitch|page|process|download", "target": "канал / логин / url / программа",
   "text": "что должно появиться на странице (для page)"}
+Маркер на экране (показать пользователю, куда смотреть или нажать, когда объясняешь; сам ничего не нажимает):
+- highlight {"text": "кнопка Настройки", "style": "circle|box|underline|arrow|fill", "label": "Нажмите сюда"}
+  — обвести / подчеркнуть / показать стрелкой то, что на экране; {"clear": true} — убрать
 Телефон пользователя (Android через KDE Connect, если подключён):
-- phone {"action": "call|sms|ring|share|photo|status", "to": "мама или номер", "text": "…"} — call: набрать номер
+- phone {"action": "call|sms|reply|ring|share|photo|status", "to": "мама или номер", "text": "…"} — call: набрать номер
   на телефоне (откроется звонилка, нажать «позвонить» нужно на телефоне); sms: отправить SMS (сначала спроси
-  «Отправить?»); ring: заставить телефон звонить, чтобы найти; share: отправить текст или ссылку на телефон
+  «Отправить?»); reply: ответить на свежее сообщение мессенджера на телефоне (to — от кого, можно пусто: последнее;
+  Джарвис сам спросит подтверждение); ring: заставить телефон звонить, чтобы найти; share: текст или ссылку на телефон
 Фон (без мыши и клавиатуры, пользователь продолжает работать):
 - download {"url": "https://...", "name": "необязательно"} — скачать файл в Загрузки
 - cleanup {"what": "temp|ram|mail"} — почистить временные файлы, освободить память, разобрать рассылки
@@ -208,6 +212,8 @@ class Core:
         self.phone = Phone(self)           # Android through KDE Connect: notifications, calls, "найди телефон", SMS
         from .quick import Quick
         self.quick = Quick(self)           # the quick panel over any window (Ctrl+Alt+Q)
+        from .marker import Marker
+        self.marker = Marker(self)         # circles / underlines / arrows drawn over the screen
         from .extras import Extras
         self.extras = Extras(self)   # before the router: it registers voice rules of its own
         self.router = Router(self)
@@ -1263,6 +1269,8 @@ class Core:
             return bool(c)
         if name == "phone":
             return self.phone.tool_phone(a)
+        if name == "highlight":
+            return self.marker.tool_highlight(a)
         ext = getattr(self.extras, "tool_" + str(name), None)
         if ext:
             return ext(a)
@@ -1763,7 +1771,7 @@ class Core:
         fn = next((getattr(o, "rpc_" + method) for o in (self, self.extras, self.mail, self.sentinel, self.initiative,
                                                           self.people, self.watchers, self.background, self.plugins,
                                                           self.automations, self.notebook, self.backup, self.persona, self.phone,
-                                                          self.quick)
+                                                          self.quick, self.marker)
                    if hasattr(o, "rpc_" + method)), None)
         if not fn:
             raise ValueError(f"unknown method {method}")

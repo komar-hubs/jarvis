@@ -7,7 +7,6 @@ tick() every 2 s (focus, breaks, watchdog). Voice rules go into the Router befor
 import collections
 import ctypes
 import datetime as dt
-import json
 import random
 import re
 import shutil
@@ -19,8 +18,8 @@ from pathlib import Path
 import psutil
 
 from . import system as S
-from .config import DATA, JsonStore
-from .planner import parse_duration, plural, say_duration, words_to_digits
+from .config import JsonStore
+from .planner import parse_duration, plural, say_duration
 
 CREATE_NO_WINDOW = 0x08000000
 

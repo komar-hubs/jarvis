@@ -23,7 +23,6 @@ import collections
 import datetime as dt
 import fnmatch
 import os
-import re
 import threading
 import time
 import uuid

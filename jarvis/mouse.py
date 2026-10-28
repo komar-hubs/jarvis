@@ -536,11 +536,37 @@ def _reading_order(items):
     return sorted(items, key=lambda e: (round(e["rect"][1] / 14), e["rect"][0]))
 
 
-def find(spoken, near_role=None, taskbar=None, allow_ocr=True):
-    """Best on-screen target for a spoken description. Returns a dict with x, y, name, role, src or None."""
+def _variants(q):
+    """What the screen may show for a spoken label: as said, with digits ("пять и пять" -> "5.5"), in Latin
+    letters ("опус" -> "opus") and both ("Opus 5.5"). Speech has no digits and no Latin."""
+    from .planner import words_to_digits
+    from .system import translit
+    d = words_to_digits(q)
+    d = re.sub(r"(\d+)\s+(?:и|точка|запятая)\s+(\d+)", r"\1.\2", d)
+    out = []
+    for v in (q, d, translit(q), translit(d)):
+        v = _norm(v)
+        if v and v not in out:
+            out.append(v)
+    return out
+
+
+def find(spoken, near_role=None, taskbar=None, allow_ocr=True, small=False):
+    """Best on-screen target for a spoken description. Returns a dict with x, y, name, role, src or None.
+    small: prefer tight targets (the marker draws around the rectangle: a whole panel named alike is wrong)."""
     q, roles, nth = parse_target(spoken)
     roles = roles or (near_role or set())
     qn = _norm(q)
+    qvs = _variants(q) if qn else []
+
+    def best_score(name):
+        return max((score(v, name) for v in qvs), default=0)
+
+    def size_penalty(e):
+        if not small or not e.get("rect"):
+            return 0
+        l, t, r, b = e["rect"]
+        return 22 if (b - t) > 160 or (r - l) > 900 else 8 if (b - t) > 80 else 0
     want_taskbar = taskbar if taskbar is not None else bool(re.search(r"панел\w*\s+задач|трей|пуск", spoken.lower()))
     with physical():
         fg = foreground()
@@ -574,9 +600,10 @@ def find(spoken, near_role=None, taskbar=None, allow_ocr=True):
 
         scored = []
         for e in els:
-            s = max(score(qn, e["name"]), score(qn, e.get("aid", "")) - 10)
+            s = max(best_score(e["name"]), best_score(e.get("aid", "")) - 10)
             if s <= 0:
                 continue
+            s -= size_penalty(e)
             if roles:
                 s += 6 if e["role"] in roles else -18
             if e["role"] == "text":
@@ -587,7 +614,7 @@ def find(spoken, near_role=None, taskbar=None, allow_ocr=True):
         best = max((s for s, _ in scored), default=0)
         if allow_ocr and best < 88:
             for c in _ocr_candidates():
-                s = score(qn, c["name"]) - (2 if c.get("word") else 0)
+                s = best_score(c["name"]) - (2 if c.get("word") else 0)
                 if roles and not roles & {"link", "button", "listitem", "menuitem", "tab"}:
                     s -= 10
                 if s > 0:

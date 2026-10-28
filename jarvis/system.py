@@ -1234,8 +1234,7 @@ def find_files(query, limit=12, timeout=5.0):
 
 
 def _walk_files(query, limit=12, timeout=5.0):
-    """Fuzzy file search in the user's folders (Desktop, Documents, Downloads, media) and other drives' roots."""
-    from rapidfuzz import fuzz
+    """File search by name in the user's folders (Desktop, Documents, Downloads, media) and other drives' roots."""
     q = query.lower().strip()
     qt = translit(q)
     roots = [Path.home() / d for d in ("Desktop", "Documents", "Downloads", "Pictures", "Videos", "Music")]
@@ -1251,7 +1250,6 @@ def _walk_files(query, limit=12, timeout=5.0):
                 dirs[:] = []
             for name in files + dirs:
                 low = name.lower()
-                stem = os.path.splitext(low)[0]
                 if q in low or qt in low:
                     score = 100 - len(low) / 10
                 elif q.replace("ё", "е") in low.replace("ё", "е"):

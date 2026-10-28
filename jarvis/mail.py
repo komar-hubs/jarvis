@@ -5,7 +5,6 @@ Voice: "проверь почту", "прочитай последнее пис�
 Sending always asks "Отправить?" first. New mail is checked in the background; an important letter (from someone
 you wrote to, a VIP, or "срочно" in the subject) makes Jarvis speak up and offer to read it, everything else only
 counts. Passwords stay in data/config.json and never go to the interface."""
-import datetime as dt
 import email
 import email.header
 import email.utils

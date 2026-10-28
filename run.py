@@ -11,6 +11,11 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 os.chdir(ROOT)
 
+# two library warnings printed into the log on every start, with nothing for the user to do about them
+os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
+import warnings  # noqa: E402
+warnings.filterwarnings("ignore", message="TypedStorage is deprecated")
+
 # before any window exists: window calls that cannot deadlock against the WebView GUI thread (jarvis/winsafe.py)
 from jarvis import winsafe  # noqa: E402
 winsafe.install()
@@ -257,10 +262,12 @@ def main():
     def menu_show():
         import ctypes
         from ctypes import wintypes
+        # a private handle: another library once set argtypes on the shared ctypes.windll.user32 and this failed
+        u32 = ctypes.WinDLL("user32")
         pt = wintypes.POINT()
-        ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
+        u32.GetCursorPos(ctypes.byref(pt))
         wa = wintypes.RECT()
-        ctypes.windll.user32.SystemParametersInfoW(0x30, 0, ctypes.byref(wa), 0)  # work area (without the taskbar)
+        u32.SystemParametersInfoW(0x30, 0, ctypes.byref(wa), 0)  # work area (without the taskbar)
         x = max(wa.left + 6, min(pt.x - MW + 14, wa.right - MW - 6))
         y = pt.y - MH - 8 if pt.y - MH - 8 >= wa.top else pt.y + 8   # above the cursor; below when the taskbar is on top
         y = max(wa.top + 6, min(y, wa.bottom - MH - 6))

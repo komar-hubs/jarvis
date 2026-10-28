@@ -16,7 +16,6 @@ import collections
 import ctypes
 import datetime as dt
 import hashlib
-import json
 import os
 import re
 import socket
@@ -380,7 +379,6 @@ class Sentinel:
                                  f"закрыть её?", priority=3, on_yes=kill, cooldown_min=12 * 60)
 
     def _hung_windows(self):
-        import win32gui
         import win32process
         now = time.time()
         alive = set()

@@ -188,6 +188,12 @@ def split_chain(raw):
     """One phrase -> ordered steps (strings in the user's words). One step -> [raw]."""
     text, keep = _protect_quotes(raw.strip())
     text = LEAD.sub("", text.strip(), count=1) if LEAD.match(text.lower()) else text
+    # "открой телеграм, давай": the go-ahead at the end is not part of the command ("телеграм, давай" is no app)
+    head = re.sub(r"[,\s]+(?:ну\s+)?(?:делай|сделай|давай|выполняй|действуй|жми|го)(?:\s+так|\s+это)?[\s.!]*$", "", text,
+                  flags=re.I)
+    cut = head != text and bool(head.strip()) and _starts_command(head)
+    if cut:
+        text = head
     steps = []
     for chunk in STRONG.split(text):
         chunk = chunk.strip(" ,")
@@ -200,6 +206,12 @@ def split_chain(raw):
                 continue
             nxt = chunk[m.end():]
             cur = chunk[start:m.start()].strip(" ,").lower()
+            # "вот так, делай", "открой телеграм, давай": a lone "делай / давай" is a go-ahead, not a step of its own
+            if re.fullmatch(r"\s*(?:ну\s+)?(?:делай|сделай|давай|выполняй|действуй|продолжай|жми|го)(?:\s+так|\s+это)?[\s.!]*", nxt.lower()):
+                continue
+            # "мне скучно, включи музыку": the first part is not a command, so this is one request for the AI
+            if start == 0 and not _starts_command(cur):
+                continue
             if TEXT_VERB.match(cur):
                 # inside text to write ("напиши маме привет и скажи, что я опоздаю") only a clear next action splits
                 if not AFTER_TEXT.match(nxt.strip().lower()):
@@ -210,7 +222,7 @@ def split_chain(raw):
         pieces.append(chunk[start:])
         steps += [LEAD.sub("", p.strip(" ,")) for p in pieces if p.strip(" ,")]
     steps = [_restore(s, keep) for s in steps]
-    return steps if len(steps) > 1 else [raw]
+    return steps if len(steps) > 1 else [_restore(text, keep) if cut else raw]
 
 
 PLACE_WORDS = (r"(?:в|во)\s+(?:(?:нов\w+|этом|этот|эту|том|открыт\w+|пуст\w+|перв\w+|последн\w+|активн\w+)\s+)?"

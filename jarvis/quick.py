@@ -9,13 +9,6 @@ import io
 import re
 import threading
 
-ACTIONS = {
-    "play": "Пауза / играть", "next": "Следующий трек", "prev": "Предыдущий трек", "mute": "Без звука",
-    "screenshot": "Скриншот", "lock": "Заблокировать ПК", "sleep": "Режим сна Джарвиса", "talk": "Режим разговора",
-    "focus25": "Фокус 25 минут", "listen": "Слушать команду", "phone_ring": "Найти телефон",
-    "phone_clip": "Буфер на телефон", "persona": "Следующая личность",
-    "window": "Открыть Джарвиса",
-}
 PERSONA_ORDER = ["jarvis", "friday", "ultron"]
 
 

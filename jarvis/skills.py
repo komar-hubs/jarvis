@@ -10,7 +10,6 @@ import math
 import operator
 import random
 import re
-import shutil
 import threading
 import time
 import xml.etree.ElementTree as ET
@@ -698,7 +697,7 @@ def register(R, core):
         if rs:
             parts.append("; ".join(f"в {r['at'][11:16]} — {r['text']}" for r in rs[:4]))
         if ts:
-            parts.append(f"задачи: " + ", ".join(x["text"] for x in ts[:4]))
+            parts.append("задачи: " + ", ".join(x["text"] for x in ts[:4]))
         return f"На {word}: " + ". ".join(parts) + "."
 
     @R(r"^(?:добавь|запиши|создай|поставь|назначь|запланируй)\s+(?:в\s+календарь\s+)?(встреч\w*|событи\w*|мероприяти\w*|созвон\w*|звонок|приём|прием|"

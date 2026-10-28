@@ -32,7 +32,13 @@ RULES = {"silent": "Молчать", "name": "Сказать, от кого", "a
 NOISE_RX = re.compile(r"(?i)скидк|акци[яи]|распродаж|промокод|кешб[эе]к|кэшб[эе]к|бонус|выгодн|спецпредложени|реклам|"
                       r"\bsale\b|\boffer\b|\d+\s*%|скачивани|загрузка\s|загружено|обновлени[ея]\s+(?:доступно|установлено)|"
                       r"синхронизац|резервн\w+\s+копи|работает\s+в\s+фоне|запущен[оа]?\s+в\s+фоне|vpn|подключено\s+к|"
-                      r"usb|зарядк|заряжается|батаре|погода\s+на|шагов|экран\s+включ")
+                      r"usb|зарядк|заряжается|батаре|погода\s+на|шагов|экран\s+включ|"
+                      r"приложение\s+устарел|обновите\s+приложени")
+PROMO_RX = re.compile(r"(?i)играй\s+сейчас|играть\s+сейчас|сыграй|вернись\s+в\s+игру|возвращайся\s+в\s+игру|"
+                      r"забери\s+(?:награду|подарок|бонус)|награда\s+(?:ждёт|ждет|готова)|бесплатн\w+\s+(?:спин|попытк|жизн)|"
+                      r"энерги[яи]\s+(?:восстановлен|полн)|новый\s+уровень|тебя\s+ждут?|не\s+пропусти")
+# emoji in a notification are read as nonsense and break the "no system emoji" look of the HUD
+EMOJI_RX = re.compile("[\U0001F000-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF\uFE0F\u200D\u20E3]+")
 NOISE_APPS = ["Google", "Play Маркет", "Galaxy Store", "GetApps", "Security", "Безопасность", "Темы", "Themes",
               "Погода", "Weather", "Часы", "Clock", "Mi Fit", "Zepp", "Яндекс Маркет", "Ozon", "Wildberries", "AliExpress"]
 
@@ -109,6 +115,7 @@ class KdeBus:
             return
         bus = await MessageBus(bus_address=f"tcp:host=127.0.0.1,port={port}", auth=AuthSid(self._sid())).connect()
         self.bus = bus
+        self.loop = asyncio.get_running_loop()
         await bus.call(Message(destination="org.freedesktop.DBus", path="/org/freedesktop/DBus", interface="org.freedesktop.DBus",
                                member="AddMatch", signature="s", body=[f"type='signal',interface='{self.IFACE}'"]))
 
@@ -161,11 +168,30 @@ class KdeBus:
                 self.phone._from_bus(props, True)
 
 
+    def send_reply(self, dev, reply_id, message):
+        """Answer a messenger notification on the phone (its own "Reply" field): KDE Connect's sendReply."""
+        import asyncio
+        from dbus_next import Message, MessageType
+        if not self.ok or not self.bus or not getattr(self, "loop", None):
+            raise RuntimeError("нет связи с KDE Connect")
+
+        async def go():
+            return await self.bus.call(Message(destination="org.kde.kdeconnect.daemon",
+                                               path=f"/modules/kdeconnect/devices/{dev}/notifications",
+                                               interface=self.IFACE, member="sendReply", signature="ss",
+                                               body=[reply_id, message]))
+        r = asyncio.run_coroutine_threadsafe(go(), self.loop).result(timeout=10)
+        if r.message_type != MessageType.METHOD_RETURN:
+            raise RuntimeError(str(r.body[0] if r.body else r.error_name))
+        return True
+
+
 class Phone:
     def __init__(self, core):
         self.core = core
         self.cfg = core.cfg
         self.recent = collections.deque(maxlen=40)
+        self.repliable = collections.deque(maxlen=20)   # messenger notifications with a "Reply" field on the phone
         self.seen = None              # notification lines already on the phone (None = not looked yet)
         self.devices = []             # [{"id", "name", "reachable"}]
         self._dev_t = 0
@@ -271,6 +297,10 @@ class Phone:
             return                       # seen already (by the signal or the 3 s check), or re-sent without changes
         self._last_text[nid] = (title, text)
         body = f"{title}: {text}" if title and title.lower() != app.lower() and text else (text or title)
+        rid = str(d.get("replyId") or "")
+        if rid:   # the phone offers "Reply" on it: Jarvis can answer by voice ("ответь, что буду через 10 минут")
+            self.repliable.appendleft({"app": app, "who": title if title.lower() != app.lower() else app,
+                                       "text": text, "reply_id": rid, "t": time.time()})
         self._new(f"{app}: {body}", quiet=bool(d.get("silent")))
 
     @staticmethod
@@ -283,7 +313,10 @@ class Phone:
             return name
         out = []
         for w in words:
-            p = next((p for p in m.parse(w) if {"Name", "Surn", "Patr"} & set(str(p.tag).replace(" ", ",").split(","))), None)
+            ps = m.parse(w)
+            p = next((p for p in ps if {"Name", "Surn", "Patr"} & set(str(p.tag).replace(" ", ",").split(","))), None)
+            if p is None and len(words) == 1 and ps and ps[0].tag.POS == "NOUN" and "nomn" in ps[0].tag:
+                p = ps[0]                 # "Мама" -> "мамы", "Шеф" -> "шефа": contacts saved by role
             g = p.inflect({"gent"}) if p else None
             if not g:
                 return name
@@ -302,7 +335,8 @@ class Phone:
             return rules[app.lower()], "правило"
         if self._is(app, self.cfg.get("phone.mute") or MUTE_DEFAULT):
             return "silent", "системное"
-        if self.cfg.get("phone.filter", True) and (self._is(app, NOISE_APPS) or NOISE_RX.search(text)):
+        if self.cfg.get("phone.filter", True) and (self._is(app, NOISE_APPS) or NOISE_RX.search(text)
+                                                   or (not self._is(app, MESSENGERS) and PROMO_RX.search(text))):
             return "silent", "неважное"
         if self._is(app, MESSENGERS):
             return self.cfg.get("phone.messenger_rule", "ask"), "мессенджер"
@@ -310,7 +344,7 @@ class Phone:
 
     def _new(self, line, quiet=False):
         app, _, text = line.partition(": ")
-        app, text = app.strip(), text.strip()
+        app, text = EMOJI_RX.sub("", app).strip(), re.sub(r"\s{2,}", " ", EMOJI_RX.sub("", text)).strip()
         call = CALL_RX.search(line) or (app.lower().startswith(DIALERS) and text)
         # the phone's "silent" mark is not used: messengers set it when they add a message to a chat's notification
         rule, why = ("call", "") if call else self.rule_for(app, text)
@@ -328,6 +362,9 @@ class Phone:
             return
         # "Иван: привет" -> the sender is the part before the first colon, when there is one
         who, _, body = text.partition(": ") if ": " in text[:60] else ("", "", text)
+        messenger = self._is(app, MESSENGERS)
+        if not messenger:   # a game's "Играй сейчас" or a bank's "Приложение устарело" is a title, not a sender
+            who, body = "", text.replace(": ", ". ", 1)
         frm = f" от {self._gent(who.strip())}" if who.strip() else ""
         # priority 3: the user chose these rules, so they are said even at "говорить первым: о важном" (2 was only
         # shown, and with no toast nothing happened at all). One sender: once per 30 s — a chat sends several updates
@@ -336,11 +373,12 @@ class Phone:
             self.core.initiative.propose(f"phone:{line}", f"{app}{frm}: {body}", priority=3, title=f"Телефон · {app}", cooldown_min=0, kind="phone")
         elif rule == "ask":
             # the text stays on the phone until "да": no toast with it either
-            self.core.initiative.propose(key, f"Сообщение в {app}{frm}. Прочитать?", priority=3, title=f"Телефон · {app}",
+            self.core.initiative.propose(key, f"Сообщение в {app}{frm}. Прочитать?" if messenger else
+                                         f"Уведомление от {app}. Прочитать?", priority=3, title=f"Телефон · {app}",
                                          on_yes=lambda: self.core.say(body or "Текста нет."), cooldown_min=0.5, toast=False, kind="phone")
         else:
-            self.core.initiative.propose(key, f"На телефоне сообщение в {app}{frm}." if self._is(app, MESSENGERS)
-                                         else f"На телефоне уведомление от {app}{frm}.", priority=3, title=f"Телефон · {app}",
+            self.core.initiative.propose(key, f"На телефоне сообщение в {app}{frm}." if messenger
+                                         else f"На телефоне уведомление от {app}.", priority=3, title=f"Телефон · {app}",
                                          cooldown_min=0.5, toast=False, kind="phone")
 
     # ---------------------------------------------------------------- actions
@@ -412,6 +450,12 @@ class Phone:
             # never sent straight from the AI: the user says "да" first (the AI once sent one on its own)
             self.core.ask_confirm(lambda: self.core.say(self.sms(number, text)), f"Отправить SMS {name}: «{text}»?")
             return "спросил подтверждение — отправлю после «да»"
+        if act == "reply":
+            target = self.reply_target(to)
+            if not target:
+                raise LookupError("нечему отвечать: нет свежих сообщений с кнопкой «Ответить»" + (f" от «{to}»" if to else ""))
+            self.ask_reply(target, text)
+            return "спросил подтверждение — отвечу после «да»"
         if act == "ring":
             return self.ring()
         if act == "share":
@@ -421,7 +465,61 @@ class Phone:
         if act == "status":
             d = self.device() if self.devices else None
             return {"подключён": bool(d), "телефон": (d or {}).get("name"), "контакты": sorted((self.cfg.get("phone.contacts") or {}))}
-        raise ValueError("action: call | sms | ring | share | photo | status")
+        raise ValueError("action: call | sms | reply | ring | share | photo | status")
+
+    # ---------------------------------------------------------------- answering a message by voice
+    def reply_target(self, who=""):
+        """The message to answer: the latest one (half an hour at most), or the latest from "who" ("Ване" ~ "Ваня")."""
+        fresh = [r for r in self.repliable if time.time() - r["t"] < 1800]
+        if not who:
+            return fresh[0] if fresh else None
+        from rapidfuzz import fuzz
+        w = who.lower().replace("ё", "е")
+        stem = w[:max(3, len(w) - 2)]          # "ване" / "ваню" / "ваня" -> "ван"
+        best, score = None, 0
+        for r in fresh:
+            name = r["who"].lower().replace("ё", "е")
+            s = 100 if stem in name else fuzz.partial_ratio(w, name)
+            if s > score:
+                best, score = r, s
+        return best if score >= 75 else None
+
+    def ask_reply(self, target, text):
+        """Never sent without "да": speech recognition slips, and the message goes out in the user's name."""
+        text = text.strip().strip("«»\"").strip()
+        if not text:
+            raise ValueError("что ответить?")
+        dev = (self.device() or {}).get("id")
+        if not dev:
+            raise RuntimeError("телефон не подключён")
+
+        def send():
+            try:
+                self.bus.send_reply(dev, target["reply_id"], text)
+                self.core.say(f"Ответил {self._dat(target['who'])}.")
+            except Exception as e:
+                self.core.say(f"Не получилось ответить: {e}")
+        self.core.ask_confirm(send, f"Ответить {self._dat(target['who'])} в {target['app']}: «{text}»?")
+
+    @staticmethod
+    def _dat(name):
+        """"Ваня" -> "Ване" for "ответить …"; anything that is not a person's name stays as it is."""
+        from .nlu import morph
+        m = morph()
+        words = name.split()
+        if not m or not 0 < len(words) <= 3:
+            return name
+        out = []
+        for w in words:
+            ps = m.parse(w)
+            p = next((p for p in ps if {"Name", "Surn", "Patr"} & set(str(p.tag).replace(" ", ",").split(","))), None)
+            if p is None and len(words) == 1 and ps and ps[0].tag.POS == "NOUN" and "nomn" in ps[0].tag:
+                p = ps[0]                 # "Мама" -> "маме", "Шеф" -> "шефу": contacts saved by role
+            g = p.inflect({"datv"}) if p else None
+            if not g:
+                return name
+            out.append(g.word.capitalize() if w[:1].isupper() else g.word)
+        return " ".join(out)
 
     # ---------------------------------------------------------------- connecting by IP
     @staticmethod
@@ -609,6 +707,43 @@ def register(R, core):
         if not number:
             return f"Не знаю номер «{who}». Добавьте его в Настройки → Телефон → контакты для SMS."
         core.ask_confirm(lambda: do(lambda: PH().sms(number, text)), f"Отправить SMS {name}: «{text}»?")
+        return True
+
+    @R(r"^(?:ответь|ответить|напиши\s+в\s+ответ)(?:\s+(?!на\s+(?:это\s+|последнее\s+)?письмо|на\s+выделен|на\s+вопрос)(.+))?$")
+    def _reply(m, t):
+        """"ответь, что буду через 10 минут", "ответь Ване: ок" — the answer goes into the messenger on the phone."""
+        ph, rest = PH(), (m.group(1) or "").strip(" ,:")
+        if not ph.repliable:
+            return False                  # nothing from the phone to answer: maybe it is about mail or the AI
+        who = ""
+        mm = re.match(r"^(?:ему|ей|им|в\s+ответ)(?:[\s,:]+|$)", rest)
+        if mm:
+            rest = rest[mm.end():]
+        else:                             # "ответь ване что буду" — a sender's name first?
+            first = re.match(r"^([а-яёa-z-]{3,})(?:\s+|$)", rest, re.I)
+            if first and ph.reply_target(first.group(1)):
+                who, rest = first.group(1), rest[first.end():]
+        text = re.sub(r"^(?:что|мол|:)\s*", "", rest.strip(" ,:"), flags=re.I).strip()
+        target = ph.reply_target(who)
+        if not target:
+            return False
+        mail = getattr(core, "mail", None)
+        if mail is not None and getattr(mail, "current", None) and getattr(mail, "current_at", 0) > target["t"]:
+            return False                  # the e-mail was read after this message: "ответь" is about the e-mail
+        if not text:
+            def take(raw):
+                try:
+                    ph.ask_reply(target, raw)
+                except Exception as e:
+                    core.say(f"Не получилось: {e}")
+            core.say(f"Что ответить {ph._dat(target['who'])}?")
+            core.capture = (take, time.time() + 25)
+            core.listen_next(25)
+            return True
+        try:
+            ph.ask_reply(target, text)
+        except Exception as e:
+            return f"Не получилось: {e}"
         return True
 
     @R(rf"^(?:что|какие\s+уведомления)\s+(?:нового\s+)?на\s+{PHONE}$|^(?:прочитай\s+)?уведомления\s+(?:с\s+)?{PHONE}$")

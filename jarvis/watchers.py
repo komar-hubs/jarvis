@@ -12,7 +12,6 @@ import time
 import uuid
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from urllib.parse import quote_plus
 
 import psutil
 import requests

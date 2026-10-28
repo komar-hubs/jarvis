@@ -1,6 +1,5 @@
 """Fast rule-based intent router (no LLM needed). Anything not matched goes to the AI chat."""
 import datetime as dt
-import os
 import random
 import re
 import threading
@@ -149,8 +148,8 @@ class Router:
             core.say(f"Сделаю {say_when(when)}: {cmd}.")
             return True
         parts = nlu.split_chain(body)
-        if len(parts) == 1:
-            return self.handle(raw)
+        if len(parts) == 1:   # split_chain may have dropped a trailing "давай" from it
+            return self.handle(raw if parts[0] == body else parts[0])
         core.log(f"Цепочка из {len(parts)} шагов: " + " → ".join(parts))
         core.emit("chain", steps=parts, at=0)
         gen = core.cancel_gen
@@ -434,7 +433,7 @@ class Router:
         R = self.rule
         cfg = core.cfg
         from . import (automation, background, backup, extras, mail, messenger, mouse, notes, people, persona, phone, plugins,
-                       quick, sentinel, skills, teach, watchers)
+                       marker, quick, sentinel, skills, teach, watchers)
 
         def addr():
             return cfg.get("user.address", "сэр") or "сэр"
@@ -452,6 +451,7 @@ class Router:
         backup.register(R, core)     # "сделай резервную копию"
         persona.register(R, core)    # "позови Пятницу" / "верни Джарвиса"
         quick.register(R, core)      # "открой быструю панель"
+        marker.register(R, core)     # "обведи кнопку Отправить", "покажи где настройки"
         mail.register(R, core)    # e-mail (jarvis/mail.py)
         sentinel.register(R, core)  # "что случилось", autostart, initiative level (jarvis/sentinel.py)
         watchers.register(R, core)  # "скажи, когда выйдет новое видео у …" (jarvis/watchers.py)
@@ -717,7 +717,7 @@ class Router:
         @R(r"^(?:скрой|спрячь)\s+(.+)$", generic=True)
         def _hidewin(m, t):
             n = S.window_action(m.group(1).strip(), "hide")
-            return f"Скрыл. Скажите «покажи скрытые окна», чтобы вернуть." if n else "Не нашёл такое окно."
+            return "Скрыл. Скажите «покажи скрытые окна», чтобы вернуть." if n else "Не нашёл такое окно."
 
         @R(r"^(?:покажи|верни)\s+(?:скрытые|спрятанные)\s*(?:окна)?$")
         def _showhidden(m, t):
