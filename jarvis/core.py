@@ -570,6 +570,12 @@ class Core:
                 return
             self._dictate(re.sub(r"^\W*(?:джарвис|jarvis)\W*", "", text, flags=re.I) if woke else text, norm)
             return
+        if getattr(self.phone, "searching", False) and re.search(
+                r"\b(?:нашел|нашла|нашелся|нашлась|нашли|хватит|стоп|стой|все|тут|вот\s+он)\b", (norm or "").replace("ё", "е")):
+            # "найди телефон" is ringing: the user is walking around the room, "нашёл" works without the name
+            self.phone.stop_search()
+            self.say("Отлично, сэр.")
+            return
         if norm in STOP_WORDS and (woke or self.alarm_active):
             self.stop_all()
             self.clear_notice()

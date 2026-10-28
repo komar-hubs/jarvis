@@ -23,6 +23,9 @@ MUTE_DEFAULT = ["KDE Connect", "Android System", "Система Android", "Goog
 MESSENGERS = ["Telegram", "WhatsApp", "Viber", "VK", "ВКонтакте", "VK Мессенджер", "Discord", "Signal", "MAX", "Skype",
               "Snapchat", "Instagram", "Messenger", "WeChat", "Element", "Тамтам", "TamTam",
               "WilliGram", "Nekogram", "Plus Messenger", "Telegram X", "Forkgram", "AyuGram", "Cherrygram", "Nicegram"]
+# the phone's own SMS app: a message from a person, answered by SMS when the notification has no "Reply" field
+SMS_APPS = ["Сообщения", "Messages", "Google Messages", "SMS", "СМС", "Сообщения Samsung", "Samsung Messages", "Mi Сообщения"]
+MESSENGERS += SMS_APPS
 # shown in Settings even before the phone sent anything, so rules can be set up front
 POPULAR = ["MAX", "Telegram", "WhatsApp", "VK", "Discord", "Viber", "Instagram", "Gmail", "Почта", "Сбербанк", "Т-Банк",
            "Госуслуги", "YouTube"]
@@ -161,9 +164,10 @@ class KdeBus:
             if p.message_type != MessageType.METHOD_RETURN or not p.body:
                 continue
             props = {k: v.value for k, v in p.body[0].items()} | {"id": nid}
-            if baseline:                  # already on the phone when Jarvis connected: not news
+            if baseline:                  # already on the phone when Jarvis connected: not news, but can be answered
                 self.phone._last_text[str(props.get("internalId") or nid)] = (str(props.get("title") or "").strip(),
                                                                               str(props.get("text") or "").strip())
+                self.phone._remember_reply(props)
             else:
                 self.phone._from_bus(props, True)
 
@@ -191,7 +195,8 @@ class Phone:
         self.core = core
         self.cfg = core.cfg
         self.recent = collections.deque(maxlen=40)
-        self.repliable = collections.deque(maxlen=20)   # messenger notifications with a "Reply" field on the phone
+        self.repliable = collections.deque(maxlen=20)
+        self.searching = False                         # "найди телефон": ringing again and again until found   # messenger notifications with a "Reply" field on the phone
         self.seen = None              # notification lines already on the phone (None = not looked yet)
         self.devices = []             # [{"id", "name", "reachable"}]
         self._dev_t = 0
@@ -297,11 +302,25 @@ class Phone:
             return                       # seen already (by the signal or the 3 s check), or re-sent without changes
         self._last_text[nid] = (title, text)
         body = f"{title}: {text}" if title and title.lower() != app.lower() and text else (text or title)
-        rid = str(d.get("replyId") or "")
-        if rid:   # the phone offers "Reply" on it: Jarvis can answer by voice ("ответь, что буду через 10 минут")
-            self.repliable.appendleft({"app": app, "who": title if title.lower() != app.lower() else app,
-                                       "text": text, "reply_id": rid, "t": time.time()})
+        self._remember_reply(d, live=True)
         self._new(f"{app}: {body}", quiet=bool(d.get("silent")))
+
+    def _remember_reply(self, d, live=False):
+        """A message Jarvis can answer by voice: the phone offers "Reply" on it (replyId), or it is an SMS
+        (answered by SMS to the sender's number from the contacts)."""
+        app = EMOJI_RX.sub("", str(d.get("appName") or "")).strip()
+        title = EMOJI_RX.sub("", str(d.get("title") or "")).strip()
+        rid = str(d.get("replyId") or "")
+        sms = self._is(app, SMS_APPS)
+        if not (rid or sms) or not title or title.lower() == app.lower():
+            return
+        nid = str(d.get("internalId") or d.get("id") or "")
+        for r in list(self.repliable):
+            if r.get("nid") == nid:
+                self.repliable.remove(r)
+        self.repliable.appendleft({"app": "SMS" if sms else app, "who": title, "text": str(d.get("text") or ""),
+                                   "reply_id": rid, "sms": sms and not rid, "nid": nid, "t": time.time(),
+                                   "live": live})   # live: arrived while Jarvis was on (and was announced)
 
     @staticmethod
     def _gent(name):
@@ -373,18 +392,95 @@ class Phone:
             self.core.initiative.propose(f"phone:{line}", f"{app}{frm}: {body}", priority=3, title=f"Телефон · {app}", cooldown_min=0, kind="phone")
         elif rule == "ask":
             # the text stays on the phone until "да": no toast with it either
-            self.core.initiative.propose(key, f"Сообщение в {app}{frm}. Прочитать?" if messenger else
+            self.core.initiative.propose(key, f"SMS{frm}. Прочитать?" if self._is(app, SMS_APPS) else
+                                         f"Сообщение в {app}{frm}. Прочитать?" if messenger else
                                          f"Уведомление от {app}. Прочитать?", priority=3, title=f"Телефон · {app}",
                                          on_yes=lambda: self.core.say(body or "Текста нет."), cooldown_min=0.5, toast=False, kind="phone")
         else:
-            self.core.initiative.propose(key, f"На телефоне сообщение в {app}{frm}." if messenger
+            self.core.initiative.propose(key, f"На телефоне SMS{frm}." if self._is(app, SMS_APPS) else
+                                         f"На телефоне сообщение в {app}{frm}." if messenger
                                          else f"На телефоне уведомление от {app}.", priority=3, title=f"Телефон · {app}",
                                          cooldown_min=0.5, toast=False, kind="phone")
 
     # ---------------------------------------------------------------- actions
+    def _ring_once(self, dev, tries=3):
+        """One ring that survives a dropped link: HyperOS/MIUI puts KDE Connect to sleep, the phone's "findmyphone"
+        then vanishes from the bus for a few seconds ("No such object path"). Reconnect and try again."""
+        last = None
+        for i in range(tries):
+            try:
+                out = self.cli("-d", dev, "--ring")
+                if not re.search(r"(?i)error|no such object|not reachable|не на связи", out):
+                    # HyperOS keeps "Find my phone" silent until its notification is tapped; a ping is an ordinary
+                    # notification with the phone's notification sound, so something is heard every cycle
+                    try:
+                        self.cli("-d", dev, "--ping-msg", "Джарвис ищет телефон", timeout=8)
+                    except Exception:
+                        pass
+                    return True
+                last = out.strip()
+            except Exception as e:
+                last = str(e)
+            if i < tries - 1:
+                try:
+                    self.cli("--refresh", timeout=8)          # look for the phone again and re-establish the link
+                except Exception:
+                    pass
+                time.sleep(3)
+                self._dev_t = 0                              # the device list is stale now
+        raise RuntimeError(last or "телефон не отвечает")
+
     def ring(self):
-        self.cli("-d", self._dev(), "--ring")
-        return "Звоню на телефон."
+        """"Найди телефон": one ring is a short beep on many phones (MIUI) — not enough to find it under a cushion.
+        It rings again every 8 s for up to 2 minutes, until "нашёл" / "стоп" (no name needed while searching)."""
+        if self.searching:
+            return "Уже звоню на телефон. Скажите «нашёл», когда найдёте."
+        try:
+            dev = self._dev()
+            self._ring_once(dev)                      # the first ring right away: a failure is told to the user
+        except Exception as e:
+            self.core.log(f"Поиск телефона: {e}", "warn")
+            return ("Телефон сейчас не на связи с KDE Connect, сэр: похоже, система телефона его усыпила. "
+                    "Откройте KDE Connect на телефоне или разрешите ему работать в фоне без ограничений.")
+        self.searching = True
+        gen = self.core.cancel_gen
+
+        def loop():
+            t0, fails, told = time.time(), 0, False
+            try:
+                while self.searching and gen == self.core.cancel_gen and time.time() - t0 < 120:
+                    for _ in range(16):
+                        if not self.searching or gen != self.core.cancel_gen:
+                            return
+                        time.sleep(0.5)
+                    try:
+                        self._ring_once(dev, tries=2)
+                        fails = 0
+                    except Exception as e:      # a dropped link is not the end of the search: keep trying
+                        fails += 1
+                        self.core.log(f"Поиск телефона: {e}", "warn")
+                        if fails >= 3 and not told:
+                            told = True
+                            self.core.say("Телефон пропал со связи, сэр. Продолжаю пытаться.")
+            finally:
+                self.searching = False
+        threading.Thread(target=loop, daemon=True, name="find-phone").start()
+        return "Звоню на телефон. Скажите «нашёл», когда найдёте. Если не слышно — «найди телефон через гугл»."
+
+    def find_google(self):
+        """Google's Find My Device rings at full volume even on silent: the sure way when KDE Connect only posts
+        a notification. The user presses "Прозвонить" on the page (signed in with the phone's Google account)."""
+        import webbrowser
+        webbrowser.open("https://www.google.com/android/find")
+        return "Открыл «Найти устройство» от Google, сэр. Нажмите «Прозвонить» — телефон зазвонит на полную громкость, даже на беззвучном."
+
+    def stop_search(self):
+        was, self.searching = self.searching, False
+        return was
+
+    def rpc_phone_find(self, on=True):
+        """The quick panel / Settings button: start or stop ringing the phone."""
+        return self.ring() if on else ("Перестал звонить." if self.stop_search() else "Не звонил.")
 
     def share_text(self, text):
         text = text.strip()
@@ -468,9 +564,10 @@ class Phone:
         raise ValueError("action: call | sms | reply | ring | share | photo | status")
 
     # ---------------------------------------------------------------- answering a message by voice
-    def reply_target(self, who=""):
-        """The message to answer: the latest one (half an hour at most), or the latest from "who" ("Ване" ~ "Ваня")."""
-        fresh = [r for r in self.repliable if time.time() - r["t"] < 1800]
+    def reply_target(self, who="", max_age=1800, live_only=False):
+        """The message to answer: the latest one (half an hour at most), or the latest from "who" ("Ване" ~ "Ваня").
+        live_only: skip what was already in the phone's shade when Jarvis started (an old SMS is not "just now")."""
+        fresh = [r for r in self.repliable if time.time() - r["t"] < max_age and (r.get("live") or not live_only)]
         if not who:
             return fresh[0] if fresh else None
         from rapidfuzz import fuzz
@@ -493,13 +590,25 @@ class Phone:
         if not dev:
             raise RuntimeError("телефон не подключён")
 
+        number = None
+        if not target.get("reply_id"):
+            number, _ = self.number_for(target["who"])
+            if not number:
+                raise LookupError(f"не знаю номер «{target['who']}»: добавьте его в Настройки → Телефон → контакты для SMS")
+
         def send():
             try:
-                self.bus.send_reply(dev, target["reply_id"], text)
-                self.core.say(f"Ответил {self._dat(target['who'])}.")
+                if target.get("reply_id"):
+                    self.bus.send_reply(dev, target["reply_id"], text)
+                else:
+                    self.sms(number, text)
+                self.core.say(f"Ответил {self._dat(target['who'])}." if target.get("reply_id")
+                              else f"Отправил SMS {self._dat(target['who'])}.")
             except Exception as e:
-                self.core.say(f"Не получилось ответить: {e}")
-        self.core.ask_confirm(send, f"Ответить {self._dat(target['who'])} в {target['app']}: «{text}»?")
+                self.core.say(f"Не получилось отправить: {e}")
+        # an SMS goes to the number as a new message: "Отправить SMS маме", not "Ответить" (the user just wants to write)
+        self.core.ask_confirm(send, f"Ответить {self._dat(target['who'])} в {target['app']}: «{text}»?" if target.get("reply_id")
+                              else f"Отправить SMS {self._dat(target['who'])}: «{text}»?")
 
     @staticmethod
     def _dat(name):
@@ -672,6 +781,16 @@ def register(R, core):
     def _ring(m, t):
         return do(PH().ring)
 
+    @R(r"^(?:найди|прозвони|позвони\s+на)\s+(?:мой\s+)?телефон\w*\s+(?:через\s+)?(?:гугл\w*|google)$|^(?:громко\s+)?найди\s+телефон\s+громко$")
+    def _find_google(m, t):
+        PH().stop_search()
+        return PH().find_google()
+
+    @R(r"^(?:я\s+)?(?:нашел|нашла|нашёл)(?:\s+(?:его|телефон|мобильник|трубку))?$|^(?:телефон\s+)?(?:нашелся|нашёлся|нашлась)$|"
+       r"^(?:хватит|перестань|прекрати|не\s+надо)\s+(?:звонить|искать)(?:\s+(?:на\s+)?телефон\w*)?$")
+    def _found(m, t):
+        return "Отлично, сэр." if PH().stop_search() else "Хорошо."
+
     @R(rf"^(?:отправь|скинь|перекинь|кинь)\s+(?:это|буфер|ссылку|из\s+буфера)\s+на\s+{PHONE}$|^(?:открой)\s+(?:это|ссылку)\s+на\s+{PHONE}$")
     def _clip(m, t):
         return do(lambda: PH().share_text(S.clipboard_get() or ""))
@@ -707,6 +826,33 @@ def register(R, core):
         if not number:
             return f"Не знаю номер «{who}». Добавьте его в Настройки → Телефон → контакты для SMS."
         core.ask_confirm(lambda: do(lambda: PH().sms(number, text)), f"Отправить SMS {name}: «{text}»?")
+        return True
+
+    @R(r"^(?:напиши|ответь|отправь|скажи)\s+([а-яёa-z-]{3,})\s+(?:(в|на|с|через)\s+телефон\w*\s+|((?:в\s+|по\s+)?(?:смс\w*|sms|эсэмэс\w*|смск\w*))\s+)?(?:что\s+)?(.+)$")
+    def _write_back(m, t):
+        """"напиши маме хорошо": mum has just written to the phone, so this is the answer to her, on the phone.
+        Without a fresh message from that person it stays the Telegram / Discord command on the PC — unless the
+        phone was named ("напиши маме в телефоне хорошо")."""
+        who, phone_said, text = m.group(1), bool(m.group(2) or m.group(3)), m.group(4).strip()
+        ph = PH()
+        if who.lower() in ("ему", "ей", "им", "мне", "ответ", "туда", "сюда"):
+            return False
+        # "напиши маме …" is the Telegram command on the PC, unless mum has JUST written to the phone (3 min)
+        # or the phone was named: it took over every "напиши маме" for half an hour, even with an old SMS
+        sms_said = bool(m.group(3))
+        target = None if sms_said else (ph.reply_target(who) if phone_said else ph.reply_target(who, max_age=180, live_only=True))
+        if not target and not phone_said:
+            return False
+        if not target:
+            number, name = ph.number_for(who)
+            if not number:
+                return f"На телефоне нет свежего сообщения от «{who}», и номера в контактах нет."
+            core.ask_confirm(lambda: do(lambda: ph.sms(number, text)), f"Отправить SMS {ph._dat(name)}: «{text}»?")
+            return True
+        try:
+            ph.ask_reply(target, text)
+        except Exception as e:
+            return f"Не получилось: {e}"
         return True
 
     @R(r"^(?:ответь|ответить|напиши\s+в\s+ответ)(?:\s+(?!на\s+(?:это\s+|последнее\s+)?письмо|на\s+выделен|на\s+вопрос)(.+))?$")

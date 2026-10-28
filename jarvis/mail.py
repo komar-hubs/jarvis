@@ -698,9 +698,9 @@ def register(R, core):
 
     @R(r"^(?:ответь|ответить)\s+(?:ему|ей|им|на\s+(?:это\s+|последнее\s+)?письмо|на\s+него|отправителю)?\s*(?:что|:)?\s*(.*)$")
     def _reply(m, t):
-        n = need()
-        if n:
-            return n
+        if not M().accounts():
+            # "ответь хорошо" was answered with "почта не подключена": only a reply that names the letter is about mail
+            return need() if re.search(r"письм", t) else False
         cur = M().current
         if not cur or time.time() - M().current_at > 900 or re.search(r"вопрос|сообщени|телеграм|чат|дискорд|вк\b", t):
             return False  # "ответь на сообщение в телеграме", "ответь на вопрос": not about mail

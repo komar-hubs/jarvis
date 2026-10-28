@@ -93,7 +93,9 @@ async function phonePanel() {
     ${r.devices.length > 1 ? `<div class="sgrid"><label>Телефон</label><select id="ph-dev">${r.devices.map((d) => `<option value="${esc(d.id)}" ${d.id === r.device ? "selected" : ""}>${esc(d.name)}${d.reachable ? "" : " (не в сети)"}</option>`).join("")}</select></div>` : ""}
     <div class="row"><button class="btn" ${dev ? "" : "disabled"} onclick="phoneAct('ring')">${I("bell", "lead")}Найти телефон</button>
       <button class="btn" ${dev ? "" : "disabled"} onclick="phoneAct('clipboard')">${I("export", "lead")}Буфер на телефон</button>
-      <button class="btn" ${dev ? "" : "disabled"} onclick="phoneAct('photo')">${I("eye", "lead")}Фото с телефона</button></div>
+      <button class="btn" ${dev ? "" : "disabled"} onclick="phoneAct('photo')">${I("eye", "lead")}Фото с телефона</button>
+      <button class="btn small" ${dev ? "" : "disabled"} onclick="rpc('phone_find',{on:false}).then((r)=>toast(r,'Телефон'))">${I("check", "lead")}Нашёл</button></div>
+    <p class="hint">«Найти телефон» звонит каждые 8 секунд до двух минут, пока не скажете «нашёл». Если на телефоне приходит только тихое уведомление: Настройки телефона → Приложения → KDE Connect → разрешите «Всплывающие окна в фоне», «Экран блокировки» и «Полноэкранные уведомления», а в KDE Connect → «Найти телефон» выберите громкую мелодию.</p>
     <div class="ph-sw">${sw("enabled", "Следить за телефоном")}${sw("calls", "Говорить, кто звонит")}${sw("announce", "Озвучивать уведомления")}${sw("filter", "Отсеивать неважное: рекламу, загрузки, системные")}</div>
     <div class="sgrid ph-rules"><label>Мессенджеры</label>${ruleSel("ph-mrule", r.rule_titles, s.messenger_rule)}
       <label>Остальные приложения</label>${ruleSel("ph-drule", r.rule_titles, s.default_rule)}</div>
