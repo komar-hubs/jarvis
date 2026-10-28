@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>JARVIS MENU</title>
+<style>
+  :root { --c: #4fd8ff; --c2: #a8efff; --hot: #ffb347; --red: #ff5d6c; --green: #5dffb0; --text: #dcf3ff; --dim: #7c9cb3; --bg: #040a12; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); overflow: hidden; user-select: none;
+    font: 14px "Segoe UI", system-ui, sans-serif; }
+  body { border: 1px solid color-mix(in srgb, var(--c) 55%, transparent); display: flex; flex-direction: column;
+    background: radial-gradient(circle at 18% 0%, color-mix(in srgb, var(--c) 18%, transparent), transparent 55%), var(--bg);
+    animation: in .16s ease-out; }
+  @keyframes in { from { opacity: 0; transform: translateY(6px); } }
+  /* corner brackets, like the panels of the main window */
+  body::before, body::after { content: ""; position: fixed; width: 12px; height: 12px; pointer-events: none; }
+  body::before { left: 3px; top: 3px; border-left: 2px solid var(--c); border-top: 2px solid var(--c); }
+  body::after { right: 3px; bottom: 3px; border-right: 2px solid var(--c); border-bottom: 2px solid var(--c); }
+
+  .head { display: flex; align-items: center; gap: 11px; padding: 13px 15px 11px; border-bottom: 1px solid color-mix(in srgb, var(--c) 22%, transparent); }
+  .core { position: relative; width: 30px; height: 30px; border-radius: 50%; border: 1.5px solid var(--c); flex: none;
+    box-shadow: 0 0 12px color-mix(in srgb, var(--c) 60%, transparent), inset 0 0 8px color-mix(in srgb, var(--c) 60%, transparent); }
+  .core::after { content: ""; position: absolute; inset: 7px; border-radius: 50%; background: radial-gradient(circle, #fff, var(--c) 55%, transparent 72%);
+    animation: pulse 2.2s infinite; }
+  @keyframes pulse { 50% { opacity: .45; } }
+  .title { font: 800 13px "Segoe UI", sans-serif; letter-spacing: 4px; color: var(--c); text-shadow: 0 0 10px color-mix(in srgb, var(--c) 70%, transparent); }
+  .state { font-size: 11.5px; letter-spacing: 1.5px; color: var(--dim); text-transform: uppercase; margin-top: 2px; }
+  .state b { color: var(--green); font-weight: 600; }
+  body.sleeping .state b { color: #8aa2ff; }
+  body.sleeping .core { border-color: #8aa2ff; }
+
+  .items { padding: 6px; flex: 1; }
+  .it { display: flex; align-items: center; gap: 11px; padding: 8px 10px; cursor: pointer; border-left: 2px solid transparent;
+    transition: background .12s, border-color .12s; }
+  .it:hover { background: color-mix(in srgb, var(--c) 13%, transparent); border-left-color: var(--c); }
+  .it svg { width: 18px; height: 18px; flex: none; fill: none; stroke: var(--c2); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  .it span { flex: 1; }
+  .it kbd { font: 11px Consolas, monospace; color: var(--dim); border: 1px solid color-mix(in srgb, var(--c) 25%, transparent); padding: 1px 5px; }
+  .it.bold span { font-weight: 600; color: #fff; }
+  .tg { width: 30px; height: 16px; border-radius: 8px; background: rgba(127, 166, 189, .25); position: relative; transition: .2s; flex: none; }
+  .tg::after { content: ""; position: absolute; left: 2px; top: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--dim); transition: .2s; }
+  .on .tg { background: color-mix(in srgb, var(--c) 45%, transparent); }
+  .on .tg::after { left: 16px; background: #fff; box-shadow: 0 0 8px var(--c); }
+  .sep { height: 1px; margin: 5px 8px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--c) 35%, transparent), transparent); }
+  .it.exit svg { stroke: var(--red); }
+  .it.exit:hover { background: rgba(255, 93, 108, .14); border-left-color: var(--red); }
+  .it.exit span { color: #ffc2c8; }
+  body.night { filter: brightness(.7) sepia(.2); }
+</style>
+</head>
+<body>
+  <div class="head">
+    <div class="core"></div>
+    <div><div class="title">J.A.R.V.I.S.</div><div class="state" id="state">статус: <b>в сети</b></div></div>
+  </div>
+  <div class="items">
+    <div class="it bold" data-a="show"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="15" rx="1.5"/><path d="M3 8.5h18"/></svg><span>Открыть J.A.R.V.I.S.</span></div>
+    <div class="it" data-a="listen"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0013 0M12 17.5V21"/></svg><span>Слушать команду</span><kbd>Ctrl+Alt+J</kbd></div>
+    <div class="it" data-a="stop"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M17 9l4 6M21 9l-4 6"/></svg><span>Замолчать</span></div>
+    <div class="sep"></div>
+    <div class="it" data-a="sleep" id="it-sleep"><svg viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 019.5 4a8.5 8.5 0 1010.5 10.5z"/></svg><span>Режим сна</span><i class="tg"></i></div>
+    <div class="it" data-a="dnd" id="it-dnd"><svg viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0112 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 004 0M3 3l18 18"/></svg><span>Не беспокоить 1 час</span><i class="tg"></i></div>
+    <div class="sep"></div>
+    <div class="it exit" data-a="quit"><svg viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.5 6.5a8 8 0 1011 0"/></svg><span>Выход</span></div>
+  </div>
+<script>
+const T = new URLSearchParams(location.search).get("t");
+const THEME = { jarvis: ["#4fd8ff", "#a8efff"], mark3: ["#ff4b5c", "#ffd27a"], nano: ["#9b86ff", "#dcd3ff"],
+                emerald: ["#3ff0a2", "#b8ffdc"], stealth: ["#e4ecf2", "#ffffff"] };
+const rpc = (method, params = {}) => fetch("/api/rpc", { method: "POST",
+  headers: { "Content-Type": "application/json", "X-Jarvis-Token": T }, body: JSON.stringify({ method, params }) })
+  .then((r) => r.json()).then((j) => j.result);
+let S = { sleeping: false, dnd: false };
+
+async function refresh() {
+  try {
+    const s = await rpc("tray_state");
+    S = s;
+    const [c, c2] = THEME[s.theme] || THEME.jarvis;
+    document.documentElement.style.setProperty("--c", c);
+    document.documentElement.style.setProperty("--c2", c2);
+    document.body.classList.toggle("sleeping", s.sleeping);
+    document.body.classList.toggle("night", !!s.night);
+    document.getElementById("it-sleep").classList.toggle("on", s.sleeping);
+    document.getElementById("it-dnd").classList.toggle("on", s.dnd);
+    document.querySelector("#it-dnd span").textContent = s.dnd ? `Не беспокоить · до ${s.dnd_until}` : "Не беспокоить 1 час";
+    document.getElementById("state").innerHTML = "статус: <b>" + s.label + "</b>";
+  } catch (e) {}
+}
+document.querySelectorAll(".it").forEach((el) => el.addEventListener("click", async () => {
+  const a = el.dataset.a;
+  if (a === "sleep" || a === "dnd") {  // toggles stay open: you see the change
+    el.classList.toggle("on");
+    await rpc("tray_action", { action: a });
+    refresh();
+    return;
+  }
+  rpc("tray_action", { action: a });
+}));
+// close on a click elsewhere (blur) — but only once the menu really had the focus; without it, close a moment
+// after the cursor leaves the menu (Windows sometimes refuses to give focus to a window that pops up)
+// (Windows juggles the focus for a moment when the menu pops up: a blur in the first 0.7 s is not "a click elsewhere")
+let hadFocus = false, leaveTimer = null, shownAt = 0;
+const close = () => { clearTimeout(leaveTimer); rpc("tray_action", { action: "close" }); };
+const armLeave = (ms) => { clearTimeout(leaveTimer); if (!hadFocus) leaveTimer = setTimeout(close, ms); };
+function opened() { shownAt = Date.now(); hadFocus = document.hasFocus(); armLeave(6000); refresh(); }
+window.addEventListener("focus", () => { hadFocus = true; clearTimeout(leaveTimer); refresh(); });
+window.addEventListener("blur", () => {
+  if (Date.now() - shownAt < 700) { hadFocus = false; armLeave(6000); return; }
+  if (hadFocus) { hadFocus = false; close(); }
+});
+document.addEventListener("mouseenter", () => clearTimeout(leaveTimer));
+document.addEventListener("mouseleave", () => armLeave(1500));
+document.addEventListener("visibilitychange", () => { if (!document.hidden) opened(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") rpc("tray_action", { action: "close" }); });
+refresh();
+</script>
+</body>
+</html>

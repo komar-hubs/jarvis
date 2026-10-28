@@ -1,0 +1,17 @@
+# personal data: settings with keys and mail passwords, chat, tasks, notes, plugins' data, models, caches
+data/
+
+# virtual environments (install.bat creates them)
+.venv/
+.xtts-venv/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# builds and local leftovers
+*.zip
+version.json
+*.log
+mic_report.txt
+screamer.py

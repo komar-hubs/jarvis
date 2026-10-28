@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>J.A.R.V.I.S.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/ui/style.css">
+<script>window.JARVIS_TOKEN = "__JARVIS_TOKEN__";</script>
+</head>
+<body data-state="idle" data-theme="jarvis">
+<!-- icon sprite -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <!-- one 24px grid, 1.6 stroke, round caps: svg.ico (nav, headings) or svg.ic (inline in buttons and text) -->
+    <symbol id="i-home" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2.3"/><path d="M12 6v3.7M6.8 15l3.2-1.85M17.2 15l-3.2-1.85"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M5 4.5h14A1.5 1.5 0 0120.5 6v9A1.5 1.5 0 0119 16.5h-8.5L6 20v-3.5H5A1.5 1.5 0 013.5 15V6A1.5 1.5 0 015 4.5z"/><path d="M8 9h8M8 12.2h5"/></symbol>
+    <symbol id="i-hub" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/><rect x="7.5" y="12.5" width="4" height="4" rx=".8"/></symbol>
+    <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3.8 7.2l8.2 6 8.2-6"/></symbol>
+    <symbol id="i-tasks" viewBox="0 0 24 24"><path d="M4 6.5l1.6 1.6L8.5 5M4 13.5l1.6 1.6L8.5 12"/><path d="M12 7h8M12 14h8M5 19.5h1M12 19.5h8"/></symbol>
+    <symbol id="i-time" viewBox="0 0 24 24"><circle cx="12" cy="13.5" r="7.5"/><path d="M12 9.5v4l2.6 1.6M10 2.5h4M12 2.5V6M18.3 6.8l1.4-1.4"/></symbol>
+    <symbol id="i-cmd" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="M7 9.5l3 2.5-3 2.5M12.5 15h4.5"/></symbol>
+    <symbol id="i-puzzle" viewBox="0 0 24 24"><path d="M4 7.5h5a2 2 0 1 1 3 0h5v4a2 2 0 1 1 0 3v6H4v-4a2 2 0 1 0 0-3z"/></symbol>
+    <symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 3.5V8M15 3.5V8M6.5 8h11v3a5.5 5.5 0 01-11 0zM12 16.5v4"/></symbol>
+    <symbol id="i-bridge" viewBox="0 0 24 24"><circle cx="5.5" cy="12" r="2.5"/><circle cx="18.5" cy="6" r="2.5"/><circle cx="18.5" cy="18" r="2.5"/><path d="M7.8 11l8.4-3.9M7.8 13l8.4 3.9"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><path d="M10.43 5.18L10.69 2.69L13.31 2.69L13.57 5.18A7.0 7.0 0 0 1 15.71 6.06L17.66 4.49L19.51 6.34L17.94 8.29A7.0 7.0 0 0 1 18.82 10.43L21.31 10.69L21.31 13.31L18.82 13.57A7.0 7.0 0 0 1 17.94 15.71L19.51 17.66L17.66 19.51L15.71 17.940A7.0 7.0 0 0 1 13.57 18.82L13.31 21.31L10.69 21.31L10.43 18.82A7.0 7.0 0 0 1 8.29 17.94L6.34 19.51L4.49 17.66L6.06 15.71A7.0 7.0 0 0 1 5.18 13.57L2.69 13.31L2.69 10.69L5.18 10.43A7.0 7.0 0 0 1 6.06 8.29L4.49 6.34L6.34 4.49L8.29 6.06A7.0 7.0 0 0 1 10.43 5.18Z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.4 9.3a2.7 2.7 0 015.2 1c0 1.8-2.6 2.2-2.6 4M12 17.3v.2"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M19.5 14.6A8 8 0 019.4 4.5a8 8 0 1010.1 10.1z"/></symbol>
+    <symbol id="i-talk" viewBox="0 0 24 24"><path d="M4.5 4.5h9A1.5 1.5 0 0115 6v5.5a1.5 1.5 0 01-1.5 1.5H8.5L5.5 15.5V13h-1A1.5 1.5 0 013 11.5V6a1.5 1.5 0 011.5-1.5z"/><path d="M15 8.5h4.5A1.5 1.5 0 0121 10v5.5a1.5 1.5 0 01-1.5 1.5h-1v2.5L15.5 17h-4a1.5 1.5 0 01-1.5-1.5V13"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.2-7.5 9.5-4.3-1.3-7.5-4.9-7.5-9.5V6z"/><path d="M8.8 12.2l2.2 2.2 4.3-4.6"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24"><path d="M8.5 13.5L4 9l4.5-4.5"/><path d="M4 9h10.5a5.5 5.5 0 010 11H10"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0013 0M12 17.5V21M8.5 21h7"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3.5 7A1.5 1.5 0 015 5.5h4.2l2 2.2H19a1.5 1.5 0 011.5 1.5v8.3A1.5 1.5 0 0119 19H5a1.5 1.5 0 01-1.5-1.5z"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10-6.5z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 6v12M15 6v12"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="1.5"/></symbol>
+    <symbol id="i-rec" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5" fill="currentColor"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+    <symbol id="i-warn" viewBox="0 0 24 24"><path d="M10.7 4.6a1.5 1.5 0 012.6 0l7.6 13.2a1.5 1.5 0 01-1.3 2.2H4.4a1.5 1.5 0 01-1.3-2.2z"/><path d="M12 9.5v4.5M12 16.8v.2"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16.5V11a6 6 0 0112 0v5.5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 004 0"/></symbol>
+    <symbol id="i-alarm" viewBox="0 0 24 24"><circle cx="12" cy="13" r="7"/><path d="M12 9.5V13l2.5 1.5M4 6l3-2.5M20 6l-3-2.5M7.2 18.5L5.8 20.5M16.8 18.5l1.4 2"/></symbol>
+    <symbol id="i-timer" viewBox="0 0 24 24"><path d="M7 3.5h10M7 20.5h10M8 3.5c0 4.5 4 5.5 4 8.5s-4 4-4 8.5M16 3.5c0 4.5-4 5.5-4 8.5s4 4 4 8.5"/></symbol>
+    <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M3 9.5a13 13 0 0118 0M6 13a8.5 8.5 0 0112 0M9 16.5a4 4 0 016 0"/><circle cx="12" cy="19.5" r="1" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20a7.5 7.5 0 0115 0"/></symbol>
+    <symbol id="i-pen" viewBox="0 0 24 24"><path d="M15.5 4.5l4 4L8.5 19.5h-4v-4z"/><path d="M13 7l4 4"/></symbol>
+    <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M20 7.5a4.5 4.5 0 01-6.2 4.2L6.5 19A1.8 1.8 0 014 16.5l7.3-7.3A4.5 4.5 0 0116.5 3l-2.7 2.7.5 2.5 2.5.5z"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.7 5.6 3.7 9s-1.2 6.4-3.7 9c-2.5-2.6-3.7-5.6-3.7-9S9.5 5.6 12 3z"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19.5h14"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19.5V5M6.5 10.5L12 5l5.5 5.5"/></symbol>
+    <symbol id="i-clip" viewBox="0 0 24 24"><path d="M19.5 11.5l-7.6 7.6a5 5 0 01-7-7l8-8a3.3 3.3 0 014.6 4.6l-8 8a1.6 1.6 0 01-2.3-2.3l7.3-7.3"/></symbol>
+    <symbol id="i-reply" viewBox="0 0 24 24"><path d="M9.5 6L4 11.5 9.5 17"/><path d="M4 11.5h10a6 6 0 016 6V19"/></symbol>
+    <symbol id="i-speaker" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 010 6M18 6.5a7.5 7.5 0 010 11"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 6.5h15M9.5 6.5v-2h5v2M6.5 6.5l1 13h9l1-13M10 10.5v5.5M14 10.5v5.5"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 3L5.5 13.5H12L11 21l7.5-10.5H12z"/></symbol>
+    <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18.5h10.5a4 4 0 00.6-8A6 6 0 006.6 9.2 4.7 4.7 0 007 18.5z"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L20 20"/></symbol>
+    <symbol id="i-flame" viewBox="0 0 24 24"><path d="M12 21c-3.9 0-6.5-2.6-6.5-6.2 0-3.6 3-5.6 3.8-9.3 1.9 1.3 3.2 3.4 3.4 5.4.9-.8 1.5-2 1.6-3.2 2.2 1.8 4.2 4.4 4.2 7.1 0 3.6-2.6 6.2-6.5 6.2z"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11.5" height="11.5" rx="1.5"/><path d="M15.5 8.5v-3A1.5 1.5 0 0014 4H5.5A1.5 1.5 0 004 5.5V14a1.5 1.5 0 001.5 1.5h3"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 11-2.2-5.3"/><path d="M19.5 4.5V9H15"/></symbol>
+    <symbol id="i-code" viewBox="0 0 24 24"><path d="M8.5 7l-5 5 5 5M15.5 7l5 5-5 5M13.5 4.5l-3 15"/></symbol>
+    <symbol id="i-chip" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="1.5"/><path d="M9.5 3.5v3M14.5 3.5v3M9.5 17.5v3M14.5 17.5v3M3.5 9.5h3M3.5 14.5h3M17.5 9.5h3M17.5 14.5h3"/><rect x="9.8" y="9.8" width="4.4" height="4.4" rx=".6"/></symbol>
+    <symbol id="i-checkbox" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M8 12.2l2.8 2.8L16 9.5"/></symbol>
+    <symbol id="i-diamond" viewBox="0 0 24 24"><path d="M12 3.5l8.5 8.5-8.5 8.5L3.5 12z"/></symbol>
+    <symbol id="i-live" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.3" fill="currentColor"/><path d="M8 8a5.7 5.7 0 000 8M16 8a5.7 5.7 0 010 8M5.2 5.2a9.6 9.6 0 000 13.6M18.8 5.2a9.6 9.6 0 010 13.6"/></symbol>
+    <symbol id="i-dict" viewBox="0 0 24 24"><path d="M4 18.5h6M14.5 4.5l4 4-9 9H5.5v-4z"/><path d="M14 18.5h6"/></symbol>
+    <symbol id="i-note" viewBox="0 0 24 24"><path d="M6 3.5h9l4 4v12a1.5 1.5 0 01-1.5 1.5h-11A1.5 1.5 0 015 19.5V5A1.5 1.5 0 016.5 3.5z"/><path d="M14.5 3.5V8H19M8.5 12h7M8.5 15.5h7M8.5 8.5h3"/></symbol>
+    <symbol id="i-flow" viewBox="0 0 24 24"><rect x="3" y="4" width="6" height="6" rx="1.5"/><rect x="15" y="14" width="6" height="6" rx="1.5"/><path d="M9 7h4a2 2 0 012 2v5M12.5 11.5L15 14l2.5-2.5"/></symbol>
+    <symbol id="i-box" viewBox="0 0 24 24"><path d="M3.5 7.5l8.5-4 8.5 4v9l-8.5 4-8.5-4z"/><path d="M3.5 7.5l8.5 4 8.5-4M12 11.5v9"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M9 3.5h6l-1 5 3 3v1.5H7V11.5l3-3z"/><path d="M12 13v7.5"/></symbol>
+    <symbol id="i-import" viewBox="0 0 24 24"><path d="M12 3.5v10M8 9.5l4 4 4-4M4 14.5v4A1.5 1.5 0 005.5 20h13a1.5 1.5 0 001.5-1.5v-4"/></symbol>
+    <symbol id="i-export" viewBox="0 0 24 24"><path d="M12 13.5v-10M8 7.5l4-4 4 4M4 14.5v4A1.5 1.5 0 005.5 20h13a1.5 1.5 0 001.5-1.5v-4"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l8.5-8.5M16 7l2.5 2.5M14 9l2 2"/></symbol>
+    <symbol id="i-ruble" viewBox="0 0 24 24"><path d="M8.5 20V4.5h5a4 4 0 010 8h-7M6.5 16h8"/></symbol>
+    <symbol id="w-sun" viewBox="0 0 48 48"><circle class="w-core" cx="24" cy="24" r="8"/><g class="w-rays"><path d="M24 6v6M24 36v6M6 24h6M36 24h6M11.3 11.3l4.2 4.2M32.5 32.5l4.2 4.2M11.3 36.7l4.2-4.2M32.5 15.5l4.2-4.2"/></g></symbol>
+    <symbol id="w-cloud" viewBox="0 0 48 48"><path class="w-cl" d="M14 34h21a7 7 0 000-14 10 10 0 00-19-2.5A8 8 0 0014 34z"/></symbol>
+    <symbol id="w-rain" viewBox="0 0 48 48"><path class="w-cl" d="M14 28h21a7 7 0 000-14 10 10 0 00-19-2.5A8 8 0 0014 28z"/><g class="w-drops"><path d="M17 33l-2 5M25 33l-2 5M33 33l-2 5"/></g></symbol>
+    <symbol id="w-snow" viewBox="0 0 48 48"><path class="w-cl" d="M14 28h21a7 7 0 000-14 10 10 0 00-19-2.5A8 8 0 0014 28z"/><g class="w-flakes"><circle cx="17" cy="35" r="1.6"/><circle cx="25" cy="38" r="1.6"/><circle cx="33" cy="35" r="1.6"/></g></symbol>
+    <symbol id="w-storm" viewBox="0 0 48 48"><path class="w-cl" d="M14 28h21a7 7 0 000-14 10 10 0 00-19-2.5A8 8 0 0014 28z"/><path class="w-bolt" d="M24 29l-4 7h5l-3 7"/></symbol>
+    <symbol id="w-partly" viewBox="0 0 48 48"><g class="w-rays"><path d="M18 5v4M7 16h4M10 8l3 3M26 8l-3 3"/></g><circle class="w-core" cx="18" cy="16" r="6"/><path class="w-cl" d="M18 36h18a6 6 0 000-12 9 9 0 00-16.5-2A7 7 0 0018 36z"/></symbol>
+    <symbol id="w-fog" viewBox="0 0 48 48"><g class="w-fogl"><path d="M8 18h32M12 25h28M8 32h30"/></g></symbol>
+  </defs>
+</svg>
+<canvas id="bg"></canvas>
+<div class="fx-scan"></div><div class="fx-vignette"></div><div class="fx-grain"></div>
+
+<!-- ============ title bar ============ -->
+<header id="titlebar" class="pywebview-drag-region">
+  <div class="logo"><span class="logo-mark"><i></i><i></i></span><span id="logo-name">J.A.R.V.I.S.</span><small id="logo-sub">Just A Rather Very Intelligent System</small></div>
+  <div class="tb-status"><span class="tb-dot"></span><span id="tb-state">ИНИЦИАЛИЗАЦИЯ</span><span class="tb-sep">//</span><span id="tb-clock"></span></div>
+  <div class="tb-btns">
+    <button title="Свернуть" onclick="winApi('minimize')"><svg viewBox="0 0 12 12"><path d="M2 6h8"/></svg></button>
+    <button title="Развернуть" onclick="winApi('toggle_max')"><svg viewBox="0 0 12 12"><rect x="2.5" y="2.5" width="7" height="7"/></svg></button>
+    <button title="В трей (Джарвис продолжит слушать)" class="tb-close" onclick="winApi('hide')"><svg viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6"/></svg></button>
+  </div>
+</header>
+
+<div id="app">
+  <!-- ============ nav ============ -->
+  <nav id="nav">
+    <div class="nav-glow"></div>
+    <button data-tab="home" class="active"><svg class="ico"><use href="#i-home"/></svg><span>Главная</span></button>
+    <button data-tab="chat"><svg class="ico"><use href="#i-chat"/></svg><span>ИИ-чат</span></button>
+    <button data-tab="hub"><svg class="ico"><use href="#i-hub"/></svg><span>Сегодня</span><b class="badge" id="badge-focus"></b></button>
+    <button data-tab="mail"><svg class="ico"><use href="#i-mail"/></svg><span>Почта</span><b class="badge" id="badge-mail"></b></button>
+    <button data-tab="tasks"><svg class="ico"><use href="#i-tasks"/></svg><span>Задачи</span><b class="badge" id="badge-tasks"></b></button>
+    <button data-tab="notes"><svg class="ico"><use href="#i-note"/></svg><span>Заметки</span></button>
+    <button data-tab="time"><svg class="ico"><use href="#i-time"/></svg><span>Время</span><b class="badge" id="badge-timers"></b></button>
+    <button data-tab="commands"><svg class="ico"><use href="#i-cmd"/></svg><span>Команды</span></button>
+    <button data-tab="plugins"><svg class="ico"><use href="#i-puzzle"/></svg><span>Плагины</span></button>
+    <button data-tab="sources"><svg class="ico"><use href="#i-plug"/></svg><span>Интеграции</span></button>
+    <button data-tab="bridges"><svg class="ico"><use href="#i-bridge"/></svg><span>Мосты</span></button>
+    <button data-tab="settings"><svg class="ico"><use href="#i-gear"/></svg><span>Настройки</span></button>
+    <button data-tab="help"><svg class="ico"><use href="#i-help"/></svg><span>Справка</span></button>
+    <div class="nav-foot">
+      <button id="conv-btn" title="Режим разговора: слушаю без «Джарвис», пока не скажете «конец разговора»"><svg class="ico"><use href="#i-talk"/></svg></button>
+      <button id="sleep-btn" title="Режим сна: Джарвис не реагирует, пока не скажете «Джарвис, проснись»"><svg class="ico"><use href="#i-moon"/></svg></button>
+    </div>
+  </nav>
+
+  <main id="main">
+    <!-- ============ HOME ============ -->
+    <section class="tab active" id="tab-home">
+      <div class="home-grid">
+        <div class="hud-col left">
+          <div class="panel clock-panel">
+            <div class="clock-row">
+              <svg class="sec-ring" viewBox="0 0 60 60"><circle class="sr-bg" cx="30" cy="30" r="26"/><circle class="sr-fg" id="sec-ring" cx="30" cy="30" r="26"/></svg>
+              <div><div class="big-time" id="h-time">--:--</div><div class="h-date" id="h-date"></div></div>
+            </div>
+            <div class="greet" id="h-greet"></div>
+          </div>
+          <div class="panel">
+            <h3>Системы <span class="h3-meta" id="sys-up"></span></h3>
+            <div class="gauges">
+              <div class="gauge" id="g-cpu"><svg viewBox="0 0 100 100"><circle class="g-tk" cx="50" cy="50" r="46"/><circle class="g-bg" cx="50" cy="50" r="38"/><circle class="g-fg" cx="50" cy="50" r="38"/></svg><b>0%</b><span>CPU</span></div>
+              <div class="gauge" id="g-ram"><svg viewBox="0 0 100 100"><circle class="g-tk" cx="50" cy="50" r="46"/><circle class="g-bg" cx="50" cy="50" r="38"/><circle class="g-fg" cx="50" cy="50" r="38"/></svg><b>0%</b><span>RAM</span></div>
+              <div class="gauge" id="g-gpu"><svg viewBox="0 0 100 100"><circle class="g-tk" cx="50" cy="50" r="46"/><circle class="g-bg" cx="50" cy="50" r="38"/><circle class="g-fg" cx="50" cy="50" r="38"/></svg><b>0%</b><span>GPU</span></div>
+            </div>
+            <canvas class="spark" id="spark" height="46"></canvas>
+            <div class="sys-lines" id="sys-lines"></div>
+          </div>
+          <div class="panel grow">
+            <h3>Журнал <span class="h3-meta live">LIVE</span></h3>
+            <div class="log" id="home-log"></div>
+          </div>
+        </div>
+
+        <div class="reactor-wrap">
+          <div class="reactor-stage">
+            <svg class="text-ring" viewBox="0 0 400 400">
+              <defs><path id="ring-path" d="M200,200 m-178,0 a178,178 0 1,1 356,0 a178,178 0 1,1 -356,0"/></defs>
+              <text><textPath href="#ring-path" id="ring-text">J.A.R.V.I.S. • JUST A RATHER VERY INTELLIGENT SYSTEM • STARK INDUSTRIES • NEURAL INTERFACE ONLINE •</textPath></text>
+            </svg>
+            <svg class="hud-arcs" viewBox="0 0 400 400">
+              <path class="arc a1" d="M60 120 A165 165 0 0 1 120 60"/><path class="arc a2" d="M340 280 A165 165 0 0 1 280 340"/>
+              <path class="arc a3" d="M280 60 A165 165 0 0 1 340 120"/><path class="arc a4" d="M120 340 A165 165 0 0 1 60 280"/>
+            </svg>
+            <canvas id="reactor"></canvas>
+            <div class="chip c-tl" id="chip-stt">STT —</div>
+            <div class="chip c-tr" id="chip-tts">TTS —</div>
+            <div class="chip c-bl" id="chip-ai">AI —</div>
+            <div class="chip c-br" id="chip-lat">— ms</div>
+          </div>
+          <div class="reactor-label" id="reactor-label">ОЖИДАНИЕ</div>
+          <div class="subtitle" id="subtitle"></div>
+          <div class="heard" id="heard"></div>
+          <div class="chain-strip" id="chain-strip"></div>
+        </div>
+
+        <div class="hud-col right">
+          <div class="panel weather-panel" id="weather-panel">
+            <h3>Погода <span class="h3-meta" id="w-city"></span></h3>
+            <div class="w-main"><svg class="w-icon" id="w-icon"><use href="#w-partly"/></svg><div><span id="w-temp">--°</span><span id="w-desc"></span></div></div>
+            <div class="w-range"><span id="w-min">--°</span><i><b id="w-bar"></b></i><span id="w-max">--°</span></div>
+            <div class="w-sub" id="w-sub"></div>
+          </div>
+          <div class="panel">
+            <h3>Таймеры <button class="mini" onclick="go('time')">+</button></h3>
+            <div id="home-timers" class="home-timers"><div class="empty">нет активных</div></div>
+          </div>
+          <div class="panel grow">
+            <h3>Сегодня <button class="mini" onclick="go('tasks')">+</button></h3>
+            <div id="home-tasks" class="home-tasks"></div>
+            <h3 class="mt">Ближайшие напоминания</h3>
+            <div id="home-rem" class="home-tasks"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ CHAT ============ -->
+    <section class="tab" id="tab-chat">
+      <div class="chat-head">
+        <h2>ИИ-чат</h2>
+        <select id="chat-provider" title="Провайдер ИИ"></select>
+        <input id="chat-model" placeholder="модель" list="chat-models" title="Модель">
+        <datalist id="chat-models"></datalist>
+        <label class="switch" title="Озвучивать ответы"><input type="checkbox" id="chat-speak"><span></span>Голос</label>
+        <button class="ghost" onclick="chatClear()">Очистить</button>
+      </div>
+      <div id="chat-list" class="chat-list"></div>
+      <div class="chat-input">
+        <button id="chat-mic" class="mic-btn" title="Сказать голосом (ответ придёт в чат)"><svg class="ic"><use href="#i-mic"/></svg></button>
+        <textarea id="chat-text" rows="1" placeholder="Спросите что угодно… Enter — отправить, Shift+Enter — новая строка"></textarea>
+        <button id="chat-stop" class="ghost" title="Остановить" onclick="rpc('chat_stop')"><svg class="ic"><use href="#i-stop"/></svg></button>
+        <button id="chat-send" class="primary">Отправить</button>
+      </div>
+    </section>
+
+    <!-- ============ TODAY HUB ============ -->
+    <section class="tab" id="tab-hub">
+      <h2>Сегодня <span class="h2-sub" id="hub-sub"></span></h2>
+      <div class="hub-grid">
+        <div class="panel focus-panel" id="focus-panel">
+          <h3>Режим фокуса</h3>
+          <div class="focus-body">
+            <svg class="focus-ring" viewBox="0 0 120 120"><circle class="fr-bg" cx="60" cy="60" r="52"/><circle class="fr-fg" id="fr-fg" cx="60" cy="60" r="52"/></svg>
+            <div class="focus-center"><b id="focus-time">45:00</b><span id="focus-task">готов к работе</span></div>
+          </div>
+          <div class="focus-ctl" id="focus-ctl">
+            <input id="focus-task-in" placeholder="над чем работаем? (необязательно)">
+            <div class="quick"><button onclick="hubFocus(25)">25 мин</button><button onclick="hubFocus(45)">45 мин</button><button onclick="hubFocus(60)">1 час</button><button onclick="hubFocus(90)">90 мин</button></div>
+          </div>
+          <div class="focus-stop hidden" id="focus-stop"><span id="focus-dist"></span><button class="btn danger" onclick="rpc('focus_stop')">Завершить</button></div>
+          <p class="hint">Сверну мессенджеры, буду молчать и мягко верну, если откроете YouTube или игру. «Джарвис, режим фокуса на час».</p>
+        </div>
+        <div class="panel usage-panel">
+          <h3>Время за ПК <span class="h3-meta" id="usage-total"></span></h3>
+          <div class="cat-bar" id="cat-bar"></div>
+          <div class="cat-legend" id="cat-legend"></div>
+          <div class="usage-list" id="usage-list"></div>
+        </div>
+        <div class="panel habits-panel">
+          <h3>Привычки <button class="mini" onclick="hubHabitNew()">+</button></h3>
+          <div id="habits"></div>
+          <p class="hint">«Джарвис, я выпил воды», «сделал зарядку», «добавь привычку медитация».</p>
+        </div>
+        <div class="panel clip-panel">
+          <h3>История копирования <button class="mini" onclick="rpc('clip_clear')" title="Очистить"><svg class="ic"><use href="#i-trash"/></svg></button></h3>
+          <div class="clip-list" id="clip-list"></div>
+          <p class="hint">Клик — снова в буфер. Пароли не запоминаю, на диск ничего не пишу.</p>
+        </div>
+        <div class="panel msg-panel">
+          <h3>Мессенджеры и система</h3>
+          <div id="hub-msgs"></div>
+          <div id="hub-active" class="hint"></div>
+        </div>
+        <div class="panel net-panel">
+          <h3><span><svg class="ico h3-ico"><use href="#i-wifi"/></svg> Интернет</span><button class="mini" onclick="hubNet()" title="Пинг и скорость загрузки (одна проверка)">проверить</button></h3>
+          <div id="hub-net" class="hub-net"><div class="empty">Нажмите «проверить» или скажите «Джарвис, проверь интернет»</div></div>
+        </div>
+        <div class="panel guard-panel">
+          <h3><span><svg class="ico h3-ico"><use href="#i-shield"/></svg> Сторож ПК</span>
+            <span><button class="mini" onclick="guardAutostart()" title="Что запускается вместе с Windows">автозагрузка</button></span></h3>
+          <div id="guard-events" class="guard-events"></div>
+          <div id="guard-auto" class="guard-auto hidden"></div>
+          <p class="hint">Скажу, если в системе что-то странное: новая программа в автозагрузке, неподписанный файл из Temp, майнер, зависшая программа, изменённый hosts. «Джарвис, что случилось?»</p>
+        </div>
+        <div class="panel watch-panel">
+          <h3><span><svg class="ico h3-ico"><use href="#i-eye"/></svg> Слежу и делаю в фоне</span></h3>
+          <div id="watch-list" class="watch-list"></div>
+          <div id="bg-list" class="bg-list"></div>
+          <p class="hint">«Скажи, когда выйдет новое видео у Робзи», «скажи, когда скачается файл», «скачай файл из буфера», «почисти временные файлы» — в фоне, мышь и клавиатура остаются вашими.</p>
+        </div>
+        <div class="panel journal-panel">
+          <h3><span><svg class="ico h3-ico"><use href="#i-undo"/></svg> Что я сделал</span></h3>
+          <div id="journal-list" class="journal-list"></div>
+          <p class="hint">«Отмени», «не котиков, а собачек», «не на 5, а на 10 минут», «повтори последнее действие».</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ MAIL ============ -->
+    <section class="tab" id="tab-mail">
+      <h2>Почта <span class="h2-sub" id="mail-sub"></span>
+        <span class="hub-actions">
+          <button class="btn small" onclick="mailLoad(true)" title="Проверить сейчас"><svg class="ic lead"><use href="#i-refresh"/></svg>Обновить</button>
+          <button class="primary small" onclick="mailCompose()"><svg class="ic lead"><use href="#i-pen"/></svg>Написать</button>
+          <button class="btn small" onclick="peopleShow()"><svg class="ic lead"><use href="#i-user"/></svg>Контакты</button>
+          <button class="btn small" onclick="mailAccounts()"><svg class="ic lead"><use href="#i-gear"/></svg>Ящики</button>
+        </span></h2>
+      <div class="mail-grid">
+        <div class="panel mail-left">
+          <input id="mail-q" class="mail-q" placeholder="Поиск по отправителю и теме…">
+          <div id="mail-list" class="mail-list"></div>
+        </div>
+        <div class="panel mail-view" id="mail-view"><div class="empty">Выберите письмо слева</div></div>
+      </div>
+    </section>
+
+    <!-- ============ TASKS ============ -->
+    <section class="tab" id="tab-tasks">
+      <h2>Планер задач</h2>
+      <div class="panel task-form">
+        <input id="t-text" placeholder="Новая задача… можно фразой: «позвонить маме завтра в 15:00»">
+        <input id="t-due" type="datetime-local" title="Срок (необязательно)">
+        <select id="t-prio" title="Приоритет"><option value="1">Низкий</option><option value="2" selected>Обычный</option><option value="3">Высокий</option></select>
+        <button class="primary" onclick="taskAdd()">Добавить</button>
+      </div>
+      <p class="hint">Голосом: «Джарвис, добавь задачу купить продукты завтра вечером», «какие задачи на сегодня», «отметь задачу 2 выполненной».</p>
+      <div class="task-cols" id="task-cols"></div>
+    </section>
+
+    <!-- ============ TIME ============ -->
+    <section class="tab" id="tab-time">
+      <h2>Время</h2>
+      <div class="time-grid">
+        <div class="panel">
+          <h3>Таймеры</h3>
+          <div class="quick">
+            <button onclick="timerQuick(60)">1 мин</button><button onclick="timerQuick(180)">3 мин</button>
+            <button onclick="timerQuick(300)">5 мин</button><button onclick="timerQuick(600)">10 мин</button>
+            <button onclick="timerQuick(900)">15 мин</button><button onclick="timerQuick(1500)">25 мин</button>
+            <button onclick="timerQuick(3600)">1 час</button>
+          </div>
+          <div class="row">
+            <input id="tm-phrase" placeholder="например: 1 час 20 минут">
+            <input id="tm-label" placeholder="метка (чай, паста…)">
+            <button class="primary" onclick="timerAdd()">Старт</button>
+          </div>
+          <div id="timers" class="timers"></div>
+        </div>
+        <div class="panel">
+          <h3>Секундомер</h3>
+          <div class="sw" id="sw">00:00.0</div>
+          <div class="row center">
+            <button class="primary" id="sw-start" onclick="sw('start')">Старт</button>
+            <button onclick="sw('stop')">Стоп</button>
+            <button onclick="sw('lap')">Круг</button>
+            <button class="ghost" onclick="sw('reset')">Сброс</button>
+          </div>
+          <div id="sw-laps" class="laps"></div>
+        </div>
+        <div class="panel span2">
+          <h3>Напоминания и будильники</h3>
+          <div class="row">
+            <input id="r-text" placeholder="О чём напомнить">
+            <input id="r-at" type="datetime-local">
+            <input id="r-phrase" placeholder="или фразой: через 20 минут / завтра в 9">
+            <select id="r-repeat"><option value="">Однократно</option><option value="daily">Каждый день</option><option value="weekdays">По будням</option><option value="weekly">Каждую неделю</option><option value="hourly">Каждый час</option></select>
+            <label class="switch"><input type="checkbox" id="r-alarm"><span></span>Будильник</label>
+            <button class="primary" onclick="remAdd()">Добавить</button>
+          </div>
+          <div id="rems" class="rems"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ COMMANDS ============ -->
+    <section class="tab" id="tab-commands">
+      <h2><span class="seg" id="cmd-seg"><button data-seg="cmd" class="on"><svg class="ic lead"><use href="#i-cmd"/></svg>Команды</button><button data-seg="auto"><svg class="ic lead"><use href="#i-flow"/></svg>Автоматизации</button></span>
+        <button class="primary small seg-cmd" onclick="cmdNew()">+ Новая команда</button>
+        <button class="primary small seg-auto hidden" onclick="autoNew()">+ Новая автоматизация</button></h2>
+      <div class="seg-cmd">
+        <p class="hint">Команда = фразы-триггеры + цепочка действий. В триггере можно использовать <code>{query}</code>: «включи музыку {query}» поймает любое название. Переменные в шагах: <code>{query}</code>, <code>{result}</code> (результат предыдущего шага), <code>{time}</code>, <code>{date}</code>.
+          Логика: шаги «Если… / Иначе / Конец», «Повторить N раз», «Спросить и запомнить ответ» (потом <code>{answer}</code>), «Запомнить в переменную». Можно научить голосом: «когда я говорю доброе утро, открой почту».</p>
+        <div class="split">
+          <div class="list" id="cmd-list"></div>
+          <div class="editor panel" id="cmd-editor"><div class="empty">Выберите команду слева или создайте новую</div></div>
+        </div>
+      </div>
+      <div class="seg-auto hidden">
+        <p class="hint">Автоматизация срабатывает сама, без голоса: запустилась игра, отключили зарядку, подключили наушники или флешку, наступило время, вы отошли от ПК. Действия — те же шаги, что в командах. Проверки идут на самом компьютере и не тратят интернет и ИИ.</p>
+        <div class="split">
+          <div class="auto-side"><div class="list" id="auto-list"></div><div class="panel auto-hist"><h3>Последние срабатывания</h3><div id="auto-hist"></div></div></div>
+          <div class="editor panel" id="auto-editor"><div class="empty">Выберите автоматизацию слева, создайте новую или возьмите готовый пример</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ NOTES ============ -->
+    <section class="tab" id="tab-notes">
+      <h2>Заметки <button class="primary small" onclick="noteNew()">+ Новая заметка</button></h2>
+      <div class="split notes-split">
+        <div class="notes-side">
+          <input id="note-q" placeholder="Поиск по заметкам">
+          <div class="list" id="note-list"></div>
+        </div>
+        <div class="panel note-ed" id="note-ed"><div class="empty">Выберите заметку слева или создайте новую. Голосом: «Джарвис, запиши в заметки …»</div></div>
+      </div>
+    </section>
+
+    <!-- ============ PLUGINS ============ -->
+    <section class="tab" id="tab-plugins">
+      <h2>Плагины <button class="primary small" onclick="pluginNew()">+ Новый плагин</button>
+        <button class="btn small" onclick="pluginImport()" title="Установить плагин из файла .py"><svg class="ic lead"><use href="#i-import"/></svg>Импорт</button>
+        <button class="btn small" onclick="rpc('plugins_folder')"><svg class="ic lead"><use href="#i-folder"/></svg>Папка</button></h2>
+      <p class="hint">Плагин = фразы-триггеры + функция на Python. Файл лежит в <code>data\plugins</code> и работает сразу после сохранения. Каждый запуск идёт в отдельном процессе: ошибка в плагине не остановит Джарвиса. В триггере <code>{слово}</code> ловит часть фразы и приходит в <code>args</code>. Запуск — голосом или шагом «Запустить плагин» в команде.</p>
+      <div class="split plg-split">
+        <div class="plg-side">
+          <input id="plg-q" class="plg-q" placeholder="Поиск по названию и фразам">
+          <div class="list" id="plg-list"></div>
+        </div>
+        <div class="editor panel" id="plg-editor"><div class="empty">Выберите плагин слева или создайте новый</div></div>
+      </div>
+    </section>
+
+    <!-- ============ SOURCES ============ -->
+    <section class="tab" id="tab-sources">
+      <h2>Интеграции с приложениями и сервисами <button class="primary small" onclick="srcNew()">+ Новая интеграция</button></h2>
+      <p class="hint">Интеграция достаёт нужную информацию из сайта, API, программы, файла или консоли. Её можно спросить голосом (триггер), использовать шагом в команде или её увидит ИИ.</p>
+      <div class="split">
+        <div class="list" id="src-list"></div>
+        <div class="editor panel" id="src-editor"><div class="empty">Выберите интеграцию слева</div></div>
+      </div>
+    </section>
+
+    <!-- ============ BRIDGES ============ -->
+    <section class="tab" id="tab-bridges">
+      <h2>Мосты к ИИ-агентам</h2>
+      <p class="hint">Джарвис запускает Claude Code, Codex, Antigravity и Gemini CLI в фоне, передаёт им задачу и озвучивает результат. Обратный мост — MCP-сервер: агенты сами могут говорить голосом Джарвиса, ставить задачи и напоминания. Голосом: «Джарвис, спроси Клода …», «поручи Кодексу …».</p>
+      <div id="bridge-cards" class="bridge-cards"></div>
+      <div class="panel">
+        <h3>Вывод агента</h3>
+        <pre id="bridge-out" class="console"></pre>
+      </div>
+      <div class="panel">
+        <h3>Jarvis API и MCP вручную</h3>
+        <div id="api-info"></div>
+      </div>
+    </section>
+
+    <!-- ============ SETTINGS ============ -->
+    <section class="tab" id="tab-settings">
+      <h2>Настройки <button class="ghost small" onclick="setupOpen()">Мастер первоначальной настройки</button></h2>
+      <div class="settings" id="settings"></div>
+    </section>
+
+    <!-- ============ HELP ============ -->
+    <section class="tab" id="tab-help">
+      <h2>Что умеет Джарвис</h2>
+      <div class="help" id="help"></div>
+    </section>
+  </main>
+</div>
+
+<!-- ============ command bar ============ -->
+<footer id="cmdbar">
+  <button id="bar-mic" class="mic-btn big" title="Слушать команду (Ctrl+Alt+J)"><svg class="ico"><use href="#i-mic"/></svg></button>
+  <canvas id="bar-wave" class="bar-wave"></canvas>
+  <div class="bar-input-wrap"><span class="bar-prompt">&gt;</span><input id="bar-input" placeholder="Скажите «Джарвис…» или введите команду: открой телеграм, таймер на 5 минут, что у меня на экране"></div>
+  <span class="bar-state" id="bar-state">ожидание</span>
+  <i id="bar-level" style="display:none"></i>
+</footer>
+
+<div id="toasts"></div>
+
+<!-- ============ BOOT SEQUENCE ============ -->
+<div id="boot" class="boot">
+  <div class="boot-core"><i></i><i></i><i></i></div>
+  <div class="boot-title">J.A.R.V.I.S.</div>
+  <div class="boot-lines" id="boot-lines"></div>
+  <div class="boot-bar"><i id="boot-bar"></i></div>
+  <div class="boot-skip">нажмите, чтобы пропустить</div>
+</div>
+
+<!-- ============ SETUP WIZARD ============ -->
+<div id="setup" class="setup hidden">
+  <div class="setup-box">
+    <div class="setup-steps" id="setup-steps"></div>
+    <div class="setup-body" id="setup-body"></div>
+    <div class="setup-nav">
+      <button class="ghost" id="setup-back">Назад</button>
+      <button class="primary" id="setup-next">Далее</button>
+    </div>
+  </div>
+</div>
+
+<script src="/ui/reactor.js"></script>
+<script src="/ui/fx.js"></script>
+<script src="/ui/app.js"></script>
+<script src="/ui/views.js"></script>
+<script src="/ui/hub.js"></script>
+<script src="/ui/codeed.js"></script>
+<script src="/ui/assist.js"></script>
+<script src="/ui/plugins.js"></script>
+<script src="/ui/automation.js"></script>
+<script src="/ui/notes.js"></script>
+<script src="/ui/maint.js"></script>
+<script src="/ui/setup.js"></script>
+</body>
+</html>

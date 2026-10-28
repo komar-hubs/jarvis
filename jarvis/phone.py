@@ -1,0 +1,636 @@
+"""The phone through KDE Connect (free, Android): its notifications and calls spoken on the PC, "найди телефон",
+links and the clipboard sent to the phone, SMS, a photo from the phone's camera.
+
+Jarvis talks to KDE Connect only through its command line tool (kdeconnect-cli.exe), every 5 s while a paired phone
+is in the same Wi-Fi. Everything stays in the local network: no cloud, no account. iPhone is not supported by KDE
+Connect in this way."""
+import collections
+import datetime as dt
+import os
+import re
+import subprocess
+import threading
+import time
+from pathlib import Path
+
+CREATE_NO_WINDOW = 0x08000000
+CANDIDATES = [Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "KDE Connect" / "bin",
+              Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "KDE Connect" / "bin"]
+CALL_RX = re.compile(r"(?i)входящ\w*\s+(?:вызов|звонок)|звонит|incoming\s+call|calling")
+DIALERS = ("телефон", "phone", "dialer", "звонки", "вызовы", "contacts")
+MUTE_DEFAULT = ["KDE Connect", "Android System", "Система Android", "Google Play", "Google Play Маркет", "Загрузки",
+                "Downloads", "Battery", "Батарея"]
+MESSENGERS = ["Telegram", "WhatsApp", "Viber", "VK", "ВКонтакте", "VK Мессенджер", "Discord", "Signal", "MAX", "Skype",
+              "Snapchat", "Instagram", "Messenger", "WeChat", "Element", "Тамтам", "TamTam",
+              "WilliGram", "Nekogram", "Plus Messenger", "Telegram X", "Forkgram", "AyuGram", "Cherrygram", "Nicegram"]
+# shown in Settings even before the phone sent anything, so rules can be set up front
+POPULAR = ["MAX", "Telegram", "WhatsApp", "VK", "Discord", "Viber", "Instagram", "Gmail", "Почта", "Сбербанк", "Т-Банк",
+           "Госуслуги", "YouTube"]
+# what to do with a notification: say nothing / say which app / ask "Прочитать?" / read it right away
+RULES = {"silent": "Молчать", "name": "Сказать, от кого", "ask": "Спросить, прочитать ли", "read": "Читать сразу"}
+# not worth a word: ads, progress bars, system chatter. Matched on the text, the text itself is never spoken
+NOISE_RX = re.compile(r"(?i)скидк|акци[яи]|распродаж|промокод|кешб[эе]к|кэшб[эе]к|бонус|выгодн|спецпредложени|реклам|"
+                      r"\bsale\b|\boffer\b|\d+\s*%|скачивани|загрузка\s|загружено|обновлени[ея]\s+(?:доступно|установлено)|"
+                      r"синхронизац|резервн\w+\s+копи|работает\s+в\s+фоне|запущен[оа]?\s+в\s+фоне|vpn|подключено\s+к|"
+                      r"usb|зарядк|заряжается|батаре|погода\s+на|шагов|экран\s+включ")
+NOISE_APPS = ["Google", "Play Маркет", "Galaxy Store", "GetApps", "Security", "Безопасность", "Темы", "Themes",
+              "Погода", "Weather", "Часы", "Clock", "Mi Fit", "Zepp", "Яндекс Маркет", "Ozon", "Wildberries", "AliExpress"]
+
+
+class KdeBus:
+    """KDE Connect's own D-Bus, for the phone's notifications.
+
+    kdeconnect-cli --list-notifications always answers an empty list on Windows (it reads the model before the
+    service replies), so Jarvis listens to the service directly: the private dbus-daemon of KDE Connect listens on a
+    127.0.0.1 TCP port and lets in the same Windows user (EXTERNAL auth with the user's SID; the daemon checks the
+    connecting process). Signals notificationPosted / notificationUpdated arrive the moment the phone sends one."""
+    IFACE = "org.kde.kdeconnect.device.notifications"
+
+    def __init__(self, phone):
+        self.phone = phone
+        self.bus = None
+        self.ok = False
+
+    def start(self):
+        threading.Thread(target=self._run, daemon=True, name="kde-dbus").start()
+
+    def _run(self):
+        import asyncio
+        with asyncio.Runner(loop_factory=asyncio.SelectorEventLoop) as r:   # dbus-next needs add_reader: not on Proactor
+            r.run(self._main())
+
+    async def _main(self):
+        import asyncio
+        await asyncio.sleep(20)
+        while True:
+            try:
+                if self.phone.cfg.get("phone.enabled", True) and self.phone.bin_dir():
+                    await self._session()
+            except Exception as e:
+                self.phone.last_error = f"уведомления телефона: {e}"[:200]
+            self.ok = False
+            await asyncio.sleep(15)
+
+    @staticmethod
+    def _port():
+        import psutil
+        for p in psutil.process_iter(["name", "exe"]):
+            if (p.info["name"] or "").lower() == "dbus-daemon.exe" and "kde connect" in (p.info["exe"] or "").lower():
+                for c in p.net_connections(kind="tcp"):
+                    if c.status == "LISTEN" and c.laddr.ip in ("127.0.0.1", "::1"):
+                        return c.laddr.port
+        return None
+
+    @staticmethod
+    def _sid():
+        r = subprocess.run(["whoami", "/user", "/fo", "csv", "/nh"], capture_output=True, timeout=10, creationflags=CREATE_NO_WINDOW)
+        return r.stdout.decode("cp866", "replace").strip().split(",")[-1].strip('"')
+
+    async def _session(self):
+        import asyncio
+        from dbus_next import Message, MessageType
+        from dbus_next.aio import MessageBus
+        from dbus_next.auth import Authenticator
+
+        class AuthSid(Authenticator):
+            def __init__(self, sid):
+                self.sid = sid
+
+            def _authentication_start(self, negotiate_unix_fd=False):
+                return "AUTH EXTERNAL " + self.sid.encode().hex()
+
+            def _receive_line(self, line):
+                if line.startswith("OK"):
+                    return "BEGIN"
+                raise RuntimeError("KDE Connect не пустил: " + line)
+
+        port = self._port()
+        if not port:
+            return
+        bus = await MessageBus(bus_address=f"tcp:host=127.0.0.1,port={port}", auth=AuthSid(self._sid())).connect()
+        self.bus = bus
+        await bus.call(Message(destination="org.freedesktop.DBus", path="/org/freedesktop/DBus", interface="org.freedesktop.DBus",
+                               member="AddMatch", signature="s", body=[f"type='signal',interface='{self.IFACE}'"]))
+
+        async def fetch(path, nid, updated):
+            try:
+                r = await bus.call(Message(destination="org.kde.kdeconnect.daemon", path=f"{path}/{nid}",
+                                           interface="org.freedesktop.DBus.Properties", member="GetAll", signature="s",
+                                           body=[self.IFACE + ".notification"]))
+                if r.message_type == MessageType.METHOD_RETURN and r.body:
+                    self.phone._from_bus({k: v.value for k, v in r.body[0].items()} | {"id": nid}, updated)
+            except Exception as e:
+                self.phone.last_error = f"уведомление телефона: {e}"[:200]
+
+        def handler(msg):
+            if msg.message_type == MessageType.SIGNAL and msg.interface == self.IFACE and \
+                    msg.member in ("notificationPosted", "notificationUpdated") and msg.body:
+                asyncio.ensure_future(fetch(msg.path, msg.body[0], msg.member == "notificationUpdated"))
+
+        bus.add_message_handler(handler)
+        self.ok = True
+        self.phone.last_error = ""
+        # the signals do not always reach a client on Windows: the list itself is compared every 3 s as well
+        # (a messenger often rewrites one notification per chat, so a changed text counts as new)
+        first = True
+        while bus.connected:
+            d = self.phone.device()
+            if d:
+                await self._poll(bus, d["id"], first)
+                first = False
+            else:
+                first = True
+            await asyncio.sleep(3)
+
+    async def _poll(self, bus, dev, baseline):
+        from dbus_next import Message, MessageType
+        path = f"/modules/kdeconnect/devices/{dev}/notifications"
+        r = await bus.call(Message(destination="org.kde.kdeconnect.daemon", path=path, interface=self.IFACE, member="activeNotifications"))
+        if r.message_type != MessageType.METHOD_RETURN or not r.body:
+            return
+        for nid in r.body[0]:
+            p = await bus.call(Message(destination="org.kde.kdeconnect.daemon", path=f"{path}/{nid}", interface="org.freedesktop.DBus.Properties",
+                                       member="GetAll", signature="s", body=[self.IFACE + ".notification"]))
+            if p.message_type != MessageType.METHOD_RETURN or not p.body:
+                continue
+            props = {k: v.value for k, v in p.body[0].items()} | {"id": nid}
+            if baseline:                  # already on the phone when Jarvis connected: not news
+                self.phone._last_text[str(props.get("internalId") or nid)] = (str(props.get("title") or "").strip(),
+                                                                              str(props.get("text") or "").strip())
+            else:
+                self.phone._from_bus(props, True)
+
+
+class Phone:
+    def __init__(self, core):
+        self.core = core
+        self.cfg = core.cfg
+        self.recent = collections.deque(maxlen=40)
+        self.seen = None              # notification lines already on the phone (None = not looked yet)
+        self.devices = []             # [{"id", "name", "reachable"}]
+        self._dev_t = 0
+        self._knock_t = 0
+        self.last_error = ""
+        self._last_text = {}          # notification id -> (title, text): an update without changes is not new
+        self.bus = KdeBus(self)
+
+    # ---------------------------------------------------------------- KDE Connect tool
+    def bin_dir(self):
+        p = self.cfg.get("phone.bin")
+        for d in ([Path(p)] if p else []) + CANDIDATES:
+            if (d / "kdeconnect-cli.exe").exists():
+                return d
+        return None
+
+    def cli(self, *args, timeout=12):
+        d = self.bin_dir()
+        if not d:
+            raise RuntimeError("KDE Connect не установлен")
+        r = subprocess.run([str(d / "kdeconnect-cli.exe"), *args], capture_output=True, timeout=timeout,
+                           creationflags=CREATE_NO_WINDOW)
+        out = r.stdout.decode("utf-8", "replace").replace("\r\n", "\n")
+        if r.returncode != 0 and not out.strip():
+            raise RuntimeError((r.stderr.decode("utf-8", "replace") or "kdeconnect-cli: ошибка").strip()[-300:])
+        return out
+
+    def ensure_daemon(self):
+        """kdeconnect-cli needs the KDE Connect app running; start its tray app quietly if it is not."""
+        import psutil
+        names = {(p.info["name"] or "").lower() for p in psutil.process_iter(["name"])}
+        if names & {"kdeconnectd.exe", "kdeconnect-indicator.exe", "kdeconnect-app.exe"}:
+            return True
+        d = self.bin_dir()
+        if d and (d / "kdeconnect-indicator.exe").exists():
+            subprocess.Popen([str(d / "kdeconnect-indicator.exe")], creationflags=CREATE_NO_WINDOW, cwd=str(d))
+            time.sleep(3)
+            return True
+        return False
+
+    def refresh_devices(self):
+        known = self.cli("-l", "--id-name-only")
+        avail = {l.split(" ", 1)[0] for l in self.cli("-a", "--id-name-only").splitlines() if l.strip()}
+        self.devices = [{"id": l.split(" ", 1)[0], "name": (l.split(" ", 1) + [""])[1].strip(), "reachable": l.split(" ", 1)[0] in avail}
+                        for l in known.splitlines() if l.strip()]
+        self._dev_t = time.time()
+        return self.devices
+
+    def device(self):
+        want = self.cfg.get("phone.device")
+        reach = [d for d in self.devices if d["reachable"]]
+        return next((d for d in reach if d["id"] == want), None) or (reach[0] if reach else None)
+
+    def _dev(self):
+        if time.time() - self._dev_t > 30 or not self.device():
+            self.refresh_devices()
+        d = self.device()
+        if not d:
+            raise RuntimeError("телефон не в сети: откройте KDE Connect на телефоне, он должен быть в той же Wi-Fi")
+        return d["id"]
+
+    # ---------------------------------------------------------------- notifications
+    def start(self):
+        threading.Thread(target=self._loop, daemon=True, name="phone").start()
+        self.bus.start()
+
+    def _loop(self):
+        time.sleep(30)
+        started = False
+        while True:
+            time.sleep(5)
+            if not self.cfg.get("phone.enabled", True) or not self.bin_dir():
+                continue
+            try:
+                if not started:
+                    started = self.ensure_daemon()
+                if time.time() - self._dev_t > 60:
+                    self.refresh_devices()
+                d = self.device()
+                if not d:
+                    self.seen = None
+                    # a VPN (Red Shield, WireGuard) may drop connections coming from the LAN but let through the answer
+                    # to a recent outgoing packet: keep knocking on the phone so its reply finds the door open
+                    if self.cfg.get("phone.ip") and time.time() - self._knock_t > 20:
+                        self._knock_t = time.time()
+                        self.cli("--refresh")
+                        time.sleep(3)
+                        self.refresh_devices()
+                    continue
+                pass                      # notifications come by D-Bus (KdeBus); its errors stay in last_error
+            except Exception as e:
+                self.last_error = str(e)[:200]
+
+    def _from_bus(self, d, updated):
+        """A notification the phone posted (D-Bus signal from KDE Connect): appName, title (sender), text, silent."""
+        if not self.cfg.get("phone.enabled", True) or not (self.cfg.get("phone.announce", True) or self.cfg.get("phone.calls", True)):
+            return
+        nid, app = str(d.get("internalId") or d.get("id") or ""), str(d.get("appName") or "").strip()
+        title, text = str(d.get("title") or "").strip(), str(d.get("text") or "").strip()
+        if not app or not (title or text):
+            return
+        if self._last_text.get(nid) == (title, text):
+            return                       # seen already (by the signal or the 3 s check), or re-sent without changes
+        self._last_text[nid] = (title, text)
+        body = f"{title}: {text}" if title and title.lower() != app.lower() and text else (text or title)
+        self._new(f"{app}: {body}", quiet=bool(d.get("silent")))
+
+    @staticmethod
+    def _gent(name):
+        """"Иван Петров" -> "Ивана Петрова" for "от …"; anything that is not a person's name stays as it is."""
+        from .nlu import morph
+        m = morph()
+        words = name.split()
+        if not m or not 0 < len(words) <= 3:
+            return name
+        out = []
+        for w in words:
+            p = next((p for p in m.parse(w) if {"Name", "Surn", "Patr"} & set(str(p.tag).replace(" ", ",").split(","))), None)
+            g = p.inflect({"gent"}) if p else None
+            if not g:
+                return name
+            out.append(g.word.capitalize() if w[:1].isupper() else g.word)
+        return " ".join(out)
+
+    @staticmethod
+    def _is(app, names):
+        a = app.lower()
+        return any(n.lower() == a or (len(n) > 3 and n.lower() in a) for n in names)
+
+    def rule_for(self, app, text):
+        """(rule, why): an explicit rule for the app wins; then the noise filter; then messengers / everything else."""
+        rules = {k.lower(): v for k, v in (self.cfg.get("phone.rules") or {}).items()}
+        if app.lower() in rules:
+            return rules[app.lower()], "правило"
+        if self._is(app, self.cfg.get("phone.mute") or MUTE_DEFAULT):
+            return "silent", "системное"
+        if self.cfg.get("phone.filter", True) and (self._is(app, NOISE_APPS) or NOISE_RX.search(text)):
+            return "silent", "неважное"
+        if self._is(app, MESSENGERS):
+            return self.cfg.get("phone.messenger_rule", "ask"), "мессенджер"
+        return self.cfg.get("phone.default_rule", "name"), ""
+
+    def _new(self, line, quiet=False):
+        app, _, text = line.partition(": ")
+        app, text = app.strip(), text.strip()
+        call = CALL_RX.search(line) or (app.lower().startswith(DIALERS) and text)
+        # the phone's "silent" mark is not used: messengers set it when they add a message to a chat's notification
+        rule, why = ("call", "") if call else self.rule_for(app, text)
+        item = {"app": app, "text": text, "at": dt.datetime.now().strftime("%H:%M"), "call": bool(call), "rule": rule, "why": why}
+        self.recent.appendleft(item)
+        self.core.emit("phone", item=item)
+        if call:
+            if self.cfg.get("phone.calls", True):
+                src = line if CALL_RX.search(app) else text      # "Входящий вызов: Мама" or "Телефон: Входящий вызов Мама"
+                who = re.sub(r"(?i)входящ\w*\s+(?:вызов|звонок)\s*(?:от\s+)?[:•·-]?\s*|incoming call\s*(?:from\s+)?[:•-]?\s*|звонит\s*", "",
+                             src).strip(" :•·-") or "кто-то"
+                self.core.initiative.propose(f"call:{who}", f"Звонит {who}.", priority=4, title="Телефон", cooldown_min=1, kind="phone")
+            return
+        if rule == "silent" or not self.cfg.get("phone.announce", True):
+            return
+        # "Иван: привет" -> the sender is the part before the first colon, when there is one
+        who, _, body = text.partition(": ") if ": " in text[:60] else ("", "", text)
+        frm = f" от {self._gent(who.strip())}" if who.strip() else ""
+        # priority 3: the user chose these rules, so they are said even at "говорить первым: о важном" (2 was only
+        # shown, and with no toast nothing happened at all). One sender: once per 30 s — a chat sends several updates
+        key = f"phone:{app.lower()}:{who.strip().lower()}"
+        if rule == "read":
+            self.core.initiative.propose(f"phone:{line}", f"{app}{frm}: {body}", priority=3, title=f"Телефон · {app}", cooldown_min=0, kind="phone")
+        elif rule == "ask":
+            # the text stays on the phone until "да": no toast with it either
+            self.core.initiative.propose(key, f"Сообщение в {app}{frm}. Прочитать?", priority=3, title=f"Телефон · {app}",
+                                         on_yes=lambda: self.core.say(body or "Текста нет."), cooldown_min=0.5, toast=False, kind="phone")
+        else:
+            self.core.initiative.propose(key, f"На телефоне сообщение в {app}{frm}." if self._is(app, MESSENGERS)
+                                         else f"На телефоне уведомление от {app}{frm}.", priority=3, title=f"Телефон · {app}",
+                                         cooldown_min=0.5, toast=False, kind="phone")
+
+    # ---------------------------------------------------------------- actions
+    def ring(self):
+        self.cli("-d", self._dev(), "--ring")
+        return "Звоню на телефон."
+
+    def share_text(self, text):
+        text = text.strip()
+        if re.match(r"^https?://\S+$", text):
+            self.cli("-d", self._dev(), "--share", text)       # a link opens on the phone
+            return "Открыл ссылку на телефоне."
+        self.cli("-d", self._dev(), "--share-text", text)
+        return "Отправил на телефон."
+
+    def share_file(self, path):
+        self.cli("-d", self._dev(), "--share", str(path), timeout=120)
+        return f"Отправил файл {Path(path).name} на телефон."
+
+    def ping(self, text):
+        self.cli("-d", self._dev(), "--ping-msg", text)
+        return "Отправил уведомление на телефон."
+
+    def photo(self):
+        folder = Path.home() / "Pictures" / "Jarvis"
+        folder.mkdir(parents=True, exist_ok=True)
+        p = folder / f"phone_{dt.datetime.now():%Y-%m-%d_%H%M%S}.jpg"
+        self.cli("-d", self._dev(), "--photo", str(p), timeout=60)
+        for _ in range(40):            # the phone takes the picture, then the file arrives
+            if p.exists() and p.stat().st_size > 0:
+                break
+            time.sleep(0.5)
+        return p
+
+    def number_for(self, who):
+        """'мама' -> '+7…' from Settings → Телефон → контакты для SMS (name = number), or a number said as is."""
+        from rapidfuzz import fuzz
+        digits = re.sub(r"[^\d+]", "", who)
+        if len(digits) >= 5:
+            return digits, who
+        book = self.cfg.get("phone.contacts") or {}
+        best = max(book.items(), key=lambda kv: fuzz.ratio(who.lower(), kv[0].lower()), default=None)
+        if best and fuzz.ratio(who.lower(), best[0].lower()) >= 70:
+            return best[1], best[0]
+        return None, who
+
+    def sms(self, number, text):
+        self.cli("-d", self._dev(), "--send-sms", text, "--destination", number)
+        return "SMS отправлено."
+
+    def call(self, who):
+        """KDE Connect cannot place a call by itself: it opens the phone's dialer with the number (a tel: link),
+        and the call starts with one tap on the phone."""
+        number, name = self.number_for(who)
+        if not number:
+            raise LookupError(f"не знаю номер «{who}»")
+        self.cli("-d", self._dev(), "--share", "tel:" + re.sub(r"[^\d+]", "", number))
+        return f"Набираю {name} на телефоне. Нажмите «позвонить»."
+
+    def tool_phone(self, a):
+        act = (a.get("action") or "").lower()
+        to, text = str(a.get("to") or ""), str(a.get("text") or "")
+        if act == "call":
+            return self.call(to)
+        if act == "sms":
+            number, name = self.number_for(to)
+            if not number:
+                raise LookupError(f"не знаю номер «{to}»: его можно добавить в Настройки → Телефон → контакты")
+            # never sent straight from the AI: the user says "да" first (the AI once sent one on its own)
+            self.core.ask_confirm(lambda: self.core.say(self.sms(number, text)), f"Отправить SMS {name}: «{text}»?")
+            return "спросил подтверждение — отправлю после «да»"
+        if act == "ring":
+            return self.ring()
+        if act == "share":
+            return self.share_text(text or to)
+        if act == "photo":
+            return str(self.photo())
+        if act == "status":
+            d = self.device() if self.devices else None
+            return {"подключён": bool(d), "телефон": (d or {}).get("name"), "контакты": sorted((self.cfg.get("phone.contacts") or {}))}
+        raise ValueError("action: call | sms | ring | share | photo | status")
+
+    # ---------------------------------------------------------------- connecting by IP
+    @staticmethod
+    def lan_ips():
+        """This PC's addresses in the home network (VPN adapters skipped): what to type on the phone."""
+        import psutil
+        skip = ("vpn", "radmin", "redlink", "wireguard", "tun", "tap", "vethernet", "loopback", "virtual", "hamachi", "zerotier")
+        stats = psutil.net_if_stats()
+        out = []
+        for name, addrs in psutil.net_if_addrs().items():
+            if any(s in name.lower() for s in skip) or not (stats.get(name) and stats[name].isup):
+                continue
+            for a in addrs:
+                if a.family.name == "AF_INET" and re.match(r"^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)", a.address):
+                    out.append(a.address)
+        return sorted(out, key=lambda ip: not ip.startswith("192.168."))
+
+    def set_phone_ip(self, ip):
+        """Discovery by broadcast fails behind some routers and VPNs (Radmin, WireGuard): KDE Connect then knocks on
+        the phone's address directly (customDevices in its config). Takes effect after its service restarts."""
+        ip = ip.strip()
+        if not re.match(r"^\d{1,3}(\.\d{1,3}){3}$", ip):
+            raise ValueError("нужен IP вида 192.168.1.105")
+        p = Path(os.environ.get("LOCALAPPDATA", "")) / "kdeconnect" / "config"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        lines = p.read_text("utf-8").splitlines() if p.exists() else ["[General]"]
+        lines = [l for l in lines if not l.startswith("customDevices=")]
+        if "[General]" not in lines:
+            lines.insert(0, "[General]")
+        lines.insert(lines.index("[General]") + 1, f"customDevices={ip}")
+        p.write_text("\n".join(lines) + "\n", "utf-8")
+        self.cfg.set("phone.ip", ip)
+        self.restart_kde()
+        return True
+
+    def restart_kde(self):
+        """Only KDE Connect's own background processes; its settings window, if open, reconnects by itself."""
+        import psutil
+        d = self.bin_dir()
+        for p in psutil.process_iter(["name", "exe"]):
+            if (p.info["name"] or "").lower() in ("kdeconnectd.exe", "kdeconnect-indicator.exe", "dbus-daemon.exe") and \
+                    d and str(d).lower() in (p.info["exe"] or "").lower():
+                try:
+                    p.terminate()
+                except Exception:
+                    pass
+        time.sleep(2)
+        self.seen, self._dev_t = None, 0
+        return self.ensure_daemon()
+
+    # ---------------------------------------------------------------- UI
+    def rpc_phone_ip(self, ip):
+        self.set_phone_ip(ip)
+        time.sleep(6)
+        try:
+            self.cli("--refresh")
+        except Exception:
+            pass
+        time.sleep(4)
+        return self.rpc_phone()
+
+    def rpc_phone(self):
+        installed = bool(self.bin_dir())
+        if installed and time.time() - self._dev_t > 10:
+            try:
+                self.ensure_daemon()
+                self.refresh_devices()
+            except Exception as e:
+                self.last_error = str(e)[:200]
+        g = lambda k, d: self.cfg.get("phone." + k, d)
+        return {"installed": installed, "devices": self.devices, "device": (self.device() or {}).get("id"),
+                "error": self.last_error, "recent": list(self.recent)[:15], "pc_ips": self.lan_ips(), "phone_ip": g("ip", ""),
+                "settings": {"enabled": g("enabled", True), "announce": g("announce", True), "read_text": g("read_text", False),
+                             "calls": g("calls", True), "filter": g("filter", True), "messenger_rule": g("messenger_rule", "ask"),
+                             "default_rule": g("default_rule", "name"), "rules": g("rules", {}), "contacts": g("contacts", {})},
+                "rule_titles": RULES, "apps": self.known_apps()}
+
+    def known_apps(self):
+        """Apps to set rules for: popular ones, the ones with a rule and the ones seen on the phone lately; messengers first."""
+        seen = {x["app"] for x in self.recent if not x.get("call")}
+        apps = set(POPULAR) | set(self.cfg.get("phone.rules") or {}) | seen
+        uniq = {}
+        for a in apps:                    # "telegram" from a voice command and "Telegram" from the phone are one app
+            uniq.setdefault(a.lower(), a)
+        return sorted(uniq.values(), key=lambda a: (not self._is(a, MESSENGERS), a.lower()))
+
+    def rpc_phone_rule(self, app, rule):
+        rules = dict(self.cfg.get("phone.rules") or {})
+        if rule in RULES:
+            rules[app] = rule
+        else:
+            rules.pop(app, None)       # "auto": back to the messenger / default rule and the noise filter
+        self.cfg.set("phone.rules", rules)
+        return self.rpc_phone()
+
+    def rpc_phone_set(self, **kw):
+        for k in ("enabled", "announce", "calls", "filter", "messenger_rule", "default_rule", "contacts", "device"):
+            if k in kw:
+                self.cfg.set("phone." + k, kw[k])
+        return self.rpc_phone()
+
+    def rpc_phone_action(self, action, text=""):
+        if action == "ring":
+            return self.ring()
+        if action == "clipboard":
+            from . import system as S
+            return self.share_text(S.clipboard_get() or "")
+        if action == "text":
+            return self.share_text(text)
+        if action == "photo":
+            p = self.photo()
+            os.startfile(p)
+            return str(p)
+        if action == "file":
+            return self.share_file(text)
+        raise ValueError("неизвестное действие")
+
+    def rpc_phone_install(self):
+        def run(job):
+            r = subprocess.run(["winget", "install", "--id", "KDE.KDEConnect", "--exact", "--silent",
+                                "--accept-package-agreements", "--accept-source-agreements", "--disable-interactivity"],
+                               capture_output=True, timeout=1800, creationflags=CREATE_NO_WINDOW)
+            if r.returncode != 0 and not self.bin_dir():
+                raise RuntimeError("winget не смог установить KDE Connect (код %s)" % r.returncode)
+            self.ensure_daemon()
+            return "KDE Connect установлен. Поставьте приложение KDE Connect на телефон и подтвердите сопряжение."
+        self.core.background.submit("install", "Устанавливаю KDE Connect", run)
+        return True
+
+
+# ====================================================================== voice rules
+def register(R, core):
+    PH = lambda: core.phone
+    from . import system as S
+
+    def do(fn):
+        def go():
+            try:
+                core.say(fn())
+            except Exception as e:
+                core.log(f"Телефон: {e}", "warn")
+                core.say("Не получилось: " + str(e).split(":")[-1].strip() if "не в сети" in str(e) or "не установлен" in str(e)
+                         else "Телефон не ответил. Проверьте, что KDE Connect открыт на телефоне.")
+        threading.Thread(target=go, daemon=True).start()
+        return True
+
+    PHONE = r"(?:телефон|телефона|телефону|мобильн\w+|смартфон\w*)"
+
+    @R(rf"^(?:найди|где|позвони\s+на|прозвони|звякни\s+на)\s+(?:мой\s+)?{PHONE}$|^(?:я\s+)?потерял\s+телефон$")
+    def _ring(m, t):
+        return do(PH().ring)
+
+    @R(rf"^(?:отправь|скинь|перекинь|кинь)\s+(?:это|буфер|ссылку|из\s+буфера)\s+на\s+{PHONE}$|^(?:открой)\s+(?:это|ссылку)\s+на\s+{PHONE}$")
+    def _clip(m, t):
+        return do(lambda: PH().share_text(S.clipboard_get() or ""))
+
+    @R(rf"^(?:отправь|скинь|напиши)\s+на\s+{PHONE}\s+(.+)$")
+    def _text(m, t):
+        return do(lambda: PH().share_text(m.group(1)))
+
+    @R(rf"^(?:сфоткай|сфотографируй)\s+(?:с\s+)?{PHONE}\w*$|^(?:сделай\s+)?фото\s+(?:с|на)\s+{PHONE}$")
+    def _photo(m, t):
+        def f():
+            p = PH().photo()
+            os.startfile(p)
+            return "Фото с телефона готово."
+        return do(f)
+
+    # "позвони маме" / "набери Ивана" / "позвони на номер 8 900…" — the dialer opens on the phone with the number
+    @R(rf"^(?:позвони|набери|звякни|вызови|позвонить)\s+(?!(?:мне\s+)?(?:на\s+)?(?:мой\s+)?{PHONE}\b|мне\b)(?:на\s+номер\s+)?(.+?)$")
+    def _call(m, t):
+        who = m.group(1).strip()
+        if re.search(r"\s(?:в|по|через)\s+(?:телеграм\w*|ватсап\w*|whatsapp|telegram|дискорд\w*|discord|вк|вайбер\w*|макс\w*)$", who):
+            return False          # a messenger call is the AI's job
+        number, name = PH().number_for(who)
+        if not number:
+            return (f"Не знаю номер «{who}». Добавьте его: Настройки → Телефон → контакты, строкой «{who} = +7…». "
+                    f"Или скажите номер: «позвони на номер …».")
+        return do(lambda: PH().call(who))
+
+    @R(r"^(?:напиши|отправь|скинь)\s+(?:смс|sms|эсэмэску)\s+(.+?)\s*(?:что|:)\s+(.+)$|^(?:напиши|отправь)\s+(?:смс|sms)\s+(?:на\s+номер\s+)?([\d +()-]{5,})\s+(.+)$")
+    def _sms(m, t):
+        who, text = (m.group(1), m.group(2)) if m.group(1) else (m.group(3), m.group(4))
+        number, name = PH().number_for(who.strip())
+        if not number:
+            return f"Не знаю номер «{who}». Добавьте его в Настройки → Телефон → контакты для SMS."
+        core.ask_confirm(lambda: do(lambda: PH().sms(number, text)), f"Отправить SMS {name}: «{text}»?")
+        return True
+
+    @R(rf"^(?:что|какие\s+уведомления)\s+(?:нового\s+)?на\s+{PHONE}$|^(?:прочитай\s+)?уведомления\s+(?:с\s+)?{PHONE}$")
+    def _list(m, t):
+        r = [x for x in PH().recent if x.get("rule") != "silent"][:5]
+        if not r:
+            return "Новых уведомлений с телефона не было."
+        # "спросить" apps: only where it came from, the text stays private
+        return "С телефона: " + "; ".join(x["app"] if x.get("rule") in ("ask", "name") else f"{x['app']}: {x['text']}" for x in r) + "."
+
+    @R(rf"^(?:не\s+читай|перестань\s+читать)\s+уведомления\s+(?:с\s+)?{PHONE}$|^(?:читай)\s+уведомления\s+(?:с\s+)?{PHONE}$")
+    def _toggle(m, t):
+        on = not t.startswith(("не", "перестань"))
+        core.cfg.set("phone.default_rule", "read" if on else "name")
+        return "Хорошо, буду читать уведомления с телефона сразу." if on else "Хорошо, только скажу, от какого приложения уведомление."
+
+    @R(r"^(?:не\s+говори|молчи)\s+(?:про|о|об)\s+(?:уведомлени\w+|сообщени\w+)\s+(?:из|от|в)\s+(.+)$"
+       r"|^(читай|спрашивай\s+(?:про|о))\s+(?:сообщени\w+|уведомлени\w+)\s+(?:из|от|в)\s+(.+)$")
+    def _app_rule(m, t):
+        app = (m.group(1) or m.group(3)).strip()
+        rule = "silent" if m.group(1) else "read" if m.group(2) == "читай" else "ask"
+        known = next((a for a in PH().known_apps() + MESSENGERS if a.lower() == app.lower() or app.lower() in a.lower()), app)
+        PH().rpc_phone_rule(known, rule)
+        return {"silent": f"Хорошо, про {known} молчу.", "read": f"Буду сразу читать сообщения из {known}.",
+                "ask": f"Буду спрашивать, читать ли сообщения из {known}."}[rule]

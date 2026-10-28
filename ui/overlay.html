@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>JARVIS HUD</title>
+<style>
+  :root { --cyan: #4fd8ff; --amber: #ffb347; --text: #d6f4ff; --dim: #7fa6bd; --c: var(--cyan); }
+  html, body { margin: 0; height: 100%; background: #03080f; color: var(--text); overflow: hidden; user-select: none;
+    font-family: "Segoe UI", sans-serif; }
+  body { display: flex; align-items: center; gap: 14px; padding: 0 16px; box-sizing: border-box;
+    border: 1px solid rgba(79, 216, 255, .45); background: radial-gradient(circle at 15% 50%, rgba(79,216,255,.16), #03080f 60%); }
+  body[data-state=thinking] { --c: var(--amber); }
+  body[data-state=listening] { --c: #c8f6ff; }
+  body.dictation { --c: #7dffb3; }
+  body.free[data-state=idle] { --c: #5dffb0; }
+  canvas { width: 76px; height: 76px; flex: none; }
+  .txt { flex: 1; min-width: 0; }
+  .st { font-size: 11px; letter-spacing: 3px; color: var(--c); text-transform: uppercase; font-weight: 700;
+    text-shadow: 0 0 8px var(--c); }
+  .line { font-size: 14.5px; line-height: 1.3; margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical; overflow: hidden; }
+  .heard { color: var(--dim); font-style: italic; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* fired reminder / timer card with buttons */
+  .notice { display: none; gap: 8px; margin-top: 6px; }
+  body.has-notice .notice { display: flex; }
+  body.has-notice { --c: var(--amber); animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 50% { box-shadow: inset 0 0 22px rgba(255, 179, 71, .35); } }
+  .notice button { flex: 1; font: 600 12.5px "Segoe UI", sans-serif; letter-spacing: .5px; color: var(--text); cursor: pointer;
+    background: rgba(255, 255, 255, .06); border: 1px solid var(--c); padding: 5px 8px; }
+  .notice button:hover { background: rgba(255, 179, 71, .22); }
+  body.night { filter: brightness(.62) sepia(.25); }
+</style>
+</head>
+<body data-state="idle">
+<canvas id="c" width="152" height="152" class="pywebview-drag-region"></canvas>
+<div class="txt">
+  <div class="st pywebview-drag-region" id="st">J.A.R.V.I.S.</div>
+  <div class="heard" id="heard"></div>
+  <div class="line" id="line"></div>
+  <div class="notice"><button onclick="notice('done')">Готово</button><button onclick="notice('snooze', 10)">+10 мин</button></div>
+</div>
+<script>
+const T = new URLSearchParams(location.search).get("t");
+const THEME = { jarvis: "#4fd8ff", mark3: "#ff4b5c", nano: "#9b86ff", emerald: "#3ff0a2", stealth: "#e4ecf2" };
+function applyTheme(name) {
+  const c = THEME[name] || THEME.jarvis;
+  document.documentElement.style.setProperty("--cyan", c);
+  document.body.style.borderColor = c + "88";
+  document.body.style.background = `radial-gradient(circle at 15% 50%, ${c}2a, #03080f 60%)`;
+}
+const rpc = (method, params = {}) => fetch("/api/rpc", { method: "POST",
+  headers: { "Content-Type": "application/json", "X-Jarvis-Token": T }, body: JSON.stringify({ method, params }) })
+  .then((r) => r.json()).then((j) => j.result);
+rpc("state").then((s) => { applyTheme(s.config.theme); const pl = { friday: "F.R.I.D.A.Y.", ultron: "ULTRON" }[(s.config.persona || {}).id]; if (pl) { LABEL.idle = pl; setState(state); } document.body.classList.toggle("night", !!s.night); if (s.notice && s.notice.hud !== false) showNotice(s.notice); }).catch(() => {});
+function showNotice(n) {
+  const on = !!(n && n.kind);
+  document.body.classList.toggle("has-notice", on);
+  if (on) { $("st").textContent = (n.kind === "timer" ? "Таймер · " : n.kind === "alarm" ? "Будильник · " : "Напоминание · ") + n.title; $("heard").textContent = ""; $("line").textContent = n.text; }
+  else setState(state);
+}
+function notice(action, minutes) { rpc("notice", { action, minutes }); showNotice(null); }
+const LABEL = { idle: "J.A.R.V.I.S.", listening: "Слушаю", thinking: "Думаю", speaking: "Говорю" };
+let state = "idle", mic = 0, voice = 0, dict = false, conv = false, follow = false;
+const $ = (id) => document.getElementById(id);
+function setState(s) {
+  state = s; document.body.dataset.state = s;
+  document.body.classList.toggle("free", conv || follow);
+  if (document.body.classList.contains("has-notice")) return;  // the reminder card keeps its title
+  $("st").textContent = dict ? "Диктовка" : (s === "idle" && conv) ? "Диалог — без имени" :
+    (s === "idle" && follow) ? "Можно без имени" : (LABEL[s] || s);
+}
+function connect() {
+  const ws = new WebSocket(`ws://${location.host}/ws?t=${T}`);
+  ws.onmessage = (e) => {
+    const ev = JSON.parse(e.data);
+    if (ev.type === "state") {
+      if (ev.dictation !== undefined) { dict = ev.dictation; document.body.classList.toggle("dictation", dict); }
+      conv = !!ev.conversation; follow = !!ev.follow;
+      setState(ev.state);
+    }
+    else if (ev.type === "theme") applyTheme(ev.name);
+    else if (ev.type === "persona") { LABEL.idle = ev.logo || "J.A.R.V.I.S."; setState(state); }
+    else if (ev.type === "notice") showNotice(ev.kind && ev.hud === false ? null : ev);  // the main window shows it
+    else if (ev.type === "night") document.body.classList.toggle("night", !!ev.on);
+    else if (ev.type === "mic_level") mic = ev.v;
+    else if (ev.type === "tts_level") voice = Math.min(1, ev.v);
+    else if (ev.type === "transcript") { $("heard").textContent = "«" + ev.text + "»"; $("line").textContent = ""; }
+    else if (ev.type === "jarvis_say") $("line").textContent = ev.text;
+    else if (ev.type === "chat_stream" && ev.state === "start") { $("line").textContent = ""; $("line").dataset.raw = ""; }
+    else if (ev.type === "chat_stream" && ev.state === "chunk") {
+      const t = ($("line").dataset.raw || "") + ev.text;
+      $("line").dataset.raw = t;
+      $("line").textContent = t.replace(/<jarvis>[\s\S]*?(<\/jarvis>|$)/g, " ").replace(/\{\s*"tool"[\s\S]*?(\}|$)/g, " ")
+        .replace(/<(?:j(?:a(?:r(?:v(?:i(?:s)?)?)?)?)?)?$/, "").replace(/\s+/g, " ").slice(-160);
+    } else if (ev.type === "chat_stream" && ev.state === "end") $("line").dataset.raw = "";
+  };
+  ws.onclose = () => setTimeout(connect, 1000);
+}
+connect();
+// mini reactor
+const cv = $("c"), x = cv.getContext("2d");
+let t0 = performance.now(), sm = 0;
+function frame(now) {
+  const t = (now - t0) / 1000;
+  const e = state === "speaking" ? voice : state === "listening" ? mic * 1.4 : state === "thinking" ? .4 : mic * .4;
+  sm += (e - sm) * .3;
+  const col = getComputedStyle(document.body).getPropertyValue("--c").trim() || "#4fd8ff";
+  x.clearRect(0, 0, 152, 152);
+  x.save(); x.translate(76, 76);
+  x.globalCompositeOperation = "lighter";
+  const g = x.createRadialGradient(0, 0, 4, 0, 0, 70);
+  g.addColorStop(0, "rgba(255,255,255,.9)"); g.addColorStop(.25, col); g.addColorStop(1, "rgba(0,0,0,0)");
+  x.globalAlpha = .35 + sm * .5; x.fillStyle = g; x.beginPath(); x.arc(0, 0, 70, 0, 6.283); x.fill();
+  x.globalAlpha = 1; x.strokeStyle = col; x.lineCap = "round";
+  const speed = state === "thinking" ? 3 : 1;
+  for (let i = 0; i < 3; i++) {
+    x.lineWidth = 4 - i; x.globalAlpha = .9 - i * .2;
+    const r = 34 + i * 11 + sm * 6, a = t * (i % 2 ? -1 : 1) * (1 + i * .5) * speed;
+    for (let s = 0; s < 3; s++) { x.beginPath(); x.arc(0, 0, r, a + s * 2.094, a + s * 2.094 + 1.4); x.stroke(); }
+  }
+  x.globalAlpha = 1; x.fillStyle = "#fff"; x.beginPath(); x.arc(0, 0, 9 + sm * 6, 0, 6.283); x.fill();
+  x.restore();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
