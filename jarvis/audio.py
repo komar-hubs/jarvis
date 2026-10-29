@@ -28,6 +28,35 @@ def _sil(d):
     return np.zeros(int(SR * d), np.float32)
 
 
+def _suit():
+    """The suit powering up (the boot screen): a low hum rising, a breath of air, three chimes and a soft chord."""
+    rng = np.random.default_rng(7)
+    n = int(SR * 2.6)
+    t = np.arange(n) / SR
+    # the hum: 48 -> 120 Hz with a little harmonic grit, swelling in and settling
+    f = 48 + 72 * np.clip(t / 1.4, 0, 1) ** 1.6
+    ph = 2 * np.pi * np.cumsum(f) / SR
+    hum = (np.sin(ph) + .35 * np.sin(2 * ph) + .15 * np.sin(3 * ph)) * np.clip(t / .5, 0, 1) * np.exp(-np.clip(t - 1.5, 0, None) * 2.2) * .22
+    # the air: noise brightening with the spin-up
+    noise = rng.standard_normal(n)
+    a = np.exp(-2 * np.pi * (300 + 2400 * np.clip(t / 1.3, 0, 1)) / SR)
+    air = np.zeros(n)
+    acc = 0.0
+    for i in range(n):           # a simple moving one-pole low-pass (its cutoff rises)
+        acc = a[i] * acc + (1 - a[i]) * noise[i]
+        air[i] = acc
+    air *= np.sin(np.pi * np.clip(t / 1.5, 0, 1)) * .12
+    out = hum + air
+    # three chimes and the chord that holds
+    for start, freqs, vol, dec in ((1.15, [880], .16, .35), (1.32, [1109], .15, .35), (1.49, [1319], .16, .45),
+                                   (1.7, [440, 659, 880, 1319], .13, .9)):
+        k = int(SR * start)
+        tone = _tone(freqs, 2.6 - start, vol, attack=.004, decay=dec)
+        out[k:k + len(tone)] += tone[:n - k]
+    peak = np.max(np.abs(out)) or 1
+    return (out / peak * .55).astype(np.float32)
+
+
 SOUNDS = {
     "wake": _cat(_tone([880, 1320], 0.09, 0.18), _tone([1320, 1760], 0.12, 0.16)),
     "done": _cat(_tone([1320], 0.07, 0.12), _tone([990], 0.1, 0.1)),
@@ -36,6 +65,7 @@ SOUNDS = {
     "boot": _cat(*[_tone([220 * (1.12 ** i), 440 * (1.12 ** i)], 0.07, 0.08 + i * 0.01) for i in range(10)],
                  _tone([880, 1318, 1760], 0.7, 0.18, decay=0.35)),
     "alarm": _cat(*[_cat(_tone([988, 1480], 0.16, 0.3), _sil(0.06)) for _ in range(4)], _sil(0.4)),
+    "suit": _suit(),
 }
 
 

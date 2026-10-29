@@ -216,6 +216,8 @@ class Core:
         self.marker = Marker(self)         # circles / underlines / arrows drawn over the screen
         from .screenmem import ScreenMemory
         self.screenmem = ScreenMemory(self)  # "где я видел …": the active window's text once a minute, local OCR
+        from .boot import Boot
+        self.boot = Boot(self)             # the suit's power-up when the PC starts (ui/boot.html)
         from .macros import Macros
         self.macros = Macros(self)         # "запиши макрос": clicks and keys recorded and played back
         from .extras import Extras
@@ -374,7 +376,9 @@ class Core:
         if "windowsapps" in (sys.base_prefix + sys.executable).lower():
             # Microsoft Store Python is a packaged app: Windows gives it silence instead of the microphone
             threading.Timer(6, lambda: self._mic_warning(mic_access_problem())).start()
-        if self.cfg.get("setup_done") and self.cfg.get("greeting", True):
+        if self.boot.should_play():
+            self.boot.schedule()                       # the full-screen power-up greets instead (ui/boot.html)
+        elif self.cfg.get("setup_done") and self.cfg.get("greeting", True):
             self.player.sound("boot")
             threading.Timer(1.6, lambda: self.say(self.greeting_phrase() + " " + random.choice(
                 ["Все системы в норме.", "Системы онлайн.", "Готов к работе.", "Чем займёмся?"]))).start()
@@ -1802,7 +1806,7 @@ class Core:
         fn = next((getattr(o, "rpc_" + method) for o in (self, self.extras, self.mail, self.sentinel, self.initiative,
                                                           self.people, self.watchers, self.background, self.plugins,
                                                           self.automations, self.notebook, self.backup, self.persona, self.phone,
-                                                          self.quick, self.marker, self.screenmem, self.macros)
+                                                          self.quick, self.marker, self.screenmem, self.macros, self.boot)
                    if hasattr(o, "rpc_" + method)), None)
         if not fn:
             raise ValueError(f"unknown method {method}")

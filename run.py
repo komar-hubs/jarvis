@@ -356,8 +356,44 @@ def main():
             qs["open"] = False
             core.log(f"Быстрая панель: {e}", "warn")
 
+    # the suit's power-up (ui/boot.html): a full-screen cinematic boot when the PC starts or on "протокол загрузки"
+    boot = None
+    if core.cfg.get("boot.mode", "startup") != "off":
+        try:
+            boot = webview.create_window(
+                "JARVIS BOOT", f"{url}ui/boot.html?t={core.cfg.get('token')}", width=1280, height=720, frameless=True,
+                easy_drag=False, on_top=True, hidden=True, resizable=False, background_color="#02060b")
+        except Exception as e:
+            core.log(f"Экран загрузки: {e}", "warn")
+
+    def boot_show():
+        import json as _json
+        import win32api
+        import win32con
+        import win32gui
+        from jarvis import system as S
+        try:
+            mon = win32api.MonitorFromPoint(win32api.GetCursorPos(), 2)
+            l, t, r, b = win32api.GetMonitorInfo(mon)["Monitor"]
+        except Exception:
+            l, t, r, b = 0, 0, win32api.GetSystemMetrics(0), win32api.GetSystemMetrics(1)
+        shot = core.quick.snapshot((l, t, r, b))      # the desktop dissolves into the HUD
+        boot.evaluate_js(f"prepare({_json.dumps(shot)});")
+        boot.show()
+        h = win32gui.FindWindow(None, "JARVIS BOOT")
+        if h:
+            win32gui.SetWindowPos(h, win32con.HWND_TOPMOST, l, t, r - l, b - t, win32con.SWP_SHOWWINDOW)
+            S.focus_window(h)
+        boot.evaluate_js("start();")
+
+    def boot_hide():
+        if boot:
+            boot.hide()
+
     core.ui_hooks = {"show": show, "hide": window.hide, "quit": shutdown, "menu_hide": menu_hide,
                      "quick_show": quick_show, "quick_hide": quick_hide}
+    if boot:
+        core.ui_hooks.update(boot_show=boot_show, boot_hide=boot_hide)
 
     # tray
     try:
@@ -467,7 +503,8 @@ def main():
                 main_front = S.active_title() == "J.A.R.V.I.S."
             except Exception:
                 main_front = False
-            want = time.time() - last_active < 3.5 and not main_front and core.cfg.get("overlay", True)
+            want = time.time() - last_active < 3.5 and not main_front and core.cfg.get("overlay", True) \
+                and not core.boot.running   # the boot screen shows the voice itself
             try:
                 if want and not shown:
                     show_hud()
