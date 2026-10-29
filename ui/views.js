@@ -486,7 +486,7 @@ async function loadSettings() {
     <label>Сторож системы</label>${sw_("s-sent", !c.sentinel || c.sentinel.enabled !== false, "автозагрузка, неподписанные программы, майнеры, зависания, hosts, Защитник, сеть")}
     <label>Зрение для мыши</label>${sw_("s-mvis", !c.mouse || c.mouse.vision !== false, "искать иконки без подписи по скриншоту (модель с картинками)")}
     <label>Фоновый режим</label>${sw_("s-bg", !c.background || c.background.enabled !== false, "сам освобождаю память и чищу временные файлы при нехватке — без мыши и клавиатуры")}
-    <label>Мессенджер</label><div class="inline">${sel("s-msgapp", [["telegram", "Telegram"], ["discord", "Discord"], ["whatsapp", "WhatsApp"]], (c.messenger || {}).default || "telegram")}${sw_("s-msgconf", !c.messenger || c.messenger.confirm !== false, "спрашивать «Отправить?»")}</div>
+    <label>Мессенджер</label><div class="inline">${sel("s-msgapp", [["telegram", "Telegram"], ["discord", "Discord"], ["whatsapp", "WhatsApp"], ["vk", "ВКонтакте (в браузере)"]], (c.messenger || {}).default || "telegram")}${sw_("s-msgconf", !c.messenger || c.messenger.confirm !== false, "спрашивать «Отправить?»")}</div>
     <label>Разбор почты</label>${sw_("s-bgmail", c.background && c.background.mail_sort, "раз в полчаса убирать старые рассылки в папку Newsletters")}
     <div class="full hint">Во время игр и видео на весь экран, в режиме фокуса, «не беспокой» и когда вас нет за ПК я жду удобного момента. С вопросом («Закрыть её?») можно ответить просто «да».</div>
   </div></div>
