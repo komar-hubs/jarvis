@@ -274,7 +274,6 @@ def main():
         y = max(wa.top + 6, min(y, wa.bottom - MH - 6))
         tray_menu.move(x, y)
         tray_menu.show()
-        import win32gui
         from jarvis import system as S
         h = S.own_window("JARVIS MENU")
         if h:
@@ -345,7 +344,6 @@ def main():
             return
         import json as _json
         import win32api
-        import win32con
         import win32gui
         from jarvis import system as S
         with qlock:
@@ -409,8 +407,6 @@ def main():
     def boot_show():
         import json as _json
         import win32api
-        import win32con
-        import win32gui
         from jarvis import system as S
         try:
             mon = win32api.MonitorFromPoint(win32api.GetCursorPos(), 2)

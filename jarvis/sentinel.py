@@ -111,6 +111,8 @@ class Initiative:
             return False
         if priority >= 4:
             return True
+        if getattr(getattr(c, "boot", None), "running", False):
+            return False  # the boot screen is greeting: a phone notification waits until it is over
         if c.sleeping or time.time() < c.dnd_until or c.extras.focus_active():
             return False
         if _user_state() in (2, 3, 4):
@@ -174,6 +176,11 @@ class Initiative:
 
 
 # ====================================================================== sentinel
+# Windows' own memory holders: they grow when the RAM fills up, by design, and cannot be "restarted"
+SYSTEM_MEMORY = {"memcompression", "memory compression", "system", "registry", "secure system", "vmmem", "vmmemwsl",
+                 "dwm.exe", "csrss.exe", "lsass.exe", "svchost.exe", "msmpeng.exe", "searchindexer.exe", "audiodg.exe",
+                 "wininit.exe", "services.exe", "smss.exe", "fontdrvhost.exe"}
+
 # unsigned helpers that come with many games and apps unpacked into Downloads: not worth a warning
 BENIGN_HELPERS = {"crashpad_handler.exe", "unitycrashhandler64.exe", "unitycrashhandler32.exe", "crashreporter.exe",
                   "crashhandler.exe", "crashsender1403.exe", "bugsplatcrashhandler.exe", "werfault.exe"}
@@ -435,6 +442,8 @@ class Sentinel:
         live = set()
         for rss, pid, name in top[:15]:
             live.add(pid)
+            if name in SYSTEM_MEMORY or pid == os.getpid() or self.core.extras.is_game(name):
+                continue    # "Memcompression … похоже на утечку, перезапустить": Windows' own memory, a game's loading
             d = self._rss[pid]
             d.append((now, rss))
             while d and now - d[0][0] > 900:

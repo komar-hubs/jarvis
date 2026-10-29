@@ -550,6 +550,48 @@ class Router:
                 return random.choice([f"Запускаю {name}.", f"Открываю {name}, {addr()}.", f"{name} запускается."])
             return False  # not an installed app: the AI decides (site, folder, setting...)
 
+        @R(r"^(закрой|закрыть|сверни|свернуть|убери)\s+(?:все|всё|остальное|остальные)(?:\s+(?:окна|программы|приложения))?\s*,?\s+"
+           r"(?:кроме|но\s+не|за\s+исключением)\s+(.+)$|^(оставь)\s+только\s+(.+)$")
+        def _close_all_but(m, t):
+            """"Закрой всё, кроме телеграма и хрома", "сверни всё кроме дискорда", "оставь только музыку"."""
+            verb, rest = (m.group(1), m.group(2)) if m.group(1) else (m.group(3), m.group(4))
+            minimize = verb.startswith("свер")
+            terms = [x.strip(" ,.") for x in re.split(r",|\s+и\s+|\s+а\s+также\s+", rest) if x.strip(" ,.")]
+            terms = [re.sub(r"^(?:окно|окна|программу|приложение)\s+", "", x) for x in terms]
+            wins, kept, unknown = S.windows_except(terms)
+            if unknown and len(unknown) == len(terms):
+                return f"Не вижу открытого «{unknown[0]}», {addr()}. Ничего не трогаю."
+            if not wins:
+                return "Закрывать нечего: кроме этого ничего не открыто." if not minimize else "Сворачивать нечего."
+            names = []
+            for w in wins:
+                nm = core.extras.app_info(w["proc"].lower())[0]
+                if nm not in names:
+                    names.append(nm)
+            kept_names = ", ".join(dict.fromkeys(core.extras.app_info(p)[0] for p in sorted(kept))) or ", ".join(terms)
+
+            def act():
+                import win32con
+                import win32gui
+                n = 0
+                for w in wins:
+                    try:
+                        if minimize:
+                            win32gui.ShowWindow(w["hwnd"], win32con.SW_MINIMIZE)
+                        else:
+                            win32gui.PostMessage(w["hwnd"], win32con.WM_CLOSE, 0, 0)   # like the cross: unsaved work asks
+                        n += 1
+                    except Exception:
+                        pass
+                core.say(("Свернул" if minimize else "Закрыл") + f" {n} {plural(n, 'окно', 'окна', 'окон')}. Оставил {kept_names}."
+                         + (f" «{unknown[0]}» не нашёл." if unknown else ""))
+            if minimize:
+                act()
+                return True
+            listed = ", ".join(names[:5]) + (f" и ещё {len(names) - 5}" if len(names) > 5 else "")
+            core.ask_confirm(act, f"Закрою {listed}. Оставлю {kept_names}. Закрывать?")
+            return True
+
         @R(r"^(?:закрой|выключи|заверши|убей|выруби|закрыть)\s+(?:все\s+)?(?:программу\s+|приложение\s+|игру\s+)?(.+)$", generic=True)
         def _close(m, t):
             q = m.group(1).strip()

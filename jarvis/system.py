@@ -258,6 +258,45 @@ def find_windows(query):
     return [w for _, w in out]
 
 
+# never closed by "закрой всё": the system shell, Jarvis itself and the Claude app it may be developed in
+KEEP_ALWAYS = {"explorer.exe", "claude.exe", "taskmgr.exe", "pythonw.exe", "python.exe", "searchhost.exe",
+               "startmenuexperiencehost.exe", "shellexperiencehost.exe", "lockapp.exe", "textinputhost.exe"}
+
+
+def windows_except(keep_terms):
+    """Visible app windows that "закрой всё, кроме …" would close: (to_close, kept_procs, unknown_terms).
+    A named app is kept whole — every window of its process ("кроме хрома" keeps all Chrome windows, "кроме ютуба"
+    keeps the browser the YouTube tab is in)."""
+    import win32gui
+    me = os.getpid()
+    keep_procs, unknown = set(), []
+    for term in keep_terms:
+        tries = [term]
+        try:                                    # "кроме настроек" -> "настройка", then a bare stem "настро"
+            from .nlu import morph
+            tries.append(" ".join(morph().parse(w)[0].normal_form for w in term.split()))
+        except Exception:
+            pass
+        tries += [term[:-k] for k in (1, 2) if len(term) - k >= 5 and " " not in term]
+        hits = next((h for h in (find_windows(x) for x in dict.fromkeys(tries)) if h), [])
+        if hits:
+            keep_procs |= {w["proc"].lower() for w in hits}
+        else:
+            unknown.append(term)
+    out = []
+    for w in list_windows():
+        proc = w["proc"].lower()
+        if w["pid"] == me or proc in KEEP_ALWAYS or proc in keep_procs or not proc:
+            continue
+        try:
+            if win32gui.GetWindow(w["hwnd"], 4):      # GW_OWNER: a dialog of another window goes with its owner
+                continue
+        except Exception:
+            pass
+        out.append(w)
+    return out, keep_procs, unknown
+
+
 def focus_window(hwnd):
     import win32con
     import win32gui
