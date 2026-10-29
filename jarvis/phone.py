@@ -227,6 +227,7 @@ class Phone:
         self.searching = False                         # "найди телефон": ringing again and again until found
         self.present = None                            # the phone in the home Wi-Fi (None: not known yet)
         self.away = None                               # {"since", "acted", "paused", "seen"} while the phone is gone
+        self._ip, self._ip_t, self._ping_fail = None, 0, 0   # our own ping of the phone, see presence_tick
         self.seen = None              # notification lines already on the phone (None = not looked yet)
         self.devices = []             # [{"id", "name", "reachable"}]
         self._dev_t = 0
@@ -592,8 +593,21 @@ class Phone:
         if not self.cfg.get("phone.presence", True):
             self.away = None
             return
+        why = "KDE Connect"
+        # KDE Connect on Windows may keep a dead connection "on the line" for many minutes after the phone left
+        # (Windows notices a vanished TCP peer late). While nobody is at the PC the phone is pinged as well:
+        # two silent pings in a row (30 s) and it counts as gone; any answer brings it back.
+        if reachable and S.idle_seconds() > 60:
+            ip = self._phone_ip()
+            self._ping_fail = 0 if not ip or self._ping(ip) else self._ping_fail + 1
+            if self._ping_fail >= 2:
+                reachable, why = False, "не отвечает на ping"
+        else:
+            self._ping_fail = 0
         was, self.present = self.present, reachable
         now = time.time()
+        if was is not None and was != reachable:
+            self.core.log(f"Телефон {'снова в сети' if reachable else f'пропал из сети ({why})'}")
         if not reachable:
             if was is None:                        # unknown at start: never act on a phone that was never seen
                 return
@@ -642,6 +656,47 @@ class Phone:
             except Exception:
                 pass
         self.core.say(" ".join(parts))
+
+    def _phone_ip(self):
+        """The phone's address in the home network: from KDE Connect's device list (every 10 min), or Settings."""
+        if time.time() - self._ip_t > 600:
+            self._ip_t = time.time()
+            try:
+                want = self.cfg.get("phone.device") or next((x["id"] for x in self.devices), "")
+                line = next((l for l in self.cli("-l").splitlines() if want and want in l), "")
+                m = re.search(r"\b(\d{1,3}(?:\.\d{1,3}){3})\b", line)
+                if m:
+                    self._ip = m.group(1)
+            except Exception:
+                pass
+        return self._ip or self.cfg.get("phone.ip") or None
+
+    @staticmethod
+    def _ping(ip):
+        """One ICMP echo with Windows' own IcmpSendEcho (no console window, no process): True if the phone answered.
+        A dozing phone answers late, so it gets 1.5 s."""
+        import ctypes
+        import socket
+        import struct
+        try:
+            icmp = ctypes.WinDLL("iphlpapi")     # a private copy: argtypes set here do not leak into other modules
+            icmp.IcmpCreateFile.restype = ctypes.c_void_p                     # a 64-bit handle: the default int truncates it
+            icmp.IcmpSendEcho.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_void_p, ctypes.c_uint16,
+                                          ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint32]
+            icmp.IcmpCloseHandle.argtypes = [ctypes.c_void_p]
+            h = icmp.IcmpCreateFile()
+            if not h or h == ctypes.c_void_p(-1).value:
+                return True                      # cannot check: never call a phone gone because of that
+            try:
+                addr = struct.unpack("<I", socket.inet_aton(ip))[0]
+                buf = ctypes.create_string_buffer(32)
+                reply = ctypes.create_string_buffer(256)
+                n = icmp.IcmpSendEcho(h, addr, buf, 32, None, reply, 256, 1500)
+                return n > 0 and struct.unpack_from("<I", reply.raw, 4)[0] == 0      # ICMP_ECHO_REPLY.Status == IP_SUCCESS
+            finally:
+                icmp.IcmpCloseHandle(h)
+        except Exception:
+            return True
 
     def rpc_phone_find(self, on=True):
         """The quick panel / Settings button: start or stop ringing the phone."""
