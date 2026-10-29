@@ -148,7 +148,7 @@ class KdeBus:
         self.phone.last_error = ""
         # the signals do not always reach a client on Windows: the list itself is compared every 3 s as well
         # (a messenger often rewrites one notification per chat, so a changed text counts as new)
-        first = True
+        first, tick = True, 0
         while bus.connected:
             d = self.phone.device()
             if d:
@@ -156,7 +156,28 @@ class KdeBus:
                 first = False
             else:
                 first = True
+            if tick % 5 == 0:                   # every 15 s: is the phone still in the home network?
+                await self._presence(bus)
+            tick += 1
             await asyncio.sleep(3)
+
+    async def _presence(self, bus):
+        from dbus_next import Message, MessageType
+        want = self.phone.cfg.get("phone.device") or next((x["id"] for x in self.phone.devices), None)
+        if not want:
+            return
+        try:
+            r = await bus.call(Message(destination="org.kde.kdeconnect.daemon", path=f"/modules/kdeconnect/devices/{want}",
+                                       interface="org.freedesktop.DBus.Properties", member="Get", signature="ss",
+                                       body=["org.kde.kdeconnect.device", "isReachable"]))
+            if r.message_type == MessageType.METHOD_RETURN and r.body:
+                reachable = bool(r.body[0].value)
+                for x in self.phone.devices:
+                    if x["id"] == want:
+                        x["reachable"] = reachable
+                threading.Thread(target=self.phone.presence_tick, args=(reachable,), daemon=True).start()
+        except Exception:
+            pass
 
     async def _poll(self, bus, dev, baseline):
         from dbus_next import Message, MessageType
@@ -201,8 +222,10 @@ class Phone:
         self.core = core
         self.cfg = core.cfg
         self.recent = collections.deque(maxlen=40)
-        self.repliable = collections.deque(maxlen=20)
-        self.searching = False                         # "найди телефон": ringing again and again until found   # messenger notifications with a "Reply" field on the phone
+        self.repliable = collections.deque(maxlen=20)   # messenger notifications with a "Reply" field on the phone
+        self.searching = False                         # "найди телефон": ringing again and again until found
+        self.present = None                            # the phone in the home Wi-Fi (None: not known yet)
+        self.away = None                               # {"since", "acted", "paused", "seen"} while the phone is gone
         self.seen = None              # notification lines already on the phone (None = not looked yet)
         self.devices = []             # [{"id", "name", "reachable"}]
         self._dev_t = 0
@@ -527,6 +550,66 @@ class Phone:
     def stop_search(self):
         was, self.searching = self.searching, False
         return was
+
+    # ---------------------------------------------------------------- "ушёл / вернулся" by the phone in the Wi-Fi
+    def presence_tick(self, reachable):
+        """Every 15 s. The phone gone for 3 minutes while nobody touches the PC: music paused, the PC locked.
+        Back: "С возвращением", the music goes on, and what came while away. A full-screen film or game is left
+        alone: a sleeping phone (HyperOS kills KDE Connect) must not lock the screen in the middle of a movie."""
+        from . import system as S
+        if not self.cfg.get("phone.presence", True):
+            self.away = None
+            return
+        was, self.present = self.present, reachable
+        now = time.time()
+        if not reachable:
+            if was is None:                        # unknown at start: never act on a phone that was never seen
+                return
+            if self.away is None:
+                self.away = {"since": now, "acted": False, "paused": False, "seen": len(self.recent)}
+            a = self.away
+            if not a["acted"] and now - a["since"] > 180 and S.idle_seconds() > 120 and not S.foreground_fullscreen():
+                a["acted"] = True
+                try:
+                    st = S.media_control("info")
+                    if st.get("playing"):
+                        S.media_control("pause")
+                        a["paused"] = True
+                except Exception:
+                    pass
+                self.core.log("Телефон ушёл из Wi-Fi: похоже, вы ушли" + (" — заблокировал ПК" if self.cfg.get("phone.presence_lock", True) else ""))
+                if self.cfg.get("phone.presence_lock", True):
+                    S.lock()
+            return
+        a = self.away
+        if a is None:
+            return
+        if not a["acted"]:                         # back within 3 minutes (or the phone only dozed): nothing happened
+            self.away = None
+            return
+        if S.idle_seconds() > 30:                  # the phone is back; the greeting waits until the user is at the PC
+            return
+        self.away = None
+        news = list(self.recent)[:max(0, len(self.recent) - a["seen"])]
+        calls = [x for x in news if x.get("call")]
+        msgs = [x for x in news if not x.get("call") and x.get("rule") != "silent"]
+        mins = int((now - a["since"]) / 60)
+        parts = [f"С возвращением, {self.core.persona.address()}."]
+        if msgs or calls:
+            what = []
+            if msgs:
+                apps = sorted({x["app"] for x in msgs})
+                what.append(f"{len(msgs)} уведомлен{'ие' if len(msgs) == 1 else 'ия' if len(msgs) < 5 else 'ий'} ({', '.join(apps[:3])})")
+            if calls:
+                what.append(f"звонки: {len(calls)}")
+            parts.append(f"Пока вас не было {mins} мин: " + ", ".join(what) + ".")
+        if a["paused"]:
+            try:
+                S.media_control("play")
+                parts.append("Продолжаю музыку.")
+            except Exception:
+                pass
+        self.core.say(" ".join(parts))
 
     def rpc_phone_find(self, on=True):
         """The quick panel / Settings button: start or stop ringing the phone."""

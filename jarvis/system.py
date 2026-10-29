@@ -1031,6 +1031,21 @@ def foreground_pid():
         return 0
 
 
+def foreground_fullscreen():
+    """The active window covers its whole monitor (a film, a game, a full-screen video), the desktop excluded."""
+    try:
+        import win32api
+        import win32gui
+        h = win32gui.GetForegroundWindow()
+        if not h or win32gui.GetClassName(h) in ("Progman", "WorkerW", "Shell_TrayWnd"):
+            return False
+        l, t, r, b = win32gui.GetWindowRect(h)
+        ml, mt, mr, mb = win32api.GetMonitorInfo(win32api.MonitorFromWindow(h, 2))["Monitor"]
+        return l <= ml and t <= mt and r >= mr and b >= mb
+    except Exception:
+        return False
+
+
 def recycle(paths):
     """Send files to the Recycle Bin (they can be restored), no dialogs."""
     from ctypes import wintypes

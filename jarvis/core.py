@@ -214,6 +214,10 @@ class Core:
         self.quick = Quick(self)           # the quick panel over any window (Ctrl+Alt+Q)
         from .marker import Marker
         self.marker = Marker(self)         # circles / underlines / arrows drawn over the screen
+        from .screenmem import ScreenMemory
+        self.screenmem = ScreenMemory(self)  # "где я видел …": the active window's text once a minute, local OCR
+        from .macros import Macros
+        self.macros = Macros(self)         # "запиши макрос": clicks and keys recorded and played back
         from .extras import Extras
         self.extras = Extras(self)   # before the router: it registers voice rules of its own
         self.router = Router(self)
@@ -358,6 +362,7 @@ class Core:
         self.automations.start()
         self.backup.start()
         self.phone.start()
+        self.screenmem.start()
         threading.Thread(target=lambda: nlu.morph(), daemon=True).start()  # word-form dictionary: load ahead
         agent = {"claude_code": "claude", "antigravity": "antigravity"}.get(self.cfg.get("ai.provider"))
         if agent:
@@ -696,7 +701,17 @@ class Core:
             return True
         return is_imperative(words[0])
 
-    def spawn_chat(self, text, source="text", add_user=True, extra=None):
+    def _show_step(self, hit):
+        """Before the AI clicks: a quick ring around the target, so the user sees what is about to be pressed."""
+        if not self.cfg.get("agent.show_steps", True) or not hit.get("rect"):
+            return
+        try:
+            self.marker.show([{"rect": tuple(int(v) for v in hit["rect"]), "style": "circle"}], seconds=1.5)
+            time.sleep(0.45)
+        except Exception:
+            pass
+
+    def spawn_chat(self, text, source="text", add_user=True, extra=None, agent=False):
         """AI answers run in their own thread: voice commands keep working while the model thinks,
         and a new question supersedes an unfinished answer instead of queueing behind it."""
         if self.ai_busy:
@@ -708,7 +723,7 @@ class Core:
         def run():
             g = self.journal.begin(text, "ai")
             try:
-                self.chat(text, source=source, add_user=add_user, extra=extra, gen=gen)
+                self.chat(text, source=source, add_user=add_user, extra=extra, gen=gen, agent=agent)
             except Exception as e:
                 self.log(f"Ошибка ИИ: {e}\n{traceback.format_exc()[-600:]}", "error")
                 self.say("Простите, сэр, что-то пошло не так.")
@@ -866,7 +881,7 @@ class Core:
         msgs = [m for m in self.chat_store.items if m["role"] in ("user", "assistant") and not m.get("hidden")][-n:]
         return [{"role": m["role"], "content": m["content"]} for m in msgs]
 
-    def chat(self, text, source="text", add_user=True, speak=None, extra=None, gen=None, step=False):
+    def chat(self, text, source="text", add_user=True, speak=None, extra=None, gen=None, step=False, agent=False):
         """extra: hidden text appended to the user's message for the model only (e.g. a screenshot path).
         gen: cancel generation of this request; stop_all() or a newer question bumps cancel_gen.
         step: one step of a chain (no follow-up window yet: the chain goes on)."""
@@ -879,7 +894,8 @@ class Core:
                     {"role": "system", "content": "Контекст: " + self.context_line()}] + self._history()
         if extra and messages[-1]["role"] == "user":
             messages[-1] = {"role": "user", "content": messages[-1]["content"] + "\n" + extra}
-        for _ in range(5):
+        # agent ("сделай за меня …"): more steps, and it always goes on until the task is done or the steps run out
+        for _ in range(int(self.cfg.get("agent.max_steps", 12)) if agent else 5):
             answer, tools, web_used = self._stream_answer(prov, messages, speak, gen)
             if answer is None or gen != self.cancel_gen:
                 return
@@ -888,8 +904,8 @@ class Core:
             if not data or gen != self.cancel_gen:
                 break
             # screen reading and failed actions are steps of a longer task: the model may continue with tags
-            acting = any(k in ("screen_text", "ui_elements", "mouse_position") or str(v).startswith("ошибка")
-                         for k, v in data.items())
+            acting = agent or any(k in ("screen_text", "ui_elements", "mouse_position") or str(v).startswith("ошибка")
+                                  for k, v in data.items())
             messages = messages + [
                 {"role": "assistant", "content": answer},
                 {"role": "user", "content": "Результаты инструментов: " + json.dumps(data, ensure_ascii=False)[:7000]
@@ -1017,6 +1033,7 @@ class Core:
             e = MS.element_by_id(a.get("id"))
             if not e:
                 raise ValueError("нет такого номера — сначала вызови ui_elements")
+            self._show_step(e)
             MS.click(e["x"], e["y"], button=g("button") or "left", double=bool(a.get("double")))
             self.journal.record(f"кликнул по «{e['name'][:40]}»", None, "click")
             return True
@@ -1194,6 +1211,14 @@ class Core:
             return True
         if name == "click_text":
             label = g("text", "label", "query")
+            try:   # show where it is about to click (the marker), then click there
+                pre = MS.find(label, small=True)
+            except Exception:
+                pre = None
+            if pre:
+                self._show_step(pre)
+                MS.click(pre["x"], pre["y"], button=g("button") or "left", double=bool(a.get("double")))
+                return True
             hit = S.click_text(label, button=g("button") or "left", double=bool(a.get("double")))
             if not hit:
                 raise ValueError(f"надпись «{label}» не найдена на экране")
@@ -1777,7 +1802,7 @@ class Core:
         fn = next((getattr(o, "rpc_" + method) for o in (self, self.extras, self.mail, self.sentinel, self.initiative,
                                                           self.people, self.watchers, self.background, self.plugins,
                                                           self.automations, self.notebook, self.backup, self.persona, self.phone,
-                                                          self.quick, self.marker)
+                                                          self.quick, self.marker, self.screenmem, self.macros)
                    if hasattr(o, "rpc_" + method)), None)
         if not fn:
             raise ValueError(f"unknown method {method}")

@@ -187,6 +187,9 @@ AFTER_TEXT = re.compile(r"^(?:сохрани|отправь|нажми|закр�
 def split_chain(raw):
     """One phrase -> ordered steps (strings in the user's words). One step -> [raw]."""
     text, keep = _protect_quotes(raw.strip())
+    # "сделай за меня: открой блокнот и напиши привет" is ONE task for the agent, not a chain of two commands
+    if re.match(r"^(?:сделай\s+за\s+меня|сделай\s+сам|выполни\s+задачу|автопилот|режим\s+агента)\b", text.lower()):
+        return [raw]
     text = LEAD.sub("", text.strip(), count=1) if LEAD.match(text.lower()) else text
     # "открой телеграм, давай": the go-ahead at the end is not part of the command ("телеграм, давай" is no app)
     head = re.sub(r"[,\s]+(?:ну\s+)?(?:делай|сделай|давай|выполняй|действуй|жми|го)(?:\s+так|\s+это)?[\s.!]*$", "", text,

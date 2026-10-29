@@ -433,7 +433,7 @@ class Router:
         R = self.rule
         cfg = core.cfg
         from . import (automation, background, backup, extras, mail, messenger, mouse, notes, people, persona, phone, plugins,
-                       marker, quick, sentinel, skills, teach, watchers)
+                       agent, macros, marker, quick, screenmem, sentinel, skills, teach, watchers)
 
         def addr():
             return cfg.get("user.address", "сэр") or "сэр"
@@ -452,6 +452,9 @@ class Router:
         persona.register(R, core)    # "позови Пятницу" / "верни Джарвиса"
         quick.register(R, core)      # "открой быструю панель"
         marker.register(R, core)     # "обведи кнопку Отправить", "покажи где настройки"
+        macros.register(R, core)     # "запиши макрос" / "стоп запись": before the screen recording's "стоп запись"
+        screenmem.register(R, core)  # "где я видел …", "что было на экране в 15:00"
+        agent.register(R, core)      # "сделай за меня: …", "подскажи по игре"
         mail.register(R, core)    # e-mail (jarvis/mail.py)
         sentinel.register(R, core)  # "что случилось", autostart, initiative level (jarvis/sentinel.py)
         watchers.register(R, core)  # "скажи, когда выйдет новое видео у …" (jarvis/watchers.py)
