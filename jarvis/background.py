@@ -431,8 +431,12 @@ class Background:
                     subprocess.Popen([str(self._find_ollama() or "ollama"), "serve"], creationflags=CREATE_NO_WINDOW)
                 time.sleep(2)
             if not self._ollama_up():
+                from . import system as S
+                vm = S.virtual_machine()
                 raise RuntimeError("Ollama установлена, но не запустилась: перезагрузите ПК и нажмите ещё раз "
-                                   "(если не поможет, антивирус или брандмауэр блокирует localhost:11434)")
+                                   "(если не поможет, антивирус или брандмауэр блокирует localhost:11434)"
+                                   + (f". Это виртуальная машина ({vm}): у её процессора может не быть нужных инструкций (AVX), "
+                                      "включите их в настройках машины или возьмите бесплатный ключ Groq / Gemini (Настройки → ИИ)" if vm else ""))
         job["title"] = f"Скачиваю модель {model}"
         job["progress"] = 0
         self._emit(job)
@@ -456,7 +460,10 @@ class Background:
         self.cfg.update({"ai": {"provider": "ollama", "providers": {"ollama": {"model": model}}}})
         self.core.emit("config")
         small = " Это самая маленькая модель: для слабого ПК умнее подойдёт бесплатный ключ Groq или Gemini (Настройки → ИИ)." if model.endswith(("0.8b", "2b")) else ""
-        return f"Готово: локальный ИИ {model} работает без интернета и ключей." + small
+        from . import system as S
+        vm = S.virtual_machine()
+        slow = f" Это виртуальная машина ({vm}) без видеокарты: ответы будут медленными." if vm else ""
+        return f"Готово: локальный ИИ {model} работает без интернета и ключей." + small + slow
 
     # download size on disk, GB (ollama.com/library/qwen3.5)
     OLLAMA_GB = {"0.8b": 1.3, "2b": 3.1, "4b": 4.0, "9b": 7.6}

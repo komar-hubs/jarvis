@@ -898,6 +898,40 @@ def screen_ocr(monitor=1):
     return asyncio.run(run())
 
 
+_VM = {}
+
+
+def virtual_machine():
+    """The hypervisor's name when Windows runs inside a virtual machine (VirtualBox, VMware, Hyper-V, QEMU/KVM, Parallels),
+    else "". Read once from the BIOS strings the hypervisor puts into the registry."""
+    if "v" not in _VM:
+        name = ""
+        try:
+            import winreg
+            k = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\DESCRIPTION\System\BIOS")
+            text = " ".join(str(winreg.QueryValueEx(k, v)[0]) for v in ("SystemManufacturer", "SystemProductName", "BIOSVendor")
+                            if _has_value(k, v))
+            for rx, label in ((r"(?i)virtualbox|innotek", "VirtualBox"), (r"(?i)vmware", "VMware"), (r"(?i)parallels", "Parallels"),
+                              (r"(?i)qemu|kvm|bochs|seabios", "QEMU/KVM"), (r"(?i)xen", "Xen"),
+                              (r"(?i)virtual machine|hyper-v", "Hyper-V"), (r"(?i)virtual", "виртуальная машина")):
+                if re.search(rx, text):
+                    name = label
+                    break
+        except Exception:
+            pass
+        _VM["v"] = name
+    return _VM["v"]
+
+
+def _has_value(key, name):
+    import winreg
+    try:
+        winreg.QueryValueEx(key, name)
+        return True
+    except OSError:
+        return False
+
+
 def own_window(title):
     """Jarvis's own top-level window with this title, or 0. FindWindow(None, title) is not enough: Explorer keeps
     "TabProxyWindow"s named after browser tabs, and one called "JARVIS QUICK" (a preview tab) was found instead of

@@ -466,6 +466,23 @@ class Listener:
         self.log(f"Микрофон не открылся: {self.mic_error}", "error")
         return False
 
+    def _vm_hint(self):
+        """Once per run: inside a virtual machine the microphone only exists if the hypervisor passes it through."""
+        if getattr(self, "_vm_said", False):
+            return ""
+        self._vm_said = True
+        try:
+            from . import system as S
+            vm = S.virtual_machine()
+        except Exception:
+            vm = ""
+        if not vm:
+            return ""
+        how = {"VirtualBox": "VirtualBox: Устройства → Аудио → Включить аудиовход",
+               "VMware": "VMware: добавьте звуковую карту и подключите микрофон (VM → Removable Devices → Sound Card)",
+               "Hyper-V": "Hyper-V: Расширенный сеанс и «Микрофон» в локальных ресурсах подключения"}.get(vm, "в настройках виртуальной машины включите вход звука")
+        return f"Это виртуальная машина ({vm}): микрофон работает, только если его пробросили. {how}."
+
     def restart_mic(self):
         self.open_mic()
 
@@ -510,6 +527,9 @@ class Listener:
                     # still no sound): remember it as stalled and let the next one try
                     self.dead[self.cur_dev] = time.time()
                     self.log(f"Микрофон «{self.dev_name or 'по умолчанию'}» не отдаёт звук: пробую другой…", "warn")
+                    vm = self._vm_hint()
+                    if vm:
+                        self.log(vm, "warn")
                     try:
                         self.open_mic(refresh=True)
                     except Exception as e:
