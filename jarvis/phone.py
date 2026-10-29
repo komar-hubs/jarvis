@@ -18,7 +18,8 @@ CANDIDATES = [Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "KDE C
               Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "KDE Connect" / "bin"]
 CALL_RX = re.compile(r"(?i)входящ\w*\s+(?:вызов|звонок)|звонит|incoming\s+call|calling")
 # a missed call is news, not a ringing phone: it was announced as "Звонит Мама: Пропущенный вызов"
-MISSED_RX = re.compile(r"(?i)пропущен\w*|missed")
+# only a real missed call: the bare word "missed" inside a Telegram message became "Пропущенный звонок от missed"
+MISSED_RX = re.compile(r"(?i)пропущенн\w*\s+(?:вызов|звонок|аудиозвонок|видеозвонок)|missed\s+(?:voice\s+|video\s+)?call")
 # the SMS app's own status lines are not senders: "SMS от Сообщения не отправлены"
 SMS_SYSTEM_RX = re.compile(r"(?i)сообщени\w*\s+не\s+(?:отправлен|доставлен)|не\s+удалось\s+отправить|новы\w+\s+сообщени|"
                            r"^\d+\s+(?:новы\w+\s+)?сообщени|черновик|ошибк")
@@ -398,7 +399,7 @@ class Phone:
     def _new(self, line, quiet=False):
         app, _, text = line.partition(": ")
         app, text = EMOJI_RX.sub("", app).strip(), re.sub(r"\s{2,}", " ", EMOJI_RX.sub("", text)).strip()
-        missed = bool(MISSED_RX.search(line))
+        missed = bool(MISSED_RX.search(line)) or (app.lower().startswith(DIALERS) and bool(re.search(r"(?i)пропущен", text)))
         call = not missed and (CALL_RX.search(line) or (app.lower().startswith(DIALERS) and text))
         # the phone's "silent" mark is not used: messengers set it when they add a message to a chat's notification
         rule, why = ("call", "") if call else self.rule_for(app, text)
