@@ -19,6 +19,7 @@ warnings.filterwarnings("ignore", message="TypedStorage is deprecated")
 # before any window exists: window calls that cannot deadlock against the WebView GUI thread (jarvis/winsafe.py)
 from jarvis import winsafe  # noqa: E402
 winsafe.install()
+from jarvis import system as S  # noqa: E402
 
 class RotatingLog:
     """data/jarvis.log that never grows past ~5 MB: it reached 60 MB of asyncio noise and was never trimmed."""
@@ -275,7 +276,7 @@ def main():
         tray_menu.show()
         import win32gui
         from jarvis import system as S
-        h = win32gui.FindWindow(None, "JARVIS MENU")
+        h = S.own_window("JARVIS MENU")
         if h:
             S.focus_window(h)  # focus (with the Alt trick): a click anywhere else then closes it (blur)
             tray_menu.evaluate_js("opened();")
@@ -317,7 +318,7 @@ def main():
         and a window shown with SetWindowPos(SWP_SHOWWINDOW) is "hidden" for WinForms: the panel stayed on screen."""
         import win32gui
         try:
-            h = win32gui.FindWindow(None, title)
+            h = S.own_window(title)
             if h and win32gui.IsWindowVisible(h):
                 win32gui.ShowWindow(h, 0)
         except Exception:
@@ -362,7 +363,7 @@ def main():
         quick.evaluate_js(f"prepare({_json.dumps(shot)}, {gen});")
         quick.show()
         core.quick.visible = True
-        h = win32gui.FindWindow(None, "JARVIS QUICK")
+        h = S.own_window("JARVIS QUICK")
         if h:   # physical pixels straight through WinAPI: pywebview's own sizes are DPI-scaled
             cover(h, (l, t, r, b))
             for _ in range(5):   # Windows sometimes refuses the first SetForegroundWindow from a background thread
@@ -419,7 +420,7 @@ def main():
         shot = core.quick.snapshot((l, t, r, b))      # the desktop dissolves into the HUD
         boot.evaluate_js(f"prepare({_json.dumps(shot)});")
         boot.show()
-        h = win32gui.FindWindow(None, "JARVIS BOOT")
+        h = S.own_window("JARVIS BOOT")
         if h:
             cover(h, (l, t, r, b))
             S.focus_window(h)
@@ -477,7 +478,7 @@ def main():
     def window_visible():
         try:
             import win32gui
-            h = win32gui.FindWindow(None, "J.A.R.V.I.S.")
+            h = S.own_window("J.A.R.V.I.S.")
             return bool(h and win32gui.IsWindowVisible(h) and not win32gui.IsIconic(h))
         except Exception:
             return False
@@ -513,7 +514,7 @@ def main():
             WinAPI: WS_EX_NOACTIVATE + SW_SHOWNOACTIVATE instead of pywebview's show()."""
             nonlocal hwnd
             if not hwnd or not win32gui.IsWindow(hwnd):
-                hwnd = win32gui.FindWindow(None, "JARVIS HUD")
+                hwnd = S.own_window("JARVIS HUD")
                 if hwnd:
                     ex = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
                     win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE,

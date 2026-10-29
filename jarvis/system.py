@@ -859,13 +859,33 @@ def screen_ocr(monitor=1):
     return asyncio.run(run())
 
 
+def own_window(title):
+    """Jarvis's own top-level window with this title, or 0. FindWindow(None, title) is not enough: Explorer keeps
+    "TabProxyWindow"s named after browser tabs, and one called "JARVIS QUICK" (a preview tab) was found instead of
+    the panel — the panel was then stretched and hidden through the wrong window and stayed 1280x720."""
+    import win32gui
+    import win32process
+    me, found = os.getpid(), []
+
+    def cb(h, _):
+        if win32gui.GetWindowText(h) == title and win32process.GetWindowThreadProcessId(h)[1] == me:
+            found.append(h)
+            return False
+        return True
+    try:
+        win32gui.EnumWindows(cb, None)
+    except Exception:
+        pass               # EnumWindows reports the early stop (cb returned False) as an error
+    return found[0] if found else 0
+
+
 def own_window_rects():
     """Screen rects of Jarvis's own visible windows: their text (the subtitle repeats the user's phrase)
     must never be the click target."""
     import win32gui
     out = []
     for title in ("J.A.R.V.I.S.", "JARVIS HUD"):
-        h = win32gui.FindWindow(None, title)
+        h = own_window(title)
         if h and win32gui.IsWindowVisible(h) and not win32gui.IsIconic(h):
             out.append(win32gui.GetWindowRect(h))
     return out

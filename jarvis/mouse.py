@@ -203,10 +203,12 @@ def foreground():
 
 def own_rects():
     import win32gui
+
+    from . import system as S
     out = []
     with physical():
         for title in OWN_TITLES:
-            h = win32gui.FindWindow(None, title)
+            h = S.own_window(title)
             if h and win32gui.IsWindowVisible(h) and not win32gui.IsIconic(h):
                 out.append(win32gui.GetWindowRect(h))
     return out
