@@ -70,9 +70,9 @@ function perfSection() {
   const opt = (v, t, cur) => `<option value="${v}" ${v === cur ? "selected" : ""}>${t}</option>`;
   return `<div class="mt-sec"><b>Производительность</b><span class="dim">Сейчас: <b>${p.lite ? "лёгкий режим" : "обычный режим"}</b>${hw ? ` (${esc(hw)})` : ""}${p.light_model ? ", лёгкая модель распознавания" : ""}.
       Лёгкий режим для слабых ноутбуков: распознавание речи занимает на 600 МБ меньше памяти, сторож проверяет систему реже, память экрана и заставка загрузки по умолчанию выключены. «Авто» включает его на ПК до 10 ГБ памяти или до 4 потоков.</span>
-    <div class="row"><span class="dim">Режим</span><select id="perf-lite" style="flex:none">${opt("auto", "авто", mode)}${opt("on", "лёгкий", mode)}${opt("off", "обычный", mode)}</select>
-      <span class="dim">Распознавание</span><select id="perf-quant" style="flex:none">${opt("auto", "по режиму", quant)}${opt("int8", "лёгкое (260 МБ)", quant)}${opt("full", "полное (880 МБ)", quant)}</select>
-      <span class="dim" id="perf-note"></span></div></div>`;
+    <div class="row"><span class="dim" style="min-width:110px">Режим</span><select id="perf-lite" style="flex:none">${opt("auto", "авто", mode)}${opt("on", "лёгкий", mode)}${opt("off", "обычный", mode)}</select></div>
+    <div class="row"><span class="dim" style="min-width:110px">Распознавание</span><select id="perf-quant" style="flex:none">${opt("auto", "по режиму", quant)}${opt("int8", "лёгкое (260 МБ)", quant)}${opt("full", "полное (880 МБ)", quant)}</select></div>
+    <div class="dim" id="perf-note"></div></div>`;
 }
 async function mediaRow() {
   const row = $("#media-row"); if (!row) return;
