@@ -16,6 +16,6 @@ function overlaysPanel() {
         <option value="off">выключена</option></select>
       <button onclick="rpc('boot_play')">${I("play", "lead")}Показать</button></div>`;
   $("#ovl-hk").onchange = (e) => { const v = e.target.value.trim().toLowerCase(); if (v) saveConfig({ quick: { hotkey: v } }); };
-  $("#boot-mode").value = ((S.config && S.config.boot) || {}).mode || "startup";
+  $("#boot-mode").value = ((S.config && S.config.boot) || {}).mode || (S.boot && S.boot.perf && S.boot.perf.lite ? "off" : "startup");
   $("#boot-mode").onchange = (e) => saveConfig({ boot: { mode: e.target.value } });
 }

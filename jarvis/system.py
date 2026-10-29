@@ -1411,20 +1411,46 @@ def mouse_click(x=None, y=None, button="left", double=False):
 _gpu_cache = {"t": 0, "v": None}
 
 
+GPU_FAST = [True]      # the interface is on the screen: fresh numbers every 3 s; hidden — every 30 s (core._ticker sets it)
+
+
 def gpu_info():
-    if time.time() - _gpu_cache["t"] < 3:
+    # nvidia-smi is a separate program: started every 3-4 s all day long, with nobody looking at the numbers
+    age = time.time() - _gpu_cache["t"]
+    if age < (3 if GPU_FAST[0] else 30) or (_gpu_cache.get("missing") and age < 600):
         return _gpu_cache["v"]
-    v = None
+    v, missing = None, False
     try:
         out = subprocess.run(["nvidia-smi", "--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu",
                               "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=3,
                              creationflags=CREATE_NO_WINDOW).stdout.strip().splitlines()[0]
         name, util, mu, mt, temp = [x.strip() for x in out.split(",")]
         v = {"name": name, "util": int(util), "mem_used": int(mu), "mem_total": int(mt), "temp": int(temp)}
+    except FileNotFoundError:
+        missing = True                 # no NVIDIA card: ask again in 10 minutes, not every few seconds
     except Exception:
         pass
-    _gpu_cache.update(t=time.time(), v=v)
+    _gpu_cache.update(t=time.time(), v=v, missing=missing)
     return v
+
+
+_WEAK = {}
+
+
+def weak_pc():
+    """A modest computer: up to ~10 GB of memory or up to 4 processor threads (a typical budget laptop)."""
+    if "v" not in _WEAK:
+        try:
+            _WEAK["v"] = psutil.virtual_memory().total < 10.5 * 2**30 or (os.cpu_count() or 8) <= 4
+        except Exception:
+            _WEAK["v"] = False
+    return _WEAK["v"]
+
+
+def lite(cfg):
+    """The light mode for weak laptops: config perf.lite = "auto" (by the hardware) | true | false."""
+    v = cfg.get("perf.lite", "auto")
+    return weak_pc() if v in ("auto", None, "") else bool(v)
 
 
 def system_stats():

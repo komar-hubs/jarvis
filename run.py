@@ -11,6 +11,10 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 os.chdir(ROOT)
 
+# before numpy/torch load: OpenBLAS reserved a buffer per core (~650 MB of commit on a 12-thread CPU) for maths that
+# never needs more than two threads here — on a 6-8 GB laptop that commit pushed everything into the page file
+for _v in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS"):
+    os.environ.setdefault(_v, "2")
 # two library warnings printed into the log on every start, with nothing for the user to do about them
 os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 import warnings  # noqa: E402
@@ -396,7 +400,7 @@ def main():
 
     # the suit's power-up (ui/boot.html): a full-screen cinematic boot when the PC starts or on "протокол загрузки"
     boot = None
-    if core.cfg.get("boot.mode", "startup") != "off":
+    if core.cfg.get("boot.mode", "off" if S.lite(core.cfg) else "startup") != "off":
         try:
             boot = webview.create_window(
                 "JARVIS BOOT", f"{url}ui/boot.html?t={core.cfg.get('token')}", width=1280, height=720, frameless=True,
@@ -478,6 +482,7 @@ def main():
             return bool(h and win32gui.IsWindowVisible(h) and not win32gui.IsIconic(h))
         except Exception:
             return False
+    core.ui_hooks["main_visible"] = window_visible   # core._ticker refreshes the screen numbers less often when hidden
 
     # floating HUD: appears above all windows while Jarvis listens/thinks/speaks and the main window is not in front
     overlay = None

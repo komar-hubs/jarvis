@@ -46,16 +46,33 @@ async function maintLoad() {
         <button class="btn" onclick="rpc('downloads_sort',{undo:true})">${I("undo", "lead")}Вернуть как было</button>
         <label class="switch"><input type="checkbox" id="dl-auto" ${bg.sort_downloads ? "checked" : ""}><span></span>Раскладывать сам раз в несколько часов</label></div></div>
     <div class="mt-sec"><b>Выключить, когда досмотрю</b><span class="dim">Жду, пока звук затихнет и вы не будете трогать мышь пару минут, предупреждаю голосом и выключаю через минуту. Работает на самом ПК: интернет и ИИ не нужны.</span>
-      <div class="row" id="media-row"></div></div>`;
+      <div class="row" id="media-row"></div></div>
+    ${perfSection()}`;
   $("#bk-auto").onchange = (e) => rpc("backup_set", { auto: e.target.checked });
   $("#bk-keep").onchange = (e) => rpc("backup_set", { keep: +e.target.value || 5 });
   $("#dl-auto").onchange = (e) => saveConfig({ background: { sort_downloads: e.target.checked } });
+  const pl = $("#perf-lite"), pq = $("#perf-quant");
+  if (pl) pl.onchange = (e) => { saveConfig({ perf: { lite: e.target.value === "auto" ? "auto" : e.target.value === "on" } }); $("#perf-note").textContent = "Изменится после перезапуска Джарвиса."; };
+  if (pq) pq.onchange = (e) => { saveConfig({ stt: { gigaam_quant: e.target.value } }); $("#perf-note").textContent = "Модель сменится после перезапуска Джарвиса."; };
   if (MT.updates) updatesRender();
   mediaRow();
   personaPanel();
   phonePanel();
   overlaysPanel();
   memPanel();
+}
+// Settings → Обслуживание ПК → Производительность: the light mode for weak laptops (jarvis/system.py lite())
+function perfSection() {
+  const p = (S.boot && S.boot.perf) || {}, c = S.config || {};
+  const lite = (c.perf || {}).lite, mode = lite === true ? "on" : lite === false ? "off" : "auto";
+  const quant = (c.stt || {}).gigaam_quant || "auto";
+  const hw = p.ram_gb ? `${p.ram_gb} ГБ памяти, ${p.cpus} потоков процессора` : "";
+  const opt = (v, t, cur) => `<option value="${v}" ${v === cur ? "selected" : ""}>${t}</option>`;
+  return `<div class="mt-sec"><b>Производительность</b><span class="dim">Сейчас: <b>${p.lite ? "лёгкий режим" : "обычный режим"}</b>${hw ? ` (${esc(hw)})` : ""}${p.light_model ? ", лёгкая модель распознавания" : ""}.
+      Лёгкий режим для слабых ноутбуков: распознавание речи занимает на 600 МБ меньше памяти, сторож проверяет систему реже, память экрана и заставка загрузки по умолчанию выключены. «Авто» включает его на ПК до 10 ГБ памяти или до 4 потоков.</span>
+    <div class="row"><span class="dim">Режим</span><select id="perf-lite" style="flex:none">${opt("auto", "авто", mode)}${opt("on", "лёгкий", mode)}${opt("off", "обычный", mode)}</select>
+      <span class="dim">Распознавание</span><select id="perf-quant" style="flex:none">${opt("auto", "по режиму", quant)}${opt("int8", "лёгкое (260 МБ)", quant)}${opt("full", "полное (880 МБ)", quant)}</select>
+      <span class="dim" id="perf-note"></span></div></div>`;
 }
 async function mediaRow() {
   const row = $("#media-row"); if (!row) return;

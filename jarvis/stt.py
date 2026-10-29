@@ -201,23 +201,41 @@ class Listener:
         """GigaAM v3 CTC (Sber) via onnx-asr: best Russian accuracy, ~0.3 s per phrase on any CPU,
         and as a CTC model it cannot invent phrases that were never said (Whisper's "открой браузер")."""
         import onnx_asr
+        from . import system as S
         t = time.time()
+        # the int8 model: 260 MB of memory instead of 880, faster, and the same words on our test phrases. Weak laptops
+        # get it by themselves (config stt.gigaam_quant: auto | int8 | full)
+        q = self.cfg.get("stt.gigaam_quant", "auto")
+        int8 = S.lite(self.cfg) if q in ("auto", None, "") else q == "int8"
+        quant = "int8" if int8 else None
+        hub = Path(os.environ.get("HF_HUB_CACHE") or Path.home() / ".cache" / "huggingface" / "hub")
+        snaps = sorted((d for d in (hub / "models--istupakov--gigaam-v3-onnx" / "snapshots").glob("*")),
+                       key=lambda d: d.stat().st_mtime, reverse=True)
+
+        def cached(int8_):
+            return next((d for d in snaps if (d / ("v3_ctc.int8.onnx" if int8_ else "v3_ctc.onnx")).exists()), None)
         try:
             # cached copy first: without this onnx-asr asks the HuggingFace Hub on every start,
             # and a slow/blocked network then hangs recognition loading for minutes
-            hub = Path(os.environ.get("HF_HUB_CACHE") or Path.home() / ".cache" / "huggingface" / "hub")
-            snaps = [d for d in (hub / "models--istupakov--gigaam-v3-onnx" / "snapshots").glob("*")
-                     if any(d.glob("*ctc*.onnx"))]
-            if not snaps:
+            path = cached(int8)
+            if not path:
                 raise FileNotFoundError("not cached")
-            path = max(snaps, key=lambda d: d.stat().st_mtime)
-            m = onnx_asr.load_model("gigaam-v3-ctc", path, providers=["CPUExecutionProvider"])
+            m = onnx_asr.load_model("gigaam-v3-ctc", path, quantization=quant, providers=["CPUExecutionProvider"])
         except Exception:
-            self.log("Скачиваю модель распознавания GigaAM (~250 МБ)...")
-            m = onnx_asr.load_model("gigaam-v3-ctc", providers=["CPUExecutionProvider"])
+            try:
+                self.log(f"Скачиваю модель распознавания GigaAM ({'~225 МБ, лёгкая' if int8 else '~880 МБ'})...")
+                m = onnx_asr.load_model("gigaam-v3-ctc", quantization=quant, providers=["CPUExecutionProvider"])
+            except Exception as e:
+                other = cached(not int8)       # no internet for the light one: the model already on disk will do
+                if not other:
+                    raise
+                self.log(f"Лёгкая модель не скачалась ({str(e)[:80]}): беру ту, что уже есть", "warn")
+                int8, quant = not int8, ("int8" if not int8 else None)
+                m = onnx_asr.load_model("gigaam-v3-ctc", other, quantization=quant, providers=["CPUExecutionProvider"])
         m.recognize(np.zeros(SR // 2, np.float32), sample_rate=SR)  # warm-up
-        self.model, self.model_name, self.device = m, "gigaam-v3-ctc", "cpu"
-        self.log(f"Распознавание речи: GigaAM v3 на CPU ({time.time() - t:.1f} с)")
+        self.model, self.model_name, self.device = m, "gigaam-v3-ctc", "cpu"   # the name is compared elsewhere: keep it
+        self.model_light = int8
+        self.log(f"Распознавание речи: GigaAM v3{' (лёгкая)' if int8 else ''} на CPU ({time.time() - t:.1f} с)")
         self.on_state("idle")
         return True
 

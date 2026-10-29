@@ -46,7 +46,7 @@ class Boot:
 
     # ---------------------------------------------------------------- when
     def should_play(self):
-        mode = self.cfg.get("boot.mode", "startup")      # startup | always | off
+        mode = self.cfg.get("boot.mode", "off" if S.lite(self.cfg) else "startup")      # startup | always | off
         if mode == "off" or not self.cfg.get("setup_done"):
             return False
         if mode == "always":
@@ -103,7 +103,7 @@ class Boot:
         persona = c.persona.public()
         lst = c.listener
         checks = [("ЯДРО", f"J.A.R.V.I.S. {self._version()}", "ok")]
-        stt = (lst.model_name or "").replace("gigaam-v3-ctc", "GigaAM v3")
+        stt = (lst.model_name or "").replace("gigaam-v3-ctc", "GigaAM v3" + (" lite" if getattr(lst, "model_light", False) else ""))
         checks.append(("РАСПОЗНАВАНИЕ РЕЧИ", f"{stt or 'загружается'} · {(lst.device or 'cpu').upper()}", "ok" if lst.model else "warn"))
         eng = self.cfg.get("voice.engine", "silero")
         voice = {"silero": f"Silero · {self.cfg.get('voice.silero_speaker', 'aidar')}", "edge": self.cfg.get("voice.edge_voice", "Edge"),

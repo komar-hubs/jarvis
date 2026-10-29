@@ -14,6 +14,7 @@ import threading
 import time
 from pathlib import Path
 
+from . import system as S
 from .config import DATA
 
 DB = DATA / "screen_memory.db"
@@ -47,7 +48,7 @@ class ScreenMemory:
         last_clean = 0
         while True:
             try:
-                if self.cfg.get("screenmem.enabled", True):
+                if self.cfg.get("screenmem.enabled", not S.lite(self.cfg)):
                     self.snap()
                 if time.time() - last_clean > 6 * 3600:
                     last_clean = time.time()
@@ -258,7 +259,7 @@ class ScreenMemory:
                 n = con.execute("select count(*) from snaps").fetchone()[0]
                 con.close()
             size = DB.stat().st_size + sum(f.stat().st_size for f in PICS.rglob("*.jpg")) if PICS.exists() else DB.stat().st_size
-        return {"enabled": self.cfg.get("screenmem.enabled", True), "days": self.cfg.get("screenmem.days", 7),
+        return {"enabled": self.cfg.get("screenmem.enabled", not S.lite(self.cfg)), "days": self.cfg.get("screenmem.days", 7),
                 "count": n, "mb": round(size / 2**20, 1)}
 
     def rpc_screenmem_set(self, enabled=None, days=None):
@@ -308,7 +309,7 @@ def register(R, core):
        r"^(?:вспомни|напомни),?\s+где\s+(?:я\s+)?(?:видел|видела|был[аои]?)\s+(.+)$")
     def _where(m, t):
         what = next(g for g in m.groups() if g).strip()
-        if not core.cfg.get("screenmem.enabled", True) and not M().search(what):
+        if not core.cfg.get("screenmem.enabled", not S.lite(core.cfg)) and not M().search(what):
             return "Память экрана выключена, сэр. Скажите «запоминай экран», чтобы включить."
         return tell(M().search(what), what)
 

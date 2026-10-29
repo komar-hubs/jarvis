@@ -1707,12 +1707,21 @@ class Core:
     def _ticker(self):
         threading.Thread(target=self._duck_loop, daemon=True, name="duck").start()
         S.system_stats()  # prime cpu_percent
+        tick = 0
         while True:
             time.sleep(2)
+            tick += 1
+            # the numbers are for the screen: while no window of Jarvis is open they are refreshed every 10 s, not 2
             try:
-                self.emit("stats", **S.system_stats())
+                seen = bool(self.ui_hooks.get("main_visible", lambda: True)()) or bool(getattr(self.quick, "visible", False))
             except Exception:
-                pass
+                seen = True
+            S.GPU_FAST[0] = seen
+            if seen or tick % 5 == 0:
+                try:
+                    self.emit("stats", **S.system_stats())
+                except Exception:
+                    pass
             try:
                 self._maybe_briefing()
             except Exception as e:
@@ -1816,7 +1825,12 @@ class Core:
             raise ValueError(f"unknown method {method}")
         return fn(**(p or {}))
 
+    def rpc_debug_threads(self):
+        """Diagnostics: Python thread names by native id (to see which loop eats the processor on a weak laptop)."""
+        return [{"name": t.name, "id": t.native_id} for t in threading.enumerate()]
+
     def rpc_state(self):
+        import psutil
         return {"state": self.state, "sleeping": self.sleeping, "config": self.cfg.public(), "logs": self.logs[-80:],
                 "providers": PROVIDERS, "action_types": ACTION_TYPES, "source_types": SOURCE_TYPES,
                 "version": current_version(),
@@ -1825,7 +1839,9 @@ class Core:
                 "xtts": {"installed": XttsEngine.available(), "ready": self.tts.engines["xtts"].ready,
                          "error": self.tts.engines["xtts"].error},
                 "night": self.night_on(), "notice": self.notice, "conversation": self.conversation,
-                "focus": self.extras.focus_state()}
+                "focus": self.extras.focus_state(),
+                "perf": {"lite": S.lite(self.cfg), "weak": S.weak_pc(), "light_model": getattr(self.listener, "model_light", False),
+                         "ram_gb": round(psutil.virtual_memory().total / 2**30, 1), "cpus": os.cpu_count()}}
 
     # --- the tray menu (ui/traymenu.html)
     def rpc_tray_state(self):

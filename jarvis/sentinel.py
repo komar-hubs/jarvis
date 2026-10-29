@@ -224,8 +224,9 @@ class Sentinel:
             if not self.enabled():
                 continue
             now = time.time()
+            slow = 3 if S.lite(self.cfg) else 1    # a weak laptop: the same checks, three times less often
             for fn, every in checks:
-                if now - self._t[fn.__name__] < every:
+                if now - self._t[fn.__name__] < every * slow:
                     continue
                 self._t[fn.__name__] = now
                 try:
