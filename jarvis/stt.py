@@ -526,7 +526,10 @@ class Listener:
                 # is longer while Jarvis speaks; a stream that Windows itself reports as stopped is dealt with sooner.
                 stopped = self.stream is not None and not getattr(self.stream, "active", True)
                 speaking = bool(self.is_speaking())
-                if starved >= (25 if speaking else 8) or (stopped and starved >= 2):
+                # a freshly opened device may need many seconds before its first sound (some laptop drivers and Bluetooth
+                # headsets): the reopening itself used to start the next "молчит" ~10 s later, round and round
+                warming = time.time() - self.opened_at < 15
+                if (starved >= (25 if speaking else 8) and not warming) or (stopped and starved >= 2):
                     stalled, starved = starved, 0
                     # the same device reopened over and over was never going to help ("Python использует микрофон", and
                     # still no sound): remember it as stalled and let the next one try

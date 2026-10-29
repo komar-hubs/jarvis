@@ -229,8 +229,53 @@ class SileroEngine:
         self.error = None
         self.lock = threading.Lock()
         self.path = DATA / "models" / "silero_v5_ru.pt"
+        self.retry_at = 0.0         # a failed start is not repeated at every phrase
+        self.fails = 0
+
+    def _download(self):
+        """The model file, resumable: a dropped connection continues from the same byte, a few attempts, progress in the log.
+        (It used to restart from zero with no timeout, and again on every spoken phrase: "постоянно качает Silero".)"""
+        import requests
+        url = self.cfg.get("voice.silero_url") or self.URL
+        tmp = self.path.with_suffix(".part")
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        err = None
+        for attempt in range(4):
+            have = tmp.stat().st_size if tmp.exists() else 0
+            try:
+                with requests.get(url, stream=True, timeout=(15, 45), headers={"Range": f"bytes={have}-"} if have else {}) as r:
+                    if r.status_code == 416:                       # the file is complete already
+                        break
+                    r.raise_for_status()
+                    resumed = have > 0 and r.status_code == 206
+                    total = int(r.headers.get("content-length") or 0) + (have if resumed else 0)
+                    got, shown = (have if resumed else 0), time.time()
+                    with open(tmp, "ab" if resumed else "wb") as f:
+                        for chunk in r.iter_content(1 << 20):
+                            f.write(chunk)
+                            got += len(chunk)
+                            if time.time() - shown > 10:
+                                shown = time.time()
+                                self.log(f"Голос Silero: скачано {got // 2**20} из {total // 2**20 or '?'} МБ")
+                    if total and got < total:
+                        raise IOError(f"обрыв связи на {got // 2**20} из {total // 2**20} МБ")
+                err = None
+                break
+            except Exception as e:
+                err = e
+                self.log(f"Голос Silero: попытка {attempt + 1} из 4 не вышла ({str(e)[:90]})", "warn")
+                time.sleep(2 + attempt * 3)
+        if err is not None:
+            raise RuntimeError(f"не удалось скачать голос с models.silero.ai ({str(err)[:80]}). Скачанное сохранено, следующая попытка продолжит "
+                               f"с того же места. Можно скачать файл вручную: {url} -> {self.path}")
+        if tmp.stat().st_size < 20 * 2**20:
+            tmp.unlink(missing_ok=True)
+            raise RuntimeError("скачался слишком маленький файл (не модель): проверьте интернет, прокси и VPN")
+        os.replace(tmp, self.path)
 
     def start(self):
+        if not self.ready and time.time() < self.retry_at:
+            return False
         with self.lock:
             if self.ready:
                 return True
@@ -238,11 +283,7 @@ class SileroEngine:
                 import torch
                 if not self.path.exists():
                     self.log("Скачиваю голос Silero (~60 МБ)...")
-                    self.path.parent.mkdir(parents=True, exist_ok=True)
-                    import urllib.request
-                    tmp = self.path.with_suffix(".part")
-                    urllib.request.urlretrieve(self.URL, tmp)
-                    os.replace(tmp, self.path)
+                    self._download()
                 torch.set_num_threads(max(2, min(6, (os.cpu_count() or 4) // 2)))
                 model = torch.package.PackageImporter(str(self.path)).load_pickle("tts_models", "model")
                 dev = "cuda" if torch.cuda.is_available() and self.cfg.get("voice.silero_gpu", True) else "cpu"
@@ -256,11 +297,22 @@ class SileroEngine:
             except Exception as e:
                 self.error = f"Silero: {e}"
                 self.log(self.error)
+                self.fails += 1
+                self.retry_at = time.time() + min(600, 60 * self.fails)   # 1, 2, 3 … 10 minutes, not at every phrase
+                if self.path.exists() and "скач" not in str(e):           # the file is there but does not load: broken, fetch again later
+                    try:
+                        self.path.replace(self.path.with_suffix(".bad"))
+                    except OSError:
+                        pass
                 return False
 
     def synth(self, text):
-        if not self.ready and not self.start():
-            raise RuntimeError(self.error)
+        if not self.ready:
+            # never hold the speaking thread for a download or a model load: it runs in the background and
+            # the next engine (edge / Windows voice) speaks meanwhile
+            if not self.lock.locked() and time.time() >= self.retry_at:
+                threading.Thread(target=self.start, daemon=True, name="silero-start").start()
+            raise RuntimeError(self.error or "Голос Silero загружается, пока говорю резервным голосом")
         from .textnorm import normalize_ru
         t = normalize_ru(text)
         if not re.search(r"[а-яё]", t, re.I):
