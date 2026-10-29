@@ -80,6 +80,21 @@ def _looks_secret(s):
     return kinds >= 3 or bool(re.match(r"^(sk|ghp|gho|xox[bp]|eyJ)[-_\w.]{16,}$", s))
 
 
+def pct_ru(n):
+    return "процент" if n % 10 == 1 and n % 100 != 11 else "процента" if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14 else "процентов"
+
+
+def size_ru(mb):
+    """Megabytes said aloud: "3.7 гигабайта", "1 гигабайт", "800 мегабайт" (never "0.0 гигабайта")."""
+    if mb < 1000:
+        return f"{max(10, int(round(mb, -1)))} мегабайт"
+    gb = round(mb / 1024, 1)
+    if gb == int(gb):
+        gb = int(gb)
+        return f"{gb} " + ("гигабайт" if gb % 10 == 1 and gb % 100 != 11 else "гигабайта" if 2 <= gb % 10 <= 4 and not 12 <= gb % 100 <= 14 else "гигабайт")
+    return f"{gb} гигабайта"
+
+
 class Extras:
     def __init__(self, core):
         self.core = core
@@ -527,11 +542,13 @@ class Extras:
             top = self.hogs()
             # the memory eater is the very thing on screen (a game, a render): the user knows, and "Закрыть его?"
             # about the game being played was said four times in one evening
-            if top and top[0][0].lower() != (fg_exe or "").lower():
+            # under memory pressure Windows trims the working sets of background programs: "Edge, около 0.0
+            # гигабайта" was offered for closing. A program under half a gigabyte is not worth closing.
+            if top and top[0][0].lower() != (fg_exe or "").lower() and top[0][1] >= 500:
                 exe, mb = top[0]
                 name = self.app_info(exe)[0]
-                self._watch_once("ram", 20, f"Память заполнена на {int(st['ram'])} процентов. Больше всего занимает "
-                                            f"{name}, около {round(mb / 1024, 1)} гигабайта. Закрыть его?",
+                self._watch_once("ram", 20, f"Память заполнена на {int(st['ram'])} {pct_ru(int(st['ram']))}. Больше всего занимает "
+                                            f"{name}, около {size_ru(mb)}. Закрыть его?",
                                  confirm=lambda: self.core.say(f"Закрыл {name}." if self.kill_by_name(exe) else "Не получилось закрыть."))
         gpu = st.get("gpu") or {}
         if (gpu.get("temp") or 0) >= 86:
@@ -960,7 +977,7 @@ def register(R, core):
             if cpu and cpu[0][1] > 10:
                 parts.append(f"Процессор больше всего грузит {X.app_info(cpu[0][0])[0]} — {int(cpu[0][1])} процентов.")
             if ram:
-                parts.append(f"Больше всего памяти у {X.app_info(ram[0][0])[0]}: {round(ram[0][1] / 1024, 1)} гигабайта.")
+                parts.append(f"Больше всего памяти у {X.app_info(ram[0][0])[0]}: {size_ru(ram[0][1])}.")
             g = st.get("gpu")
             if g and g.get("temp", 0) >= 80:
                 parts.append(f"Видеокарта горячая: {g['temp']} градусов.")
