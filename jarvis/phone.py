@@ -192,8 +192,9 @@ class KdeBus:
                 continue
             props = {k: v.value for k, v in p.body[0].items()} | {"id": nid}
             if baseline:                  # already on the phone when Jarvis connected: not news, but can be answered
-                self.phone._last_text[str(props.get("internalId") or nid)] = (str(props.get("title") or "").strip(),
-                                                                              str(props.get("text") or "").strip())
+                key = self.phone._key(props)       # the same cleaned text _from_bus compares (MAX sends HTML)
+                self.phone._last_text[str(props.get("internalId") or nid)] = key
+                self.phone._mark_announced(str(props.get("appName") or ""), key)
                 self.phone._remember_reply(props)
             else:
                 self.phone._from_bus(props, True)
@@ -232,6 +233,7 @@ class Phone:
         self._knock_t = 0
         self.last_error = ""
         self._last_text = {}          # notification id -> (title, text): an update without changes is not new
+        self._announced = self._load_announced()   # what was already said, by content: survives restarts and re-posts
         self.bus = KdeBus(self)
 
     # ---------------------------------------------------------------- KDE Connect tool
@@ -324,15 +326,45 @@ class Phone:
         if not self.cfg.get("phone.enabled", True) or not (self.cfg.get("phone.announce", True) or self.cfg.get("phone.calls", True)):
             return
         nid, app = str(d.get("internalId") or d.get("id") or ""), str(d.get("appName") or "").strip()
-        title, text = self._clean(str(d.get("title") or "")), self._clean(str(d.get("text") or ""))
+        title, text = self._key(d)
         if not app or not (title or text):
             return
         if self._last_text.get(nid) == (title, text):
             return                       # seen already (by the signal or the 3 s check), or re-sent without changes
         self._last_text[nid] = (title, text)
+        if not self._mark_announced(app, (title, text)):
+            return                       # the same message again under a new id (phone reconnected, Jarvis restarted)
         body = f"{title}: {text}" if title and title.lower() != app.lower() and text else (text or title)
         self._remember_reply(d, live=True)
         self._new(f"{app}: {body}", quiet=bool(d.get("silent")))
+
+    def _key(self, d):
+        return self._clean(str(d.get("title") or "")), self._clean(str(d.get("text") or ""))
+
+    ANNOUNCED = Path(__file__).resolve().parent.parent / "data" / "phone_announced.json"
+
+    def _load_announced(self):
+        import json
+        try:
+            raw = json.loads(self.ANNOUNCED.read_text(encoding="utf-8"))
+            return {k: t for k, t in raw.items() if time.time() - t < 12 * 3600}
+        except Exception:
+            return {}
+
+    def _mark_announced(self, app, key):
+        """True if this message (app + sender + text) is new in the last 12 hours; remembers it either way."""
+        import hashlib
+        import json
+        h = hashlib.sha1("\x1f".join((app.lower(), *key)).encode("utf-8")).hexdigest()[:16]   # no message text on disk
+        new = h not in self._announced
+        self._announced[h] = time.time()
+        if len(self._announced) > 400:
+            self._announced = dict(sorted(self._announced.items(), key=lambda kv: kv[1])[-300:])
+        try:
+            self.ANNOUNCED.write_text(json.dumps(self._announced), encoding="utf-8")
+        except Exception:
+            pass
+        return new
 
     @staticmethod
     def _clean(s):
