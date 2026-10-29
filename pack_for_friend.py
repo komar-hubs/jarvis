@@ -5,7 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 OUT = ROOT.parent / "jarvis_share.zip"
-SKIP_DIRS = {".venv", ".xtts-venv", "data", "__pycache__", ".git"}
+SKIP_DIRS = {".venv", ".xtts-venv", "data", "__pycache__", ".git", "docs"}   # docs: README screenshots, not needed to run
 
 with zipfile.ZipFile(OUT, "w", zipfile.ZIP_DEFLATED) as z:
     n = 0
