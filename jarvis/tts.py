@@ -308,11 +308,15 @@ class SileroEngine:
 
     def synth(self, text):
         if not self.ready:
-            # never hold the speaking thread for a download or a model load: it runs in the background and
-            # the next engine (edge / Windows voice) speaks meanwhile
-            if not self.lock.locked() and time.time() >= self.retry_at:
-                threading.Thread(target=self.start, daemon=True, name="silero-start").start()
-            raise RuntimeError(self.error or "Голос Silero загружается, пока говорю резервным голосом")
+            if not self.path.exists():
+                # the file has to be downloaded (minutes, maybe): never hold the speaking thread for it. It runs in the
+                # background and the next engine (edge / Windows voice) speaks meanwhile
+                if not self.lock.locked() and time.time() >= self.retry_at:
+                    threading.Thread(target=self.start, daemon=True, name="silero-start").start()
+                raise RuntimeError(self.error or "Голос Silero скачивается, пока говорю резервным голосом")
+            # the file is there: loading takes a few seconds — wait for it, the phrase stays in the same voice (as before)
+            if not self.start():
+                raise RuntimeError(self.error)
         from .textnorm import normalize_ru
         t = normalize_ru(text)
         if not re.search(r"[а-яё]", t, re.I):
