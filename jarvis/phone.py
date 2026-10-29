@@ -49,7 +49,12 @@ PROMO_RX = re.compile(r"(?i)играй\s+сейчас|играть\s+сейча�
 # emoji in a notification are read as nonsense and break the "no system emoji" look of the HUD
 EMOJI_RX = re.compile("[\U0001F000-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF\uFE0F\u200D\u20E3]+")
 NOISE_APPS = ["Google", "Play Маркет", "Galaxy Store", "GetApps", "Security", "Безопасность", "Темы", "Themes",
-              "Погода", "Weather", "Часы", "Clock", "Mi Fit", "Zepp", "Яндекс Маркет", "Ozon", "Wildberries", "AliExpress"]
+              "Погода", "Weather", "Часы", "Clock", "Mi Fit", "Zepp", "Яндекс Маркет", "Ozon", "Wildberries", "AliExpress",
+              "YouTube", "YouTube Music", "TikTok", "Likee", "Pinterest"]
+# an SMS from a letter name ("beeline", "beelineOFD", "Tinkoff") or a short number (900) is the operator, a shop or a
+# receipt — not a person. Said only when it carries a code.
+SERVICE_SENDER_RX = re.compile(r"^(?:[A-Za-z][A-Za-z0-9 ._&-]{1,15}|\d{3,5})$")
+CODE_RX = re.compile(r"(?i)\bкод\b|\bcode\b|парол|\b\d{4,6}\b.*(?:вход|подтвержд|никому)|(?:вход|подтвержд|никому).*\b\d{4,6}\b")
 
 
 class KdeBus:
@@ -448,6 +453,10 @@ class Phone:
         if self.cfg.get("phone.filter", True) and (self._is(app, NOISE_APPS) or NOISE_RX.search(text)
                                                    or (not self._is(app, MESSENGERS) and PROMO_RX.search(text))):
             return "silent", "неважное"
+        if self._is(app, SMS_APPS) and self.cfg.get("phone.filter", True):
+            who, _, body = text.partition(": ")
+            if body and SERVICE_SENDER_RX.match(who.strip()) and not CODE_RX.search(body)                     and not self.contact_for_number(who.strip()):
+                return "silent", "сервисное SMS"
         if self._is(app, MESSENGERS):
             return self.cfg.get("phone.messenger_rule", "ask"), "мессенджер"
         return self.cfg.get("phone.default_rule", "name"), ""

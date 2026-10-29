@@ -142,7 +142,9 @@ class Initiative:
 
     def tick(self):
         with self._lock:
-            self.queue = [e for e in self.queue if time.time() - e["ts"] < 1800 and e["state"] == "new"]
+            # a phone notification said 8 minutes late (after a game) is stale: it stays in the list, not in the voice
+            self.queue = [e for e in self.queue if e["state"] == "new" and time.time() - e["ts"] <
+                          (180 if e.get("kind") == "phone" and not str(e.get("key") or "").startswith("missed:") else 1800)]
             if not self.queue:
                 return
             ev = max(self.queue, key=lambda e: (e["priority"], e["ts"]))

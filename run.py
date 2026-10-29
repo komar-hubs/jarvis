@@ -310,6 +310,34 @@ def main():
             except Exception:
                 pass
         quick.hide()
+        really_hide("JARVIS QUICK")
+
+    def really_hide(title):
+        """pywebview's hide() goes through WinForms, which skips Hide() when it believes the form is hidden already —
+        and a window shown with SetWindowPos(SWP_SHOWWINDOW) is "hidden" for WinForms: the panel stayed on screen."""
+        import win32gui
+        try:
+            h = win32gui.FindWindow(None, title)
+            if h and win32gui.IsWindowVisible(h):
+                win32gui.ShowWindow(h, 0)
+        except Exception:
+            pass
+
+    def cover(h, rect):
+        """Stretch a window over the whole monitor and make sure it stays so: pywebview's show() is finished on the
+        GUI thread and may put back the window's own 1280x720 after our SetWindowPos (the panel once opened as a
+        small window in the middle of the screen)."""
+        import win32con
+        import win32gui
+        l, t, r, b = rect
+        for _ in range(12):
+            win32gui.SetWindowPos(h, win32con.HWND_TOPMOST, l, t, r - l, b - t, win32con.SWP_SHOWWINDOW)
+            time.sleep(0.04)
+            if tuple(win32gui.GetWindowRect(h)) == (l, t, r, b) and win32gui.IsWindowVisible(h):
+                time.sleep(0.12)                     # once more after a moment: a late restore comes right after
+                if tuple(win32gui.GetWindowRect(h)) == (l, t, r, b):
+                    return True
+        return False
 
     def quick_show():
         if not quick:
@@ -336,7 +364,7 @@ def main():
         core.quick.visible = True
         h = win32gui.FindWindow(None, "JARVIS QUICK")
         if h:   # physical pixels straight through WinAPI: pywebview's own sizes are DPI-scaled
-            win32gui.SetWindowPos(h, win32con.HWND_TOPMOST, l, t, r - l, b - t, win32con.SWP_SHOWWINDOW)
+            cover(h, (l, t, r, b))
             for _ in range(5):   # Windows sometimes refuses the first SetForegroundWindow from a background thread
                 S.focus_window(h)
                 if win32gui.GetForegroundWindow() == h:
@@ -382,13 +410,14 @@ def main():
         boot.show()
         h = win32gui.FindWindow(None, "JARVIS BOOT")
         if h:
-            win32gui.SetWindowPos(h, win32con.HWND_TOPMOST, l, t, r - l, b - t, win32con.SWP_SHOWWINDOW)
+            cover(h, (l, t, r, b))
             S.focus_window(h)
         boot.evaluate_js("start();")
 
     def boot_hide():
         if boot:
             boot.hide()
+            really_hide("JARVIS BOOT")
 
     core.ui_hooks = {"show": show, "hide": window.hide, "quit": shutdown, "menu_hide": menu_hide,
                      "quick_show": quick_show, "quick_hide": quick_hide}
