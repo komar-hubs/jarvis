@@ -410,44 +410,117 @@ class Background:
             return False
 
     def ollama_setup(self, job, model):
-        """Free AI on this PC, no key: install Ollama (winget) if needed, start it, pull the model, switch Jarvis to it."""
+        """Free AI on this PC, no key: install Ollama if needed (winget, else the official installer), start it, pull the
+        model, switch Jarvis to it. Every failure says what exactly went wrong and what to do."""
         import json
         import subprocess
         import requests
-        exe = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Ollama" / "ollama.exe"
+        gb = self.OLLAMA_GB.get(model.split(":")[-1], 4.0)
+        installed = bool(self._ollama_up() or self._find_ollama())
+        need = gb + (0 if installed else 1.8)            # the model, and the program itself (about 1.5 GB)
+        free = shutil.disk_usage(Path.home()).free / 2**30
+        if free < need + 0.5:
+            raise RuntimeError(f"мало места на диске: свободно {free:.1f} ГБ, нужно около {need + 0.5:.1f} ГБ. Освободите место и нажмите ещё раз")
         if not self._ollama_up():
-            if not exe.exists() and not shutil.which("ollama"):
-                job["title"] = "Устанавливаю Ollama"
-                self._emit(job)
-                code, _ = self._winget(["install", "--id", "Ollama.Ollama", "--exact", "--silent", "--accept-package-agreements"], timeout=1800)
-                if code != 0 and not exe.exists():
-                    raise RuntimeError("winget не смог установить Ollama — поставьте её с ollama.com и нажмите ещё раз")
-            for _ in range(30):                       # the installer starts it; if not, start the server ourselves
+            if not self._find_ollama():
+                self._ollama_install(job)
+            for i in range(30):                       # the installer starts it; if not, start the server ourselves
                 if self._ollama_up():
                     break
-                if _ == 5:
-                    subprocess.Popen([str(exe) if exe.exists() else "ollama", "serve"], creationflags=CREATE_NO_WINDOW)
+                if i == 5:
+                    subprocess.Popen([str(self._find_ollama() or "ollama"), "serve"], creationflags=CREATE_NO_WINDOW)
                 time.sleep(2)
             if not self._ollama_up():
-                raise RuntimeError("Ollama установлена, но не запустилась — перезагрузите ПК и нажмите ещё раз")
+                raise RuntimeError("Ollama установлена, но не запустилась: перезагрузите ПК и нажмите ещё раз "
+                                   "(если не поможет, антивирус или брандмауэр блокирует localhost:11434)")
         job["title"] = f"Скачиваю модель {model}"
+        job["progress"] = 0
         self._emit(job)
-        with requests.post(self.OLLAMA + "/api/pull", json={"model": model, "stream": True}, stream=True, timeout=(15, 600)) as r:
-            r.raise_for_status()
-            last = 0
-            for line in r.iter_lines():
-                if not line:
-                    continue
-                st = json.loads(line)
-                if st.get("error"):
-                    raise RuntimeError(st["error"])
-                if st.get("total") and time.time() - last > 1:
-                    last = time.time()
-                    job["progress"] = int(st.get("completed", 0) * 100 / st["total"])
-                    self._emit(job)
+        try:
+            with requests.post(self.OLLAMA + "/api/pull", json={"model": model, "stream": True}, stream=True, timeout=(15, 600)) as r:
+                r.raise_for_status()
+                last = 0
+                for line in r.iter_lines():
+                    if not line:
+                        continue
+                    st = json.loads(line)
+                    if st.get("error"):
+                        raise RuntimeError(st["error"])
+                    if st.get("total") and time.time() - last > 1:
+                        last = time.time()
+                        job["progress"] = int(st.get("completed", 0) * 100 / st["total"])
+                        self._emit(job)
+        except requests.exceptions.RequestException as e:
+            raise RuntimeError(f"не удалось скачать модель {model}: нет связи с registry.ollama.ai (интернет, VPN или прокси). "
+                               f"Нажмите ещё раз, скачивание продолжится с того же места. {str(e)[:120]}")
         self.cfg.update({"ai": {"provider": "ollama", "providers": {"ollama": {"model": model}}}})
         self.core.emit("config")
-        return f"Готово: локальный ИИ {model} работает без интернета и ключей."
+        small = " Это самая маленькая модель: для слабого ПК умнее подойдёт бесплатный ключ Groq или Gemini (Настройки → ИИ)." if model.endswith(("0.8b", "2b")) else ""
+        return f"Готово: локальный ИИ {model} работает без интернета и ключей." + small
+
+    # download size on disk, GB (ollama.com/library/qwen3.5)
+    OLLAMA_GB = {"0.8b": 1.3, "2b": 3.1, "4b": 4.0, "9b": 7.6}
+
+    @staticmethod
+    def _find_ollama():
+        for p in (Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Ollama" / "ollama.exe",
+                  Path(os.environ.get("ProgramFiles", "")) / "Ollama" / "ollama.exe"):
+            if p.exists():
+                return p
+        w = shutil.which("ollama")
+        return Path(w) if w else None
+
+    def _ollama_install(self, job):
+        """winget first; when it is missing (a Windows without App Installer) or fails, the official installer from
+        ollama.com is downloaded and run quietly. The reason of the winget failure goes into the final error."""
+        import subprocess
+        job["title"] = "Устанавливаю Ollama"
+        job["progress"] = 0
+        self._emit(job)
+        why = ""
+        try:
+            code, out = self._winget(["install", "--id", "Ollama.Ollama", "--exact", "--silent", "--accept-package-agreements"], timeout=1800)
+            if code == 0 or self._find_ollama():
+                return
+            why = ([l.strip() for l in out.splitlines() if l.strip()] or [""])[-1][:140]
+        except FileNotFoundError:
+            why = "winget не найден (нет «Установщика приложений»)"
+        except Exception as e:
+            why = str(e)[:140]
+        job["title"] = "Скачиваю установщик Ollama с ollama.com"
+        self._emit(job)
+        setup = Path(os.environ.get("TEMP") or ".") / "OllamaSetup.exe"
+        try:
+            self._fetch("https://ollama.com/download/OllamaSetup.exe", setup, job)
+        except Exception as e:
+            raise RuntimeError(f"не удалось установить Ollama. winget: {why or 'не сработал'}. Скачать установщик с ollama.com тоже не вышло "
+                               f"({str(e)[:100]}). Поставьте Ollama вручную с ollama.com/download и нажмите ещё раз")
+        job["title"] = "Устанавливаю Ollama (1–3 минуты)"
+        job["progress"] = 100
+        self._emit(job)
+        try:
+            subprocess.run([str(setup), "/SILENT", "/NORESTART"], timeout=900, creationflags=CREATE_NO_WINDOW)
+        finally:
+            setup.unlink(missing_ok=True)
+        if not self._find_ollama():
+            raise RuntimeError(f"установщик Ollama отработал, но программа не появилась (winget: {why or 'не сработал'}). "
+                               "Возможно, его остановил антивирус: поставьте Ollama вручную с ollama.com/download")
+
+    def _fetch(self, url, dest, job):
+        import requests
+        with requests.get(url, stream=True, timeout=(15, 60), allow_redirects=True) as r:
+            r.raise_for_status()
+            total, got, last = int(r.headers.get("content-length") or 0), 0, 0
+            with open(dest, "wb") as f:
+                for chunk in r.iter_content(1 << 20):
+                    f.write(chunk)
+                    got += len(chunk)
+                    if total and time.time() - last > 1:
+                        last = time.time()
+                        job["progress"] = int(got * 100 / total)
+                        self._emit(job)
+        if got < 50 * 2**20:
+            raise RuntimeError(f"скачалось только {got // 1024} КБ: похоже, это не установщик")
 
     def rpc_ollama_setup(self, model=""):
         model = (model or "").strip() or self.ollama_model_for_pc()
@@ -456,7 +529,8 @@ class Background:
 
     @staticmethod
     def ollama_model_for_pc():
-        """A model the PC can run comfortably: 9B with 9+ GB of video memory, else 4B."""
+        """A model the PC can run comfortably: 9B with 9+ GB of video memory, 4B with 3.5+ GB; without a video card it
+        depends on RAM (4B: 14+ GB, 2B: 7.5+ GB, else the 0.8B — on 6 GB, with Windows and Jarvis in it, nothing bigger fits)."""
         import subprocess
         try:
             out = subprocess.run(["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"], capture_output=True,
@@ -464,7 +538,12 @@ class Background:
             vram = max(int(x) for x in out.split() if x.strip().isdigit())
         except Exception:
             vram = 0
-        return "qwen3.5:9b" if vram >= 9000 else "qwen3.5:4b"
+        if vram >= 9000:
+            return "qwen3.5:9b"
+        if vram >= 3500:
+            return "qwen3.5:4b"
+        ram = psutil.virtual_memory().total / 2**30
+        return "qwen3.5:4b" if ram >= 14 else "qwen3.5:2b" if ram >= 7.5 else "qwen3.5:0.8b"
 
     def rpc_updates_check(self):
         rows = self.upgradable()

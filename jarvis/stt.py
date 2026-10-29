@@ -184,6 +184,8 @@ class Listener:
         self.force_target = "voice"      # voice | chat
         self.recording = False
         self.mic_error = None
+        self.cur_dev = (None, False)     # (device, native format) that is open now
+        self.dead = {}                   # (device, native) -> when it opened fine but delivered no sound: skipped for 10 min
         self.model_lock = threading.Lock()
         self.last_level_emit = 0
         # phrases are recognised one after another by a single worker: with a thread per phrase a short second
@@ -428,27 +430,38 @@ class Listener:
         cands = [want, None]
         try:
             apis = sd.query_hostapis()
-            cands += [i for i, d in enumerate(sd.query_devices())
-                      if d["max_input_channels"] > 0 and apis[d["hostapi"]]["name"] == "MME"]
+            ins = [(i, d) for i, d in enumerate(sd.query_devices()) if d["max_input_channels"] > 0
+                   and not re.search(r"(?i)стерео\s*микшер|stereo\s*mix|loopback|what\s*u\s*hear", d["name"])]
+            # MME first, then WASAPI: a driver that stalls in one often works in the other
+            for api in ("MME", "WASAPI"):
+                cands += [i for i, d in ins if api in apis[d["hostapi"]]["name"]]
         except Exception:
             pass
+        now = time.time()
+        self.dead = {k: t for k, t in self.dead.items() if now - t < 600}
         errors, seen = [], set()
         for dev in cands:
             if dev in seen:
                 continue
             seen.add(dev)
             for native in (False, True):
+                if (dev, native) in self.dead:
+                    continue            # it opened before and gave no sound: the others get their turn
                 try:
                     self._try_open(sd, dev, native)
                 except Exception as e:
                     errors.append(f"{dev}: {e}")
                     continue
+                self.cur_dev = (dev, native)
                 self.mic_error = None
                 if dev == want and want is not None:
                     self.cfg.set("stt.mic_ref", {"id": dev, "name": sd.query_devices(dev)["name"]})
                 if dev != want or native:
                     self.log(f"Микрофон: {self.mic_name}" + ("" if dev == want else " — выбранный не открылся"), "warn")
                 return True
+        if self.dead and not errors:
+            self.dead.clear()           # every device was tried and went quiet: start over with all of them
+            return self.open_mic()
         self.mic_error = "; ".join(errors[-3:]) or "нет микрофонов"
         self.log(f"Микрофон не открылся: {self.mic_error}", "error")
         return False
@@ -493,7 +506,10 @@ class Listener:
                 starved += 1
                 if starved >= 3:
                     starved = 0
-                    self.log("Микрофон молчит, переподключаю…", "warn")
+                    # the same device reopened over and over was never going to help ("Python использует микрофон", and
+                    # still no sound): remember it as stalled and let the next one try
+                    self.dead[self.cur_dev] = time.time()
+                    self.log(f"Микрофон «{self.dev_name or 'по умолчанию'}» не отдаёт звук: пробую другой…", "warn")
                     try:
                         self.open_mic(refresh=True)
                     except Exception as e:
