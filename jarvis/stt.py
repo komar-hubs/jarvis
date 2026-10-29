@@ -521,12 +521,19 @@ class Listener:
             except queue.Empty:
                 # no audio for 3 s: the device was unplugged or switched (headset) -> reopen it
                 starved += 1
-                if starved >= 3:
-                    starved = 0
+                # a slow laptop may hold the sound back for several seconds (speech synthesis keeps the processor busy)
+                # and then deliver it by itself: 3 s was far too nervous and cut the listening for nothing. Patience
+                # is longer while Jarvis speaks; a stream that Windows itself reports as stopped is dealt with sooner.
+                stopped = self.stream is not None and not getattr(self.stream, "active", True)
+                speaking = bool(self.is_speaking())
+                if starved >= (25 if speaking else 8) or (stopped and starved >= 2):
+                    stalled, starved = starved, 0
                     # the same device reopened over and over was never going to help ("Python использует микрофон", and
                     # still no sound): remember it as stalled and let the next one try
                     self.dead[self.cur_dev] = time.time()
-                    self.log(f"Микрофон «{self.dev_name or 'по умолчанию'}» не отдаёт звук: пробую другой…", "warn")
+                    self.log(f"Микрофон «{self.dev_name or 'по умолчанию'}» не отдаёт звук {stalled} с"
+                             + (" (пока Джарвис говорил)" if speaking else "") + (", поток остановлен" if stopped else "")
+                             + ": пробую другой…", "warn")
                     vm = self._vm_hint()
                     if vm:
                         self.log(vm, "warn")
