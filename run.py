@@ -371,6 +371,17 @@ def main():
                     break
                 time.sleep(0.05)
         quick.evaluate_js(f"opened({gen});")
+        if h:   # and once more over the next seconds: something put the panel back to 1280x720 a moment after opening
+            def recheck():
+                import win32gui
+                for delay in (0.4, 0.8, 1.5, 3):
+                    time.sleep(delay)
+                    if not qs["open"] or qs["gen"] != gen:
+                        return
+                    if tuple(win32gui.GetWindowRect(h)) != (l, t, r, b):
+                        core.log(f"Быстрая панель сжалась до {win32gui.GetWindowRect(h)}: растягиваю обратно", "warn")
+                        cover(h, (l, t, r, b))
+            threading.Thread(target=recheck, daemon=True, name="quick-fit").start()
 
     def quick_toggle():
         # holding the keys a bit long makes Windows repeat the hotkey: open → close in a blink. One toggle per 0.6 s.
