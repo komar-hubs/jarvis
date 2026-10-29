@@ -409,6 +409,56 @@ class Background:
         except Exception:
             return False
 
+    def ollama_state(self, start=True, wait=25):
+        """"up" | "not_installed" | "failed". Installed but not running (after a reboot, in a virtual machine, a closed tray
+        icon) is the usual reason for "Max retries exceeded … 11434": the server is started here, quietly, and awaited."""
+        import subprocess
+        if self._ollama_up():
+            return "up"
+        exe = self._find_ollama()
+        if not exe:
+            return "not_installed"
+        if start:
+            if time.time() - getattr(self, "_ollama_started", 0) > 60:
+                self._ollama_started = time.time()
+                try:
+                    subprocess.Popen([str(exe), "serve"], creationflags=CREATE_NO_WINDOW)
+                except Exception:
+                    return "failed"
+            for _ in range(int(wait * 2)):
+                time.sleep(0.5)
+                if self._ollama_up():
+                    return "up"
+        return "failed"
+
+    def ollama_models(self):
+        """Names of the models Ollama has, or None if it does not answer."""
+        import requests
+        try:
+            return [m["name"] for m in requests.get(self.OLLAMA + "/api/tags", timeout=3).json().get("models", [])]
+        except Exception:
+            return None
+
+    def ollama_problem(self, model):
+        """A plain-words reason why the local AI cannot answer now (and what to press), or "" when it can."""
+        st = self.ollama_state()
+        if st == "not_installed":
+            return ("Ollama не установлена на этом ПК. Нажмите ниже «Бесплатный локальный ИИ в один клик»: Джарвис поставит её сам "
+                    "и подберёт модель под ваш ПК.")
+        if st == "failed":
+            from . import system as S
+            vm = S.virtual_machine()
+            return ("Ollama установлена, но не запускается. Перезагрузите ПК; если не поможет, антивирус или брандмауэр может блокировать "
+                    "localhost:11434" + (f". Это виртуальная машина ({vm}): нужны инструкции процессора AVX" if vm else "") + ".")
+        names = self.ollama_models()
+        model = (model or "").strip()
+        if names is not None and model and model not in names and f"{model}:latest" not in names:
+            rec = self.ollama_model_for_pc()
+            have = f" Сейчас скачано: {', '.join(names[:3])}." if names else ""
+            return (f"Ollama работает, но модели «{model}» на этом ПК нет.{have} Нажмите «Бесплатный локальный ИИ в один клик»: "
+                    f"Джарвис скачает {rec}, она подходит вашему ПК.")
+        return ""
+
     def ollama_setup(self, job, model):
         """Free AI on this PC, no key: install Ollama if needed (winget, else the official installer), start it, pull the
         model, switch Jarvis to it. Every failure says what exactly went wrong and what to do."""

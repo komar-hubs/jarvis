@@ -365,6 +365,8 @@ class Core:
         self.backup.start()
         self.phone.start()
         self.screenmem.start()
+        if self.cfg.get("ai.provider") == "ollama":      # the local AI must be awake when the first question comes
+            threading.Thread(target=lambda: self.background.ollama_state(start=True, wait=0), daemon=True, name="ollama-wake").start()
         threading.Thread(target=lambda: nlu.morph(), daemon=True).start()  # word-form dictionary: load ahead
         agent = {"claude_code": "claude", "antigravity": "antigravity"}.get(self.cfg.get("ai.provider"))
         if agent:
@@ -950,8 +952,10 @@ class Core:
             err = str(e)
             if "Connection" in err or "Max retries" in err:
                 err = f"Не могу связаться с «{prov.get('title')}». Проверьте, что сервер запущен и адрес верный."
-                if prov.get("id") == "ollama":   # a fresh install: point to the one-click setup
-                    err += " Ollama ещё не установлена? Настройки → Искусственный интеллект → «Бесплатный локальный ИИ в один клик»."
+                if prov.get("id") == "ollama":   # installed but asleep -> woken up here; not installed -> the one-click setup
+                    state = self.background.ollama_state(start=True, wait=0)
+                    err = ("Локальный ИИ (Ollama) был выключен, я его запускаю. Повторите вопрос через полминуты." if state != "not_installed"
+                           else "Ollama не установлена на этом ПК. Настройки → Искусственный интеллект → «Бесплатный локальный ИИ в один клик».")
             elif "Read timed out" in err:
                 err = f"«{prov.get('title')}» слишком долго не отвечает — запрос прерван."
             self.emit("chat_stream", state="error", text=err)
@@ -1917,6 +1921,10 @@ class Core:
 
     def rpc_test_provider(self, pid):
         prov = self.cfg.provider(pid)
+        if prov.get("id") == "ollama" and re.search(r"localhost|127\.0\.0\.1", prov.get("base_url") or ""):
+            why = self.background.ollama_problem(prov.get("model"))     # starts Ollama if it is installed but asleep
+            if why:
+                raise ValueError(why)
         t = time.time()
         txt = "".join(stream_chat(prov, [{"role": "user", "content": "Ответь одним словом: работает?"}],
                                   max_tokens=20, bridges=self.bridges))
