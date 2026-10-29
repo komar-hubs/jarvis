@@ -196,7 +196,10 @@ class Extras:
         """An unknown program on the whole screen is a game (a repack in Downloads has no "Games" in its path):
         remembered for good, so Jarvis never offers to close it and keeps quiet about memory while it runs."""
         exe = (exe or "").lower()
-        if not exe or exe in APP_NAMES or exe.startswith(("python", "explorer", "applicationframehost", "msedgewebview2")):
+        if not exe or exe in APP_NAMES or exe.startswith(("python", "explorer", "applicationframehost", "msedgewebview2")) or \
+                re.search(r"player|kmp|mpc|mpv|kodi|vlc|aimp|foobar|video|movie|photo|viewer|pdf|acro|slide|present|zoom|teams|"
+                          r"meet|skype|obs|stream|lockapp|screensaver|\.scr$", exe):
+            # a full-screen film, photo, PDF or call is not a game ("Игры" would also start the game automations)
             return
         games = self.cfg.get("extras.games_seen") or []
         if exe in games or not S.foreground_fullscreen():

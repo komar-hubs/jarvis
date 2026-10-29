@@ -278,6 +278,8 @@ def windows_except(keep_terms):
         except Exception:
             pass
         tries += [term[:-k] for k in (1, 2) if len(term) - k >= 5 and " " not in term]
+        # "кроме гололо хрома": a misheard word next to the name — each longer word on its own, the longest first
+        tries += sorted((w for w in term.split() if len(w) >= 4), key=len, reverse=True) if " " in term else []
         hits = next((h for h in (find_windows(x) for x in dict.fromkeys(tries)) if h), [])
         if hits:
             keep_procs |= {w["proc"].lower() for w in hits}

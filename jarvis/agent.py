@@ -30,6 +30,21 @@ def register(R, core):
        r"^(?:что|как|куда|где|кого|чем)\s+(.+?)\s+в\s+(?:этой\s+)?игре$|"
        r"^(?:что\s+мне\s+(?:собрать|купить|прокачать|качать|делать\s+дальше)|куда\s+мне\s+(?:идти|дальше))(.*)$")
     def _game(m, t):
+        return game_help(t)
+
+    # a question asked while a game is on the screen is about the game: "где шкафчик со снаряжением?",
+    # "почему здесь не получается пройти?" went to the chat, which could not see the screen
+    @R(r"^(?:где|куда)\s+(?!я\s+(?:видел|видела|был))\S.{2,}$|"
+       r"^(?:как|почему|зачем|что|чем)\b.*\b(?:здесь|тут|пройти|победить|убить|открыть|найти|попасть|залезть|забраться|"
+       r"решить|собрать|купить|прокачать|делать|идти|достать|взять|использовать|сломать|не\s+получается|не\s+могу)\b.*$")
+    def _game_question(m, t):
+        from . import system as S
+        from .llm import vision_supported
+        if not core.extras.is_game(S.active_exe()) or not vision_supported(core.cfg.provider()):
+            return False                  # not in a game, or no eyes: the ordinary chat answers
+        return game_help(t)
+
+    def game_help(t):
         q = t.strip()
         from . import system as S
         title = S.active_title() or "игра"

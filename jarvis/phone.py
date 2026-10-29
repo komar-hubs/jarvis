@@ -1116,6 +1116,12 @@ def register(R, core):
             return f"Не получилось: {e}"
         return True
 
+    @R(r"^(?:ответь|ответить|прими|принять|возьми)\s+(?:на\s+)?(?:звонок|вызов|трубку)(?:\s+.*)?$|^(?:подними|сними)\s+трубку$")
+    def _answer_call(m, t):
+        # "ответь на звонок" used to become an SMS "на звонок" to the last sender ("не знаю номер beelineOFD")
+        return ("Принимать звонки с компьютера я пока не умею, сэр: ответьте на телефоне. "
+                "Кто звонит, я говорю сразу, как только телефон зазвонит.")
+
     @R(r"^(?:ответь|ответить|напиши\s+в\s+ответ)(?:\s+(?!на\s+(?:это\s+|последнее\s+)?письмо|на\s+выделен|на\s+вопрос)(.+))?$")
     def _reply(m, t):
         """"ответь, что буду через 10 минут", "ответь Ване: ок" — the answer goes into the messenger on the phone."""
@@ -1134,6 +1140,8 @@ def register(R, core):
         target = ph.reply_target(who)
         if not target:
             return False
+        if SERVICE_SENDER_RX.match(target["who"].strip()) and not target.get("reply_id") and not ph.contact_for_number(target["who"]):
+            return f"Это сервисный отправитель «{target['who']}», сэр: на такие SMS ответить нельзя."
         mail = getattr(core, "mail", None)
         if mail is not None and getattr(mail, "current", None) and getattr(mail, "current_at", 0) > target["t"]:
             return False                  # the e-mail was read after this message: "ответь" is about the e-mail
