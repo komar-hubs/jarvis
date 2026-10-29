@@ -192,8 +192,25 @@ class Extras:
             self._exe_cache[pid] = c
         return c[0], c[1], title
 
+    def _learn_game(self, exe):
+        """An unknown program on the whole screen is a game (a repack in Downloads has no "Games" in its path):
+        remembered for good, so Jarvis never offers to close it and keeps quiet about memory while it runs."""
+        exe = (exe or "").lower()
+        if not exe or exe in APP_NAMES or exe.startswith(("python", "explorer", "applicationframehost", "msedgewebview2")):
+            return
+        games = self.cfg.get("extras.games_seen") or []
+        if exe in games or not S.foreground_fullscreen():
+            return
+        self.cfg.set("extras.games_seen", (games + [exe])[-60:])
+        self.core.log(f"Запомнил игру: {exe}")
+
+    def is_game(self, exe, path=""):
+        return self.app_info((exe or "").lower(), path)[1] == "Игры"
+
     def app_info(self, exe, path=""):
         name, cat = APP_NAMES.get(exe, (None, None))
+        if not cat and exe and exe.lower() in (self.cfg.get("extras.games_seen") or []):
+            cat = "Игры"
         low = (path or "").lower()
         if "steamapps\\common" in low or "epic games\\" in low or "\\games\\" in low or "riot games" in low:
             if exe not in ("steam.exe",):
@@ -534,12 +551,15 @@ class Extras:
         fg_cat, fg_exe = "?", ""
         try:
             fg_exe, path, _ = self._fg()
+            self._learn_game(fg_exe)
             fg_cat = self.app_info(fg_exe, path)[1]
         except Exception:
             pass
         self._ram_high = self._ram_high + 1 if st["ram"] >= 92 else 0
         if self._ram_high >= 2 and fg_cat != "Игры":
             top = self.hogs()
+            if any(self.is_game(x[0]) for x in top):
+                top = []        # a game is running: it is what fills the memory, and "Закрыть Avengers?" mid-game hurts
             # the memory eater is the very thing on screen (a game, a render): the user knows, and "Закрыть его?"
             # about the game being played was said four times in one evening
             # under memory pressure Windows trims the working sets of background programs: "Edge, около 0.0

@@ -220,6 +220,11 @@ class Background:
             pid = p.info["pid"]
             if pid in (0, 4, me, fg_pid) or (p.info["name"] or "").lower() in ("audiodg.exe", "dwm.exe", "csrss.exe"):
                 continue
+            try:   # a game behind an alt-tab would stutter for seconds when the user comes back to it
+                if self.core.extras.is_game(p.info["name"] or ""):
+                    continue
+            except Exception:
+                pass
             try:
                 if p.info["memory_info"].rss < 80 * 2**20:
                     continue
