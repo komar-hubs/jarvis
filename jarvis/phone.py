@@ -17,6 +17,11 @@ CREATE_NO_WINDOW = 0x08000000
 CANDIDATES = [Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "KDE Connect" / "bin",
               Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "KDE Connect" / "bin"]
 CALL_RX = re.compile(r"(?i)входящ\w*\s+(?:вызов|звонок)|звонит|incoming\s+call|calling")
+# a missed call is news, not a ringing phone: it was announced as "Звонит Мама: Пропущенный вызов"
+MISSED_RX = re.compile(r"(?i)пропущен\w*|missed")
+# the SMS app's own status lines are not senders: "SMS от Сообщения не отправлены"
+SMS_SYSTEM_RX = re.compile(r"(?i)сообщени\w*\s+не\s+(?:отправлен|доставлен)|не\s+удалось\s+отправить|новы\w+\s+сообщени|"
+                           r"^\d+\s+(?:новы\w+\s+)?сообщени|черновик|ошибк")
 DIALERS = ("телефон", "phone", "dialer", "звонки", "вызовы", "contacts")
 MUTE_DEFAULT = ["KDE Connect", "Android System", "Система Android", "Google Play", "Google Play Маркет", "Загрузки",
                 "Downloads", "Battery", "Батарея"]
@@ -295,7 +300,7 @@ class Phone:
         if not self.cfg.get("phone.enabled", True) or not (self.cfg.get("phone.announce", True) or self.cfg.get("phone.calls", True)):
             return
         nid, app = str(d.get("internalId") or d.get("id") or ""), str(d.get("appName") or "").strip()
-        title, text = str(d.get("title") or "").strip(), str(d.get("text") or "").strip()
+        title, text = self._clean(str(d.get("title") or "")), self._clean(str(d.get("text") or ""))
         if not app or not (title or text):
             return
         if self._last_text.get(nid) == (title, text):
@@ -305,6 +310,35 @@ class Phone:
         self._remember_reply(d, live=True)
         self._new(f"{app}: {body}", quiet=bool(d.get("silent")))
 
+    @staticmethod
+    def _clean(s):
+        """MAX and some others send HTML: "<b>Галина</b> Привет<br/><b>Михаил</b> Хорошо" was read aloud with the tags.
+        -> "Галина: Привет. Михаил: Хорошо" (a group chat's authors become "Name:", line breaks become sentences)."""
+        import html
+        s = re.sub(r"(?is)<b>(.*?)</b>\s*", r"\1: ", s)
+        s = re.sub(r"(?i)<br\s*/?>|</p>|</div>", "\n", s)
+        s = html.unescape(re.sub(r"<[^>]+>", "", s))
+        lines, out = [x.strip(" :") for x in s.split("\n")], []
+        for ln in lines:
+            if ln and (not out or not out[-1].endswith(ln)):   # a group summary repeats a line: "…: Бараненков / Бараненков"
+                out.append(ln)
+        s = ". ".join(out)
+        s = re.sub(r"([.!?…])\.\s", r"\1 ", s)
+        return re.sub(r"\s{2,}", " ", s).strip()
+
+    def last_text(self, max_age_min=30):
+        """The newest phone notification that is not just noise, for "прочитай уведомление": (app, text) or None."""
+        for x in self.recent:
+            if x.get("call") or x.get("rule") == "silent":
+                continue
+            try:
+                h, mnt = map(int, x["at"].split(":"))
+                age = (dt.datetime.now() - dt.datetime.now().replace(hour=h, minute=mnt)).total_seconds() / 60 % 1440
+            except Exception:
+                age = 0
+            return (x["app"], x["text"]) if age <= max_age_min else None
+        return None
+
     def _remember_reply(self, d, live=False):
         """A message Jarvis can answer by voice: the phone offers "Reply" on it (replyId), or it is an SMS
         (answered by SMS to the sender's number from the contacts)."""
@@ -312,7 +346,7 @@ class Phone:
         title = EMOJI_RX.sub("", str(d.get("title") or "")).strip()
         rid = str(d.get("replyId") or "")
         sms = self._is(app, SMS_APPS)
-        if not (rid or sms) or not title or title.lower() == app.lower():
+        if not (rid or sms) or not title or title.lower() == app.lower() or SMS_SYSTEM_RX.search(title):
             return
         nid = str(d.get("internalId") or d.get("id") or "")
         for r in list(self.repliable):
@@ -364,7 +398,8 @@ class Phone:
     def _new(self, line, quiet=False):
         app, _, text = line.partition(": ")
         app, text = EMOJI_RX.sub("", app).strip(), re.sub(r"\s{2,}", " ", EMOJI_RX.sub("", text)).strip()
-        call = CALL_RX.search(line) or (app.lower().startswith(DIALERS) and text)
+        missed = bool(MISSED_RX.search(line))
+        call = not missed and (CALL_RX.search(line) or (app.lower().startswith(DIALERS) and text))
         # the phone's "silent" mark is not used: messengers set it when they add a message to a chat's notification
         rule, why = ("call", "") if call else self.rule_for(app, text)
         item = {"app": app, "text": text, "at": dt.datetime.now().strftime("%H:%M"), "call": bool(call), "rule": rule, "why": why}
@@ -377,14 +412,28 @@ class Phone:
                              src).strip(" :•·-") or "кто-то"
                 self.core.initiative.propose(f"call:{who}", f"Звонит {who}.", priority=4, title="Телефон", cooldown_min=1, kind="phone")
             return
+        if missed:
+            if self.cfg.get("phone.calls", True):
+                who = re.sub(r"(?i)пропущенн\w*\s+(?:вызов|звонок)\w*\s*(?:от\s+)?|missed\s+call\s*(?:from\s+)?", "",
+                             text.partition(": ")[0] if ": " in text else text).strip(" :•·-")
+                if len(re.sub(r"\D", "", who)) >= 5:
+                    name = self.contact_for_number(who)
+                    who = name or f"номера, оканчивающегося на {self._last_digits(who)}"
+                self.core.initiative.propose(f"missed:{who}", f"Пропущенный звонок от {self._gent(who)}." if who
+                                             else "Пропущенный звонок.", priority=3, title="Телефон", cooldown_min=5, kind="phone")
+            return
         if rule == "silent" or not self.cfg.get("phone.announce", True):
             return
         # "Иван: привет" -> the sender is the part before the first colon, when there is one
         who, _, body = text.partition(": ") if ": " in text[:60] else ("", "", text)
-        messenger = self._is(app, MESSENGERS)
+        messenger = self._is(app, MESSENGERS) and not (self._is(app, SMS_APPS) and SMS_SYSTEM_RX.search(who or text))
         if not messenger:   # a game's "Играй сейчас" or a bank's "Приложение устарело" is a title, not a sender
             who, body = "", text.replace(": ", ". ", 1)
         frm = f" от {self._gent(who.strip())}" if who.strip() else ""
+        if who.strip() and len(re.sub(r"\D", "", who)) >= 5:
+            # an unknown number: "от 79615857349" was read as "семь миллиардов…"; a contact's name, or the last digits
+            name = self.contact_for_number(who)
+            frm = f" от {self._gent(name)}" if name else f" с номера, оканчивающегося на {self._last_digits(who)}"
         # priority 3: the user chose these rules, so they are said even at "говорить первым: о важном" (2 was only
         # shown, and with no toast nothing happened at all). One sender: once per 30 s — a chat sends several updates
         key = f"phone:{app.lower()}:{who.strip().lower()}"
@@ -392,12 +441,12 @@ class Phone:
             self.core.initiative.propose(f"phone:{line}", f"{app}{frm}: {body}", priority=3, title=f"Телефон · {app}", cooldown_min=0, kind="phone")
         elif rule == "ask":
             # the text stays on the phone until "да": no toast with it either
-            self.core.initiative.propose(key, f"SMS{frm}. Прочитать?" if self._is(app, SMS_APPS) else
+            self.core.initiative.propose(key, f"SMS{frm}. Прочитать?" if messenger and self._is(app, SMS_APPS) else
                                          f"Сообщение в {app}{frm}. Прочитать?" if messenger else
                                          f"Уведомление от {app}. Прочитать?", priority=3, title=f"Телефон · {app}",
                                          on_yes=lambda: self.core.say(body or "Текста нет."), cooldown_min=0.5, toast=False, kind="phone")
         else:
-            self.core.initiative.propose(key, f"На телефоне SMS{frm}." if self._is(app, SMS_APPS) else
+            self.core.initiative.propose(key, f"На телефоне SMS{frm}." if messenger and self._is(app, SMS_APPS) else
                                          f"На телефоне сообщение в {app}{frm}." if messenger
                                          else f"На телефоне уведомление от {app}.", priority=3, title=f"Телефон · {app}",
                                          cooldown_min=0.5, toast=False, kind="phone")
@@ -521,6 +570,31 @@ class Phone:
             return best[1], best[0]
         return None, who
 
+    def contact_for_number(self, number):
+        """"+7 961 585-73-49" -> the name it is saved under in Settings → Телефон → контакты, or None."""
+        digits = re.sub(r"\D", "", number)[-10:]
+        for name, num in (self.cfg.get("phone.contacts") or {}).items():
+            if digits and re.sub(r"\D", "", str(num))[-10:] == digits:
+                return self._nominative(name)
+        return None
+
+    @staticmethod
+    def _nominative(name):
+        """Contacts are often saved the way they were said: "маме" -> "мама" (then "от мамы", "маме")."""
+        from .nlu import morph
+        m = morph()
+        if m and len(name.split()) == 1:
+            ps = m.parse(name)
+            if ps and ps[0].tag.POS == "NOUN":
+                return ps[0].normal_form
+        return name
+
+    @staticmethod
+    def _last_digits(number):
+        """The end of a number, said in pairs: "…73 49" reads "семьдесят три сорок девять"."""
+        d = re.sub(r"\D", "", number)[-4:]
+        return f"{d[:2]} {d[2:]}" if len(d) == 4 else d
+
     def sms(self, number, text):
         self.cli("-d", self._dev(), "--send-sms", text, "--destination", number)
         return "SMS отправлено."
@@ -602,13 +676,20 @@ class Phone:
                     self.bus.send_reply(dev, target["reply_id"], text)
                 else:
                     self.sms(number, text)
-                self.core.say(f"Ответил {self._dat(target['who'])}." if target.get("reply_id")
-                              else f"Отправил SMS {self._dat(target['who'])}.")
+                self.core.say(f"Ответил {self._to(target['who'])}." if target.get("reply_id")
+                              else f"Отправил SMS {self._to(target['who'])}.")
             except Exception as e:
                 self.core.say(f"Не получилось отправить: {e}")
         # an SMS goes to the number as a new message: "Отправить SMS маме", not "Ответить" (the user just wants to write)
-        self.core.ask_confirm(send, f"Ответить {self._dat(target['who'])} в {target['app']}: «{text}»?" if target.get("reply_id")
-                              else f"Отправить SMS {self._dat(target['who'])}: «{text}»?")
+        self.core.ask_confirm(send, f"Ответить {self._to(target['who'])} в {target['app']}: «{text}»?" if target.get("reply_id")
+                              else f"Отправить SMS {self._to(target['who'])}: «{text}»?")
+
+    def _to(self, who):
+        """Whom, for speech: "Ване", "маме" for a saved number, "на номер, оканчивающийся на 73 49" for an unknown one."""
+        if len(re.sub(r"\D", "", who)) >= 5:
+            name = self.contact_for_number(who)
+            return self._dat(name) if name else f"на номер, оканчивающийся на {self._last_digits(who)}"
+        return self._dat(who)
 
     @staticmethod
     def _dat(name):
@@ -891,6 +972,15 @@ def register(R, core):
         except Exception as e:
             return f"Не получилось: {e}"
         return True
+
+    @R(r"^(?:прочитай|зачитай|озвучь|прочти)\s+(?:последнее\s+|это\s+|новое\s+|пришедшее\s+)?(?:уведомлени\w*|сообщени\w*|смс\w*|sms|смску)$|"
+       r"^что\s+(?:там\s+)?(?:пришло|написали|за\s+(?:уведомление|сообщение|смс))$|^кто\s+(?:там\s+)?(?:написал|пишет)$")
+    def _read_last(m, t):
+        last = PH().last_text()
+        if not last:
+            return False                  # nothing fresh from the phone: maybe mail, the screen or the AI
+        app, text = last
+        return f"{app}: {text}" if text else f"Уведомление от {app}, без текста."
 
     @R(rf"^(?:что|какие\s+уведомления)\s+(?:нового\s+)?на\s+{PHONE}$|^(?:прочитай\s+)?уведомления\s+(?:с\s+)?{PHONE}$")
     def _list(m, t):

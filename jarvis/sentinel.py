@@ -123,7 +123,10 @@ class Initiative:
         ev["state"] = "said"
         self.core.player.sound("notify")
         addr = (self.cfg.get("user.address") or "сэр").capitalize()
-        text = ev["text"] if ev["priority"] < 3 or ev["text"].lower().startswith(addr.lower()) else f"{addr}, {ev['text'][:1].lower()}{ev['text'][1:]}"
+        t = ev["text"]
+        # "SMS от…", "KDE Connect…", "YouTube": an abbreviation or a name keeps its capital ("Сэр, sMS" was shown)
+        head = t if len(t) > 1 and (t[1:2].isupper() or t.split(" ")[0] in ("YouTube", "Telegram", "Discord", "WhatsApp"))             else t[:1].lower() + t[1:]
+        text = t if ev["priority"] < 3 or t.lower().startswith(addr.lower()) else f"{addr}, {head}"
         if ev.get("_yes"):
             fn = ev["_yes"]
 
@@ -169,6 +172,11 @@ class Initiative:
 
 
 # ====================================================================== sentinel
+# unsigned helpers that come with many games and apps unpacked into Downloads: not worth a warning
+BENIGN_HELPERS = {"crashpad_handler.exe", "unitycrashhandler64.exe", "unitycrashhandler32.exe", "crashreporter.exe",
+                  "crashhandler.exe", "crashsender1403.exe", "bugsplatcrashhandler.exe", "werfault.exe"}
+
+
 class Sentinel:
     def __init__(self, core):
         self.core = core
@@ -367,6 +375,8 @@ class Sentinel:
         if self._signed(exe) is not False:
             return
         name = Path(exe).name
+        if name.lower() in BENIGN_HELPERS:   # crash reporters shipped inside games and portable apps
+            return
         where = "Temp" if "\\temp\\" in exe.lower() else "Загрузки" if "\\downloads\\" in exe.lower() else Path(exe).parent.name
 
         def kill():

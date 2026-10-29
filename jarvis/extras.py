@@ -516,16 +516,18 @@ class Extras:
         if not self.cfg.get("extras.watchdog", True):
             return
         st = S.system_stats()
-        fg_cat = "?"
+        fg_cat, fg_exe = "?", ""
         try:
-            exe, path, _ = self._fg()
-            fg_cat = self.app_info(exe, path)[1]
+            fg_exe, path, _ = self._fg()
+            fg_cat = self.app_info(fg_exe, path)[1]
         except Exception:
             pass
         self._ram_high = self._ram_high + 1 if st["ram"] >= 92 else 0
-        if self._ram_high >= 2:
+        if self._ram_high >= 2 and fg_cat != "Игры":
             top = self.hogs()
-            if top:
+            # the memory eater is the very thing on screen (a game, a render): the user knows, and "Закрыть его?"
+            # about the game being played was said four times in one evening
+            if top and top[0][0].lower() != (fg_exe or "").lower():
                 exe, mb = top[0]
                 name = self.app_info(exe)[0]
                 self._watch_once("ram", 20, f"Память заполнена на {int(st['ram'])} процентов. Больше всего занимает "
