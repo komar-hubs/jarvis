@@ -433,7 +433,7 @@ class Router:
         R = self.rule
         cfg = core.cfg
         from . import (automation, background, backup, extras, mail, messenger, mouse, notes, people, persona, phone, plugins,
-                       agent, boot, macros, marker, quick, screenmem, sentinel, skills, teach, watchers)
+                       agent, boot, gamevoice, macros, marker, quick, screenmem, sentinel, skills, teach, watchers)
 
         def addr():
             return cfg.get("user.address", "сэр") or "сэр"
@@ -441,6 +441,7 @@ class Router:
         people.register(R, core)  # "мой шеф — Антон", "под шефом я имею в виду…": before the generic corrections
         self._build_journal(R)    # undo, corrections, "что ты сделал": before everything, "отмени" must reach them
         self._build_search(R)     # "найди в ютубе котиков", "найди видео с котиками"
+        gamevoice.register(R, core)  # "научи заклинание люмос на клавишу один": before teach's and memory's "запомни"
         mouse.register(R, core)   # clicks by name, nth link, fields, scrolling to, dragging (jarvis/mouse.py)
         phone.register(R, core)      # "найди телефон", "отправь ссылку на телефон", "смс маме …": before the messengers
         teach.register(R, core)      # "когда я говорю доброе утро, открой почту": a new command by voice

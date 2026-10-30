@@ -60,6 +60,7 @@ async function maintLoad() {
   phonePanel();
   overlaysPanel();
   memPanel();
+  gamePanel();
 }
 // Settings → Обслуживание ПК → Производительность: the light mode for weak laptops (jarvis/system.py lite())
 function perfSection() {

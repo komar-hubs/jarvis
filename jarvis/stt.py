@@ -659,7 +659,11 @@ class Listener:
                 if not seg_tts and len(voiced) % 5 == 0 and self.is_speaking():
                     seg_tts = True  # the assistant started talking during this phrase
                 silence = 0 if is_sp else silence + 1
-                max_sil = int(self.cfg.get("stt.silence_ms", 650)) // 30
+                end_ms = int(self.cfg.get("stt.silence_ms", 650))
+                gf = getattr(self, "game_fast", None)
+                if gf is not None and gf():          # a game in front: a spell must fire sooner (jarvis/gamevoice.py)
+                    end_ms = min(end_ms, self.game_end_ms())
+                max_sil = end_ms // 30
                 too_long = len(voiced) > 600  # 18 s
                 if silence >= max_sil or too_long:
                     in_speech = False

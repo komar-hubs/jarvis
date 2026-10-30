@@ -220,6 +220,10 @@ class Core:
         self.boot = Boot(self)             # the suit's power-up when the PC starts (ui/boot.html)
         from .macros import Macros
         self.macros = Macros(self)         # "запиши макрос": clicks and keys recorded and played back
+        from .gamevoice import GameVoice
+        self.gamevoice = GameVoice(self)   # in a game: a phrase without the name presses keys ("люмос" -> 1)
+        self.listener.game_fast = self.gamevoice.fast
+        self.listener.game_end_ms = self.gamevoice.end_ms
         from .extras import Extras
         self.extras = Extras(self)   # before the router: it registers voice rules of its own
         self.router = Router(self)
@@ -580,6 +584,11 @@ class Core:
                 self.dictation(False)
                 return
             self._dictate(re.sub(r"^\W*(?:джарвис|jarvis)\W*", "", text, flags=re.I) if woke else text, norm)
+            return
+        # a game in front: "люмос" presses its key at once, without the name and without the router (after the echo
+        # check above, so Jarvis's own voice never presses anything)
+        gv = getattr(self, "gamevoice", None)
+        if gv is not None and gv.handle(text, meta):
             return
         if getattr(self.phone, "searching", False) and re.search(
                 r"\b(?:нашел|нашла|нашелся|нашлась|нашли|хватит|стоп|стой|все|тут|вот\s+он)\b", (norm or "").replace("ё", "е")):
@@ -1819,7 +1828,8 @@ class Core:
         fn = next((getattr(o, "rpc_" + method) for o in (self, self.extras, self.mail, self.sentinel, self.initiative,
                                                           self.people, self.watchers, self.background, self.plugins,
                                                           self.automations, self.notebook, self.backup, self.persona, self.phone,
-                                                          self.quick, self.marker, self.screenmem, self.macros, self.boot)
+                                                          self.quick, self.marker, self.screenmem, self.macros, self.boot,
+                                                          self.gamevoice)
                    if hasattr(o, "rpc_" + method)), None)
         if not fn:
             raise ValueError(f"unknown method {method}")

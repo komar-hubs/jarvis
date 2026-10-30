@@ -962,6 +962,12 @@ svg.ic.pin { color: var(--hot); }
 /* Settings → Память и автоматика */
 .mem-hit { padding: 8px 10px; margin-top: 6px; border: 1px solid var(--line); cursor: pointer; font-size: 13.5px; }
 .mem-hit:hover { border-color: var(--c); background: color-mix(in srgb, var(--c) 8%, transparent); }
+/* Settings → «Голос в играх» (ui/gamevoice.js) */
+.gv-head, .gv-row { display: grid; grid-template-columns: minmax(0, 2.6fr) minmax(0, 1fr) 76px auto; gap: 8px; align-items: center; }
+.gv-head { font-size: 12px; margin-top: 10px; }
+.gv-row { margin-top: 6px; }
+.gv-row input { min-width: 0; }
+.gv-btns { display: flex; gap: 6px; }
 .mem-snip { margin-top: 4px; color: var(--dim); font-size: 12.5px; line-height: 1.4; }
 .mem-snip mark { background: color-mix(in srgb, var(--c) 30%, transparent); color: var(--text); padding: 0 2px; }
 .mac-list .row { margin: 4px 0; }

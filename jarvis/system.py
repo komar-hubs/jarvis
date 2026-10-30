@@ -622,7 +622,7 @@ LETTER_WORDS = {
     "а": "a", "эй": "a", "бэ": "b", "би": "b", "б": "b", "си": "c", "цэ": "c", "ц": "c", "дэ": "d", "де": "d", "ди": "d",
     "д": "d", "е": "e", "и": "e", "эф": "f", "ф": "f", "гэ": "g", "джи": "g", "г": "g", "эйч": "h", "аш": "h", "ай": "i",
     "джей": "j", "кей": "k", "ка": "k", "к": "k", "эл": "l", "л": "l", "эм": "m", "м": "m", "эн": "n", "н": "n", "о": "o",
-    "оу": "o", "пи": "p", "пэ": "p", "п": "p", "кью": "q", "ар": "r", "эр": "r", "р": "r", "эс": "s", "с": "s", "ти": "t",
+    "оу": "o", "пи": "p", "пэ": "p", "п": "p", "кью": "q", "ку": "q", "кю": "q", "ар": "r", "эр": "r", "р": "r", "эс": "s", "с": "s", "ти": "t",
     "тэ": "t", "т": "t", "ю": "u", "у": "u", "ви": "v", "вэ": "v", "в": "v", "дабл ю": "w", "икс": "x", "х": "x",
     "уай": "y", "игрек": "y", "зет": "z", "зэ": "z", "з": "z",
 }
@@ -703,6 +703,102 @@ def _split_combo(combo):
     if cur.strip():
         parts.append(cur.strip())
     return parts
+
+
+# ---------------------------------------------------------------- keys for games (jarvis/gamevoice.py)
+# mouse buttons: (down flag, up flag, mouseData)
+GAME_MOUSE = {"lmb": (0x0002, 0x0004, 0), "лкм": (0x0002, 0x0004, 0), "rmb": (0x0008, 0x0010, 0), "пкм": (0x0008, 0x0010, 0),
+              "mmb": (0x0020, 0x0040, 0), "скм": (0x0020, 0x0040, 0), "mouse4": (0x0080, 0x0100, 1), "mouse5": (0x0080, 0x0100, 2)}
+
+
+def parse_game_keys(spec):
+    """'q' | 'shift+w' | 'q:500' (held 500 ms) | 'lmb' | 'e, 150, lmb:300' (150 ms pause between) | Russian key names
+    ('шифт ку'). -> [("wait", ms) | ("press", [("key", vk) | ("mouse", name)], hold_ms or None)]. Raises ValueError."""
+    steps = []
+    parts = [p.strip() for p in re.split(r"[,;]", spec or "") if p.strip()]
+    if not parts:
+        raise ValueError("клавиша не указана")
+    for part in parts:
+        m = re.fullmatch(r"(?:wait|пауза|ждать)?\s*(\d{2,5})\s*(?:мс|ms)?", part, re.I)
+        if m:
+            steps.append(("wait", min(5000, int(m.group(1)))))
+            continue
+        hold = None
+        m = re.fullmatch(r"(.+?)\s*:\s*(\d{2,5})\s*(?:мс|ms)?", part, re.I)
+        if m:
+            part, hold = m.group(1), min(10000, int(m.group(2)))
+        keys = []
+        for k in [k.strip().lower() for k in part.split("+") if k.strip()]:
+            if k in GAME_MOUSE:
+                keys.append(("mouse", k))
+                continue
+            try:
+                keys.append(("key", _vk(k)))
+            except ValueError:
+                try:
+                    names = parse_keys(k).split("+")    # "шифт" -> shift, "ку" -> q
+                    keys += [("key", _vk(n)) for n in names]
+                except ValueError:
+                    raise ValueError(f"не знаю клавишу «{k}»: примеры — q, shift+w, f5, space, lmb (левая кнопка мыши), q:500 (держать 0,5 с)")
+        if not keys:
+            raise ValueError(f"не понял «{part}»")
+        steps.append(("press", keys, hold))
+    return steps
+
+
+def game_press(spec, hold_ms=60, dry=False):
+    """Presses for games: SendInput with scan codes (games read scan codes, not virtual keys) and a real hold (a 12 ms
+    tap is shorter than one frame and gets lost). dry=True returns the events instead of sending them."""
+    from ctypes import wintypes
+    steps = parse_game_keys(spec)
+    events = []
+    for st in steps:
+        if st[0] == "wait":
+            events.append(("sleep", st[1]))
+            continue
+        _, keys, hold = st
+        events += [("down", k) for k in keys]
+        events.append(("sleep", hold or hold_ms))
+        events += [("up", k) for k in reversed(keys)]
+        events.append(("sleep", 15))
+    if dry:
+        return events
+
+    class MI(ctypes.Structure):
+        _fields_ = [("dx", wintypes.LONG), ("dy", wintypes.LONG), ("mouseData", wintypes.DWORD), ("dwFlags", wintypes.DWORD),
+                    ("time", wintypes.DWORD), ("dwExtraInfo", ctypes.c_size_t)]
+
+    class KI(ctypes.Structure):
+        _fields_ = [("wVk", wintypes.WORD), ("wScan", wintypes.WORD), ("dwFlags", wintypes.DWORD),
+                    ("time", wintypes.DWORD), ("dwExtraInfo", ctypes.c_size_t)]
+
+    class U(ctypes.Union):
+        _fields_ = [("mi", MI), ("ki", KI), ("pad", ctypes.c_byte * 32)]
+
+    class INPUT(ctypes.Structure):
+        _fields_ = [("type", wintypes.DWORD), ("u", U)]
+
+    u = _user32()
+
+    def send(kind, what, up):
+        inp = INPUT()
+        if kind == "mouse":
+            d, uflag, data = GAME_MOUSE[what]
+            inp.type = 0
+            inp.u.mi = MI(0, 0, data, uflag if up else d, 0, 0)
+        else:
+            sc = u.MapVirtualKeyW(what, 0)
+            flags = 0x0008 | (0x0001 if what in _EXTENDED else 0) | (0x0002 if up else 0)   # SCANCODE, EXTENDED, KEYUP
+            inp.type = 1
+            inp.u.ki = KI(0, sc, flags, 0, 0)
+        u.SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
+
+    for ev in events:
+        if ev[0] == "sleep":
+            time.sleep(ev[1] / 1000)
+        else:
+            send(ev[1][0], ev[1][1], ev[0] == "up")
+    return events
 
 
 def send_vks(vks):
