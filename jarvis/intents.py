@@ -409,12 +409,29 @@ class Router:
             return random.choice([f"Ищу «{q}»" + (f" на {title}." if site not in ("google", "images", "news") else "."),
                                   f"Открываю {title}: {q}." if site not in ("google", "images", "news") else f"Ищу: {q}."])
 
+        PLAY = ("включи", "поставь", "запусти", "воспроизведи", "вруби", "врубай", "проиграй", "сыграй")
+
+        def play_youtube(q):
+            """"Включи на ютубе AC/DC": the first video plays at once (a search verb still shows the results)."""
+            title = S.play_youtube(q)
+            core.ctx.query = q
+            if not title:
+                return f"YouTube не ответил, открыл поиск «{q}»."
+            return random.choice([f"Включаю: {nlu.short_title(title)}.", f"Ставлю {nlu.short_title(title)}."])
+        self.play_youtube = play_youtube
+
         # explicit site or content word ("в ютубе", "видео с ...", "картинки ...") — before every other rule
-        @R(r"^(?:найди|поищи|ищи|загугли|погугли|поиск|найти|поискать|покажи|посмотри|глянь|включи|поставь|запусти|открой|вбей|забей|отыщи|выведи)\s+.+$")
+        @R(r"^(?:найди|поищи|ищи|загугли|погугли|поиск|найти|поискать|покажи|посмотри|глянь|включи|поставь|запусти|открой|вбей|забей|отыщи|выведи|"
+           r"воспроизведи|вруби|врубай|проиграй|сыграй)\s+.+$")
         def _search_site(m, t):
+            verb = t.split(" ", 1)[0]
+            if verb in ("воспроизведи", "вруби", "врубай", "проиграй", "сыграй"):
+                t = "включи " + t.split(" ", 1)[1]
             hit = nlu.search_intent(t, core.ctx.current_site())
             if not hit or hit[0] == "google":
                 return False
+            if hit[0] == "youtube" and verb in PLAY:
+                return play_youtube(hit[1])
             return do_search(*hit)
 
         # plain "найди X": web search (generic: tried after files, apps, notes, everything precise)
@@ -426,6 +443,20 @@ class Router:
             hit = nlu.search_intent(t, core.ctx.current_site())
             site, q = hit if hit else ("google", nlu.clean_query(q))
             return do_search(site, q)
+
+        # YouTube was just opened: a bare "включи AC/DC" is a video there (generic: "включи свет" and the rest win first)
+        @R(r"^(?:включи|поставь|запусти|воспроизведи|вруби|врубай|проиграй)\s+(?:мне\s+)?(.+)$", generic=True)
+        def _play_here(m, t):
+            q = m.group(1).strip()
+            if core.ctx.current_site(180) != "youtube" or nlu.YT_CONTROL.match(q) or q in S.SITES or q in S.FOLDERS:
+                return False
+            try:
+                name = S.resolve_alias(q, cfg.get("aliases"))
+                if name in S.BUILTIN or core.apps.find(name, cfg.get("aliases")):
+                    return False    # "запусти телеграм" stays an app
+            except Exception:
+                pass
+            return play_youtube(nlu.clean_query(q, "youtube"))
 
     # ================================================================== rules
     def _build(self):

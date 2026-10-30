@@ -382,6 +382,50 @@ def open_target(target):
     return True
 
 
+def youtube_first(query, timeout=5):
+    """The first ordinary video for a query, as YouTube itself ranks it: (id, title) or None. Shorts, ads and live
+    streams are skipped (no lengthText). One request to the results page, no API key."""
+    import requests
+    r = requests.get("https://www.youtube.com/results?search_query=" + quote_plus(query), timeout=timeout,
+                     headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+                                            "Chrome/130.0 Safari/537.36", "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.6"},
+                     cookies={"CONSENT": "YES+1", "SOCS": "CAI"})  # no cookie wall in the EU
+    m = re.search(r"var ytInitialData\s*=\s*(\{.*?\});\s*</script>", r.text, re.S)
+    if not m:
+        return None
+
+    def first(o):
+        if isinstance(o, dict):
+            v = o.get("videoRenderer")
+            if isinstance(v, dict) and v.get("videoId") and v.get("lengthText"):
+                return v
+            o = list(o.values())
+        if isinstance(o, list):
+            for x in o:
+                hit = first(x)
+                if hit:
+                    return hit
+        return None
+    v = first(json.loads(m.group(1)))
+    if not v:
+        return None
+    return v["videoId"], "".join(x.get("text", "") for x in (v.get("title") or {}).get("runs", [])).strip()
+
+
+def play_youtube(query):
+    """"Включи на ютубе AC/DC": the first video opens and plays at once. Returns its title, or None when YouTube did not
+    answer (the results page is opened instead, so the phrase still does something)."""
+    try:
+        v = youtube_first(query)
+    except Exception:
+        v = None
+    if not v:
+        open_target("https://www.youtube.com/results?search_query=" + quote_plus(query))
+        return None
+    open_target("https://www.youtube.com/watch?v=" + v[0])
+    return v[1] or query
+
+
 def launch_app(app, index, aliases=None, loose=False):
     """Returns (ok, display_name). loose: fuzzier name matching (names typed in the command editor)."""
     q = resolve_alias(app, aliases)

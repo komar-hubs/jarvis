@@ -37,7 +37,8 @@ TOOLS_DOC = """Инструменты (поле "tool" и аргументы):
   habr|kinopoisk|maps|ymusic|twitch|rutube|reddit|pinterest|translate"} — поиск на сайте. query — то, что вбили бы
   в строку поиска: без слов «видео», «найди», «на ютубе», в именительном падеже («найди в ютубе котиков» → query
   «котики», site youtube; «найди картинки смешных собак» → «смешные собаки», site images)
-- youtube {"query": "..."} — поиск на YouTube (то же, что search с site youtube)
+- youtube {"query": "...", "play": true} — YouTube: с play сразу включает первое видео по запросу («включи AC/DC на
+  ютубе», «поставь видос про космос»), без play открывает список результатов («найди на ютубе…»)
 - timer {"duration": "5 минут", "label": "чай"}
 - remind {"when": "через 10 минут" | "завтра в 9:00", "text": "..."}
 - alarm {"when": "в 7:30"}
@@ -1042,6 +1043,9 @@ class Core:
                 return S.search_web(q, self.cfg.get("search_url"))
             return S.open_target(nlu.search_url(site, q))
         if name == "youtube":
+            if a.get("play"):
+                title = S.play_youtube(g("query", "q"))
+                return f"включено видео «{title}»" if title else "YouTube не ответил, открыт поиск"
             return S.open_target(nlu.search_url("youtube", g("query", "q")))
         # ---- screen and mouse (jarvis/mouse.py)
         if name == "ui_elements":

@@ -164,6 +164,7 @@ const BODY_PH = { message: "Текст сообщения, можно {result}",
   if: "с чем сравнить (для «содержит» и «равен»): музыка", ask: "переменная для ответа: answer → потом {answer}", set: "значение, можно {result} или {answer}" };
 const PH = {
   open: "https://youtube.com  или  C:\\Games\\game.exe  или  D:\\Папка", app: "telegram, steam, chrome…", close: "discord",
+  youtube: "AC/DC Thunderstruck  или  {query}",
   say: "Фраза, можно {result}", wait: "2", search: "погода {query}", hotkey: "ctrl+shift+esc", type: "Текст для ввода",
   window: "часть заголовка окна", volume: "40  /  +10  /  -10  /  mute", media: "play / next / prev", shell: "ipconfig",
   http: "https://api.example.com/x", source: "название интеграции", ai: "Придумай тост на день рождения", bridge: "Задача агенту, {query}",

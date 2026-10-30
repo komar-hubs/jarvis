@@ -18,7 +18,7 @@ from urllib.parse import quote
 
 import requests
 
-from . import info
+from . import info, nlu
 from . import system as S
 from .planner import MONTHS, parse_duration, parse_when, plural, say_duration, say_when
 
@@ -1120,7 +1120,9 @@ def register(R, core):
     # ---------------------------------------------------------------- music and video
     def music(query):
         svc = cfg.get("music_service", "yandex")
-        if svc == "youtube":
+        if core.ctx.current_site(180) == "youtube":   # YouTube was just opened: "включи рок" plays there
+            S.play_youtube(query)
+        elif svc == "youtube":
             S.open_target("https://music.youtube.com/search?q=" + quote(query))
         else:
             S.open_target("https://music.yandex.ru/search?text=" + quote(query))
@@ -1157,8 +1159,11 @@ def register(R, core):
         S.open_target(url)
         return "Включаю радио."
 
-    @R(r"^(?:найди|включи|покажи)\s+клип\s+(.+)$")
+    @R(r"^(?:найди|включи|покажи|поставь)\s+клип\s+(.+)$")
     def _clip(m, t):
+        if t.startswith(("включи", "поставь")):   # "включи клип AC/DC": the clip itself, not a list of them
+            title = S.play_youtube(m.group(1) + " клип")
+            return f"Включаю: {nlu.short_title(title)}." if title else "Ищу клип на YouTube."
         S.open_target("https://www.youtube.com/results?search_query=" + quote(m.group(1) + " клип"))
         return "Ищу клип на YouTube."
 

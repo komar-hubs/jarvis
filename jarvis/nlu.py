@@ -226,7 +226,35 @@ def split_chain(raw):
         pieces.append(chunk[start:])
         steps += [LEAD.sub("", p.strip(" ,")) for p in pieces if p.strip(" ,")]
     steps = [_restore(s, keep) for s in steps]
-    return steps if len(steps) > 1 else [_restore(text, keep) if cut else raw]
+    joined = _join_site_steps(steps)
+    if len(joined) > 1 or len(steps) > 1:
+        return joined
+    return [_restore(text, keep) if cut else raw]
+
+
+YT_OPEN = re.compile(r"^(?:открой|запусти|зайди\s+на|зайди\s+в|перейди\s+на)\s+(?:мне\s+)?(?:сайт\s+)?"
+                     r"(?:ютуб\w*|ютьюб\w*|ютюб\w*|youtube)$", re.I)
+YT_NEXT = re.compile(r"^(включи|поставь|запусти|воспроизведи|вруби|врубай|найди|поищи|покажи)\s+(?:мне\s+)?(.+)$", re.I)
+# "открой ютуб и включи полный экран": player controls are not a video to look for
+YT_CONTROL = re.compile(r"^(?:(?:полн\w+|на\s+весь|весь\s+экран|звук\w*|субтитр\w*|пауз\w*|пробел|громче|тише|погромче|потише|"
+                        r"следующ\w+|предыдущ\w+|дальше|сначала|автовоспроизведение|повтор\w*|главн\w+|подписк\w+|"
+                        r"скорость|качество|кинорежим|режим|перемотай|вперед|назад)(?:\s|$)|"
+                        r"(?:музыку|видео|видос|что-нибудь|что\s+нибудь|его|ее|это)$)", re.I)
+
+
+def _join_site_steps(steps):
+    """"Открой ютуб и включи AC/DC" is one action: "включи на ютубе AC/DC" plays the video in one tab, instead of opening
+    the home page and then the video next to it."""
+    out = []
+    for s in steps:
+        m = YT_NEXT.match(s.strip())
+        if out and m and YT_OPEN.match(out[-1].strip()):
+            rest = re.sub(r"(?:^|\s)(?:там|тут|на\s+н[её]м|в\s+н[её]м)(?=\s|$)", " ", m.group(2)).strip()
+            if rest and not YT_CONTROL.match(rest):
+                out[-1] = f"{m.group(1).lower()} на ютубе {rest}"
+                continue
+        out.append(s)
+    return out
 
 
 PLACE_WORDS = (r"(?:в|во)\s+(?:(?:нов\w+|этом|этот|эту|том|открыт\w+|пуст\w+|перв\w+|последн\w+|активн\w+)\s+)?"
@@ -449,6 +477,15 @@ def search_intent(t, ctx_site=None):
 
 def search_url(site, query):
     return ENGINE.get(site, ENGINE["google"])[1].replace("{q}", quote_plus(query))
+
+
+def short_title(title):
+    """A video title to say aloud: "AC/DC - Thunderstruck (Official Video)" -> "AC DC - Thunderstruck"."""
+    t = re.sub(r"\s*[(\[][^)\]]*(?:official|video|audio|lyric|hd|4k|remaster|клип|видео|премьера|live|mv)[^)\]]*[)\]]", "",
+               title, flags=re.I)
+    t = re.split(r"\s+[|•]\s+|\s+#", t)[0]
+    t = re.sub(r"(?<=\w)/(?=\w)", " ", t).strip(" -–—")
+    return (t[:70].rsplit(" ", 1)[0] + "…") if len(t) > 75 else t or title
 
 
 # ===================================================================== chain context

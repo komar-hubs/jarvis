@@ -20,6 +20,7 @@ ACTION_TYPES = {
     "click_text": {"title": "Клик по надписи или кнопке на экране", "fields": ["value"]},
     "open":      {"title": "Открыть (сайт / файл / папку / программу)", "fields": ["value"]},
     "app":       {"title": "Запустить приложение по имени", "fields": ["value"]},
+    "youtube":   {"title": "Включить видео с YouTube (первое по запросу)", "fields": ["value"]},
     "close":     {"title": "Закрыть приложение", "fields": ["value"]},
     "say":       {"title": "Сказать фразу", "fields": ["value"]},
     "wait":      {"title": "Пауза (секунды)", "fields": ["value"]},
@@ -110,7 +111,7 @@ DEFAULT_COMMANDS = [
     {"name": "Включи музыку", "triggers": ["включи музыку {query}", "поставь песню {query}", "включи песню {query}"],
      "reply": "Ищу {query}.",
      "actions": [{"type": "open", "value": "https://music.yandex.ru/search?text={query}"}]},
-    {"name": "Найди на ютубе", "triggers": ["найди на ютубе {query}", "ютуб {query}", "включи на ютубе {query}"],
+    {"name": "Найди на ютубе", "triggers": ["найди на ютубе {query}", "ютуб {query}"],
      "reply": "Открываю YouTube.",
      "actions": [{"type": "open", "value": "https://www.youtube.com/results?search_query={query}"}]},
     {"name": "Протокол чистый стол", "triggers": ["протокол чистый стол", "убери всё", "покажи рабочий стол"],
@@ -161,6 +162,21 @@ class Commands:
             self.sources.items = [self._fill(s) for s in DEFAULT_SOURCES]
             self.sources.save()
         self._add_new_defaults()
+        self._play_youtube_v3()
+
+    def _play_youtube_v3(self):
+        """"Включи на ютубе X" now plays the first video (intents): the old default trigger opened the results list and,
+        as a user command, would win over it. Removed once, only from the untouched default."""
+        marker = self.store.path.parent / ".defaults_v3"
+        if marker.exists():
+            return
+        for c in self.store.items:
+            acts = c.get("actions") or []
+            if (c.get("name") == "Найди на ютубе" and "включи на ютубе {query}" in c.get("triggers", [])
+                    and len(acts) == 1 and "youtube.com/results" in str(acts[0].get("value", ""))):
+                c["triggers"] = [x for x in c["triggers"] if x != "включи на ютубе {query}"]
+                self.store.save()
+        marker.write_text("1", "utf-8")
 
     def _add_new_defaults(self):
         """Defaults added in later versions go to existing installs once (a deleted one is not re-added)."""
@@ -475,6 +491,9 @@ class ChainRunner:
             if "://" in a.get("value", "") and "{" in a.get("value", ""):
                 val = render(a["value"], {k: quote_plus(str(x)) for k, x in v.items()})
             s.open_target(val)
+        elif typ == "youtube":
+            title = s.play_youtube(val.strip())
+            v["result"] = title or ""
         elif typ == "app":
             ok, name = s.launch_app(val.strip().strip("\"'"), core.apps, core.cfg.get("aliases"), loose=True)
             if not ok:
