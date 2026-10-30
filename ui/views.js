@@ -164,7 +164,7 @@ const BODY_PH = { message: "Текст сообщения, можно {result}",
   if: "с чем сравнить (для «содержит» и «равен»): музыка", ask: "переменная для ответа: answer → потом {answer}", set: "значение, можно {result} или {answer}" };
 const PH = {
   open: "https://youtube.com  или  C:\\Games\\game.exe  или  D:\\Папка", app: "telegram, steam, chrome…", close: "discord",
-  youtube: "AC/DC Thunderstruck  или  {query}",
+  youtube: "AC/DC Thunderstruck  или  {query}", music: "Кино Группа крови  или  {query}",
   say: "Фраза, можно {result}", wait: "2", search: "погода {query}", hotkey: "ctrl+shift+esc", type: "Текст для ввода",
   window: "часть заголовка окна", volume: "40  /  +10  /  -10  /  mute", media: "play / next / prev", shell: "ipconfig",
   http: "https://api.example.com/x", source: "название интеграции", ai: "Придумай тост на день рождения", bridge: "Задача агенту, {query}",
@@ -409,6 +409,7 @@ async function loadSettings() {
     <label style="margin-top:14px">Звуки интерфейса</label>${sw_("s-uisnd", c.ui_sounds !== false, "тихие щелчки и сигналы")}
     <label>HUD-плашка</label>${sw_("s-overlay", c.overlay !== false, "показывать поверх окон, когда я слушаю и говорю")}
     <label>Поисковик</label>${sel("s-search", [["https://www.google.com/search?q={q}", "Google"], ["https://yandex.ru/search/?text={q}", "Яндекс"], ["https://duckduckgo.com/?q={q}", "DuckDuckGo"], ["https://www.bing.com/search?q={q}", "Bing"]], c.search_url)}
+    <label>Музыка голосом</label>${sel("s-music", [["youtube", "YouTube: сразу играет, дальше похожие"], ["ytmusic", "YouTube Music: сразу играет, дальше похожие"], ["yandex", "Яндекс Музыка: только открыть поиск"]], c.music_service || "youtube")}
   </div></div>
 
   <div class="panel" id="voice-panel"><h3>Личность и голос</h3>
@@ -548,6 +549,7 @@ async function loadSettings() {
   updCheck();
   bind("#s-hidden", (t) => saveConfig({ start_hidden: t.checked }));
   bind("#s-search", (t) => saveConfig({ search_url: t.value }));
+  bind("#s-music", (t) => saveConfig({ music_service: t.value }));
   const engRows = (eng) => $$("#settings [data-eng]").forEach((el) => (el.style.display = el.dataset.eng === eng ? "" : "none"));
   engRows(c.voice.engine);
   $("#s-edge").dataset.eng = "edge"; engRows(c.voice.engine);

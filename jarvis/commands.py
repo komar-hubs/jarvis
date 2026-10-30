@@ -21,6 +21,7 @@ ACTION_TYPES = {
     "open":      {"title": "Открыть (сайт / файл / папку / программу)", "fields": ["value"]},
     "app":       {"title": "Запустить приложение по имени", "fields": ["value"]},
     "youtube":   {"title": "Включить видео с YouTube (первое по запросу)", "fields": ["value"]},
+    "music":     {"title": "Включить музыку (первый трек, дальше похожие)", "fields": ["value"]},
     "close":     {"title": "Закрыть приложение", "fields": ["value"]},
     "say":       {"title": "Сказать фразу", "fields": ["value"]},
     "wait":      {"title": "Пауза (секунды)", "fields": ["value"]},
@@ -109,8 +110,8 @@ DEFAULT_COMMANDS = [
      "actions": [{"type": "app", "value": "steam"}, {"type": "app", "value": "discord"},
                  {"type": "volume", "value": "50"}]},
     {"name": "Включи музыку", "triggers": ["включи музыку {query}", "поставь песню {query}", "включи песню {query}"],
-     "reply": "Ищу {query}.",
-     "actions": [{"type": "open", "value": "https://music.yandex.ru/search?text={query}"}]},
+     "reply": "Включаю {query}.",
+     "actions": [{"type": "music", "value": "{query}"}]},
     {"name": "Найди на ютубе", "triggers": ["найди на ютубе {query}", "ютуб {query}"],
      "reply": "Открываю YouTube.",
      "actions": [{"type": "open", "value": "https://www.youtube.com/results?search_query={query}"}]},
@@ -163,6 +164,25 @@ class Commands:
             self.sources.save()
         self._add_new_defaults()
         self._play_youtube_v3()
+        self._play_music_v4()
+
+    def _play_music_v4(self):
+        """The default "Включи музыку" opened Яндекс Музыка's search: it now plays the first track (action "music").
+        Changed once, only while its action is the untouched default."""
+        marker = self.store.path.parent / ".defaults_v4"
+        if marker.exists():
+            return
+        for c in self.store.items:
+            acts = c.get("actions") or []
+            # by the action, not the name: it may be renamed ("Найди музыку")
+            if (len(acts) == 1 and acts[0].get("type") == "open"
+                    and acts[0].get("value") == "https://music.yandex.ru/search?text={query}"
+                    and any(x.startswith(("включи", "поставь")) for x in c.get("triggers", []))):
+                c["actions"] = [{"type": "music", "value": "{query}"}]
+                if c.get("reply") == "Ищу {query}.":
+                    c["reply"] = "Включаю {query}."
+                self.store.save()
+        marker.write_text("1", "utf-8")
 
     def _play_youtube_v3(self):
         """"Включи на ютубе X" now plays the first video (intents): the old default trigger opened the results list and,
@@ -493,6 +513,9 @@ class ChainRunner:
             s.open_target(val)
         elif typ == "youtube":
             title = s.play_youtube(val.strip())
+            v["result"] = title or ""
+        elif typ == "music":
+            title = s.play_music(val.strip(), core.cfg.get("music_service", "youtube"))
             v["result"] = title or ""
         elif typ == "app":
             ok, name = s.launch_app(val.strip().strip("\"'"), core.apps, core.cfg.get("aliases"), loose=True)

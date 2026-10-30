@@ -426,6 +426,26 @@ def play_youtube(query):
     return v[1] or query
 
 
+def play_music(query, service="youtube"):
+    """"Включи песню Thunderstruck": the first track plays, then similar ones (YouTube's own mix for it, list=RD<id>).
+    service: youtube | ytmusic | yandex. Яндекс Музыка cannot start a track from a link (and its search API answers
+    451 outside Russia), so for it the search page opens, as before. Returns the title, or None."""
+    if service == "yandex":
+        open_target("https://music.yandex.ru/search?text=" + quote_plus(query))
+        return None
+    try:
+        v = youtube_first(query)
+    except Exception:
+        v = None
+    if not v:
+        open_target(("https://music.youtube.com/search?q=" if service == "ytmusic" else
+                     "https://www.youtube.com/results?search_query=") + quote_plus(query))
+        return None
+    host = "music.youtube.com" if service == "ytmusic" else "www.youtube.com"
+    open_target(f"https://{host}/watch?v={v[0]}&list=RD{v[0]}")
+    return v[1] or query
+
+
 def launch_app(app, index, aliases=None, loose=False):
     """Returns (ok, display_name). loose: fuzzier name matching (names typed in the command editor)."""
     q = resolve_alias(app, aliases)

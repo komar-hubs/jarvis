@@ -1118,14 +1118,17 @@ def register(R, core):
         return True
 
     # ---------------------------------------------------------------- music and video
-    def music(query):
-        svc = cfg.get("music_service", "yandex")
-        if core.ctx.current_site(180) == "youtube":   # YouTube was just opened: "включи рок" plays there
-            S.play_youtube(query)
-        elif svc == "youtube":
-            S.open_target("https://music.youtube.com/search?q=" + quote(query))
-        else:
-            S.open_target("https://music.yandex.ru/search?text=" + quote(query))
+    def music(query, genre=False):
+        """The first track plays at once, then similar ones (S.play_music). A spoken reply."""
+        svc = cfg.get("music_service", "youtube")
+        if svc == "yandex" and core.ctx.current_site(180) == "youtube":   # YouTube was just opened: "включи рок" plays there
+            svc = "youtube"
+        if genre and "музык" not in query:
+            query += " музыка"                # "рок" alone finds news about rock
+        title = S.play_music(query, svc)
+        if title:
+            return random.choice([f"Включаю: {nlu.short_title(title)}.", f"Ставлю {nlu.short_title(title)}."])
+        return "Открываю Яндекс Музыку." if svc == "yandex" else "YouTube не ответил, открыл поиск."
 
     GENRES = (r"рок\w*|джаз\w*|рэп\w*|реп\w*|хип[- ]?хоп\w*|поп\w*|классик\w*|классическ\w*|лоу?[- ]?фай|lo-?fi|электрон\w*|техно|хаус|"
               r"метал\w*|шансон\w*|блюз\w*|регги|кантри|инди|фонк\w*|phonk|эмбиент\w*|ambient|джаз|соул|диско|трэп\w*|"
@@ -1133,21 +1136,27 @@ def register(R, core):
 
     @R(r"^(?:включи|поставь|запусти|врубай|вруби)\s+(?:мне\s+)?(?:какую-нибудь\s+|какой-нибудь\s+)?(?:музыку\s+|песни\s+)?(" + GENRES + r")(?:\s+музык\w*|\s+песн\w*|\s+треки)?$")
     def _genre(m, t):
-        music(m.group(1))
-        return "Включаю."
+        return music(m.group(1), genre=True)
 
-    @R(r"^(?:включи|поставь|запусти|найди)\s+(?:мне\s+)?(?:песню|трек|композицию|альбом|исполнителя|группу)\s+(.+)$")
+    @R(r"^(?:включи|поставь|запусти|врубай|вруби|воспроизведи|найди)\s+(?:мне\s+)?(?:музыку\s+группы|музыку\s+исполнителя|песню|песни|"
+       r"трек|треки|композицию|альбом|исполнителя|группу|музыку)\s+(.+)$")
     def _song(m, t):
-        music(m.group(1))
-        return "Ищу."
+        if t.startswith("найди"):            # "найди песню …" shows the list, the play verbs play
+            yandex = cfg.get("music_service", "youtube") == "yandex"
+            S.open_target(("https://music.yandex.ru/search?text=" if yandex else "https://www.youtube.com/results?search_query=")
+                          + quote(m.group(1)))
+            return "Ищу."
+        return music(m.group(1))
 
     @R(r"^(?:включи|поставь|запусти|открой)\s+(?:мой\s+)?плейлист\s*(.*)$")
     def _playlist(m, t):
         q = (m.group(1) or "").strip()
-        if not q or q.startswith(("для работы", "для учебы")) and cfg.get("music_service", "yandex") != "youtube":
-            S.open_target("https://music.yandex.ru/users/me/playlists" if not q else "https://music.yandex.ru/search?text=" + quote(q))
+        if not q and cfg.get("music_service", "youtube") == "yandex":
+            S.open_target("https://music.yandex.ru/users/me/playlists")
+        elif not q:
+            S.open_target("https://www.youtube.com/feed/playlists")
         else:
-            music(q)
+            return music(q + (" плейлист" if "плейлист" not in q else ""))
         return "Открываю плейлист."
 
     @R(r"^(?:включи|поставь|запусти|открой)\s+радио\s*(.*)$")

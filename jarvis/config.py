@@ -117,6 +117,7 @@ DEFAULTS = {
     },
     "location": {"city": "Москва", "lat": 55.7558, "lon": 37.6173},
     "search_url": "https://www.google.com/search?q={q}",
+    "music_service": "youtube",   # youtube | ytmusic | yandex: where "включи песню …" plays (skills.music)
     "autostart": False,
     "theme": "jarvis",
     # night mode: dim warm interface, quieter voice (volume factor), no interface sounds; optional schedule
