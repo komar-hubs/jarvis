@@ -135,10 +135,9 @@ if ($LASTEXITCODE -ne 0) {
     if (-not (Pip $vp @('torch', '--index-url', 'https://download.pytorch.org/whl/cpu'))) { Fail 'Ошибка установки PyTorch' }
 }
 
-# a weak laptop (up to ~10 GB of memory or 4 threads) gets the light int8 model: 225 MB instead of 880, same words
+# GigaAM (a weak laptop gets the light int8 model) and Silero: jarvis/prefetch.py
 Step 'Скачиваю модели распознавания и голоса (0,4–1 ГБ, на слабом ПК меньше)...'
-& $vp -c "import os, psutil, onnx_asr; weak = psutil.virtual_memory().total < 10.5 * 2**30 or (os.cpu_count() or 8) <= 4; onnx_asr.load_model('gigaam-v3-ctc', quantization='int8' if weak else None, providers=['CPUExecutionProvider']); print('GigaAM ok', '(light)' if weak else '')"
-& $vp -c "import sys; sys.path.insert(0, '.'); from jarvis.config import Config; from jarvis.tts import SileroEngine; print('Silero ok' if SileroEngine(Config()).start() else 'Silero FAIL')"
+& $vp -m jarvis.prefetch
 
 if ($hasNvidia) {
     Step 'Найдена видеокарта NVIDIA: ставлю CUDA-библиотеки для распознавания Whisper...'
