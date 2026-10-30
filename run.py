@@ -210,6 +210,8 @@ def main():
         print("Jarvis is already running, focused the existing window.")
         return
 
+    from jarvis import appid
+    appid.set_process_id()   # own taskbar group: not "КАЛЬКУЛЯТОР_ПЕРЕНОСОВ" or any other shortcut to pythonw.exe
     import webview
     from jarvis.core import Core
     from jarvis.server import Server
@@ -240,9 +242,15 @@ def main():
 
     window.events.closing += on_closing
 
+    def own_icon():
+        appid.set_window_icon(S.own_window("J.A.R.V.I.S."))
+    window.events.loaded += own_icon
+    threading.Thread(target=appid.ensure_shortcut, args=(core.log,), daemon=True, name="shortcut").start()
+
     def show():
         window.show()
         window.restore()
+        own_icon()
         try:
             window.on_top = True
             window.on_top = False
