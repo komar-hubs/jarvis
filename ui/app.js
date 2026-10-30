@@ -16,6 +16,12 @@ async function rpc(method, params = {}) {
 }
 
 function winApi(fn, ...a) {
+  if (fn === "minimize" || fn === "hide") {
+    // the window hides under the cursor: the pressed button would come back with its focus ring and hover lit
+    document.activeElement?.blur?.();
+    document.body.classList.add("no-hover");
+    setTimeout(() => addEventListener("mousemove", () => document.body.classList.remove("no-hover"), { once: true }), 600);
+  }
   if (window.pywebview && window.pywebview.api && window.pywebview.api[fn]) return window.pywebview.api[fn](...a);
   return null;
 }
