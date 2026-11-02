@@ -555,6 +555,10 @@ class Phone:
             self._ring_once(dev)                      # the first ring right away: a failure is told to the user
         except Exception as e:
             self.core.log(f"Поиск телефона: {e}", "warn")
+            if re.search(r"(?i)no such object path.*findmyphone", str(e)):
+                # the device is there, its "Find my phone" plugin is off (in KDE Connect on the PC or on the phone)
+                return ("Телефон на связи, сэр, но в KDE Connect выключен плагин «Звонок на телефон». Включите его в "
+                        "настройках устройства в KDE Connect на компьютере и на телефоне.")
             return ("Телефон сейчас не на связи с KDE Connect, сэр: похоже, система телефона его усыпила. "
                     "Откройте KDE Connect на телефоне или разрешите ему работать в фоне без ограничений.")
         self.searching = True

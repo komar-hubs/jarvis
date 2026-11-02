@@ -95,6 +95,17 @@ def size_ru(mb):
     return f"{gb} гигабайта"
 
 
+def not_game(exe):
+    """A full-screen program that is not a game: a film, photo, PDF, call, or a screenshot tool (Snipping Tool covers
+    the whole screen while a region is picked and was remembered as a game). "Игры" would also start the game
+    automations and voice control in games."""
+    exe = (exe or "").lower()
+    return exe.startswith(("python", "explorer", "applicationframehost", "msedgewebview2")) or bool(
+        re.search(r"player|kmp|mpc|mpv|kodi|vlc|aimp|foobar|video|movie|photo|viewer|pdf|acro|slide|present|zoom|teams|"
+                  r"meet|skype|obs|stream|lockapp|screensaver|\.scr$|snipping|screenclip|screensketch|sharex|lightshot|"
+                  r"greenshot|magnify|mspaint|clipchamp", exe))
+
+
 class Extras:
     def __init__(self, core):
         self.core = core
@@ -109,6 +120,9 @@ class Extras:
         if not isinstance(self.habits.items, dict):
             self.habits.items = {}
         self._usage_dirty = 0
+        seen = self.cfg.get("extras.games_seen") or []
+        if any(not_game(g) for g in seen):           # remembered by mistake before (snippingtool.exe)
+            self.cfg.set("extras.games_seen", [g for g in seen if not not_game(g)])
         self._exe_cache = {}
         self.focus = None
         self.msg_counts = {}
@@ -196,10 +210,7 @@ class Extras:
         """An unknown program on the whole screen is a game (a repack in Downloads has no "Games" in its path):
         remembered for good, so Jarvis never offers to close it and keeps quiet about memory while it runs."""
         exe = (exe or "").lower()
-        if not exe or exe in APP_NAMES or exe.startswith(("python", "explorer", "applicationframehost", "msedgewebview2")) or \
-                re.search(r"player|kmp|mpc|mpv|kodi|vlc|aimp|foobar|video|movie|photo|viewer|pdf|acro|slide|present|zoom|teams|"
-                          r"meet|skype|obs|stream|lockapp|screensaver|\.scr$", exe):
-            # a full-screen film, photo, PDF or call is not a game ("Игры" would also start the game automations)
+        if not exe or exe in APP_NAMES or not_game(exe):
             return
         games = self.cfg.get("extras.games_seen") or []
         if exe in games or not S.foreground_fullscreen():

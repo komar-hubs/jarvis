@@ -237,7 +237,8 @@ class Background:
                 k32.CloseHandle(h)
         time.sleep(1.5)
         gained = psutil.virtual_memory().available - before
-        return f"Освободил около {human(max(0, gained))} оперативной памяти ({n} программ в фоне)." if gained > 50 * 2**20 \
+        from .planner import plural
+        return f"Освободил около {human(max(0, gained))} оперативной памяти ({n} {plural(n, 'программа', 'программы', 'программ')} в фоне)." if gained > 50 * 2**20 \
             else "Оперативная память и так в порядке."
 
     def sort_mail(self, job=None):
