@@ -168,6 +168,7 @@ class Core:
         self.cancel_gen = 0
         self.ai_busy = 0
         self.notice = None       # the fired reminder/timer card shown with "Готово" / "Отложить"
+        self.hint = None         # a card over the game on the HUD (jarvis/gamefx.py): {"title", "text", "until", "url"}
         self.last_fired = None   # (kind, item) of the last fired one, for "отложи на 10 минут"
         self.capture = None      # (fn, until): the next phrase is data, not a command ("создай заметку" -> its text)
         self.dictation_file = None
@@ -226,6 +227,8 @@ class Core:
         self.gamevoice = GameVoice(self)   # in a game: a phrase without the name presses keys ("люмос" -> 1)
         self.listener.game_fast = self.gamevoice.fast
         self.listener.game_end_ms = self.gamevoice.end_ms
+        from .gamefx import GameFx
+        self.gamefx = GameFx(self)         # clips, the hint card over a game, "марафон", per-program sound
         from .extras import Extras
         self.extras = Extras(self)   # before the router: it registers voice rules of its own
         self.router = Router(self)
@@ -1684,10 +1687,14 @@ class Core:
         except Exception as e:
             self.log(f"Громкость программ: {e}", "warn")
         ducked, last_busy = False, 0.0
+        snap, snap_t = None, 0.0
         while True:
             time.sleep(0.15)
             if self.tts_busy() or self.player.busy():
                 last_busy = time.time()
+            if time.time() - snap_t > 2:
+                snap_t = time.time()
+                snap = self._audio_watch(snap, ducked)
             want = self.cfg.get("duck_media", True) and time.time() - last_busy < 0.8
             try:
                 if want and not ducked:
@@ -1699,6 +1706,35 @@ class Core:
             except Exception as e:
                 self.log(f"Приглушение звука: {e}", "warn")
                 time.sleep(1)  # keep the state and retry: the saved levels must come back
+
+    def _audio_watch(self, prev, ducked):
+        """"У меня звук почему-то отключается": every 2 s the speakers and each program's volume are compared with
+        the last look, and a mute or a big drop is logged with what Jarvis was doing then — the next time it happens
+        the log says who did it (Jarvis's own ducking, a phone call, Windows' "communications" ducking, the game)."""
+        try:
+            cur = S.audio_snapshot()
+        except Exception:
+            return prev
+        if prev:
+            what = []
+            (mv, mm), (pv, pm) = cur["master"], prev["master"]
+            if mm and not pm:
+                what.append("выключен звук всего компьютера")
+            elif mv <= pv - 25:
+                what.append(f"громкость компьютера {pv}% → {mv}%")
+            for exe, (v, m, _) in cur["apps"].items():
+                if exe not in prev["apps"] or exe.lower().startswith("python"):
+                    continue
+                pv2, pm2, _ = prev["apps"][exe]
+                if m and not pm2:
+                    what.append(f"{exe}: выключен звук")
+                elif v <= pv2 - 40 and not ducked:
+                    what.append(f"{exe}: {pv2}% → {v}%")
+            if what:
+                doing = ("говорил" if self.tts_busy() else "приглушал программы" if ducked else
+                         "слушал" if self.state == "listening" else "ничего не делал")
+                self.log(f"Звук: {'; '.join(what)} (Джарвис в этот момент {doing}, окно: {S.active_exe() or '?'})", "warn")
+        return cur
 
     def _maybe_briefing(self):
         """Scheduled morning briefing: at the set time, or at the first activity within 4 hours after it."""
@@ -1804,6 +1840,26 @@ class Core:
         self.notice = None
         self.emit("notice", kind=None)
 
+    def show_hint(self, title, text, secs=None, url=None):
+        """A card on the HUD over the game (it grows for the time): a game hint, a quiet break reminder."""
+        secs = secs or max(12, min(45, len(text) / 12))
+        self.hint = {"title": title, "text": text, "until": time.time() + secs, "url": url}
+        self.emit("hint", title=title, text=text, on=True)
+
+    def hide_hint(self):
+        if self.hint:
+            self.hint = None
+            self.emit("hint", on=False)
+
+    def rpc_hint_hide(self):
+        self.hide_hint()
+        return True
+
+    def rpc_hint_show(self, title, text, secs=None):
+        """For checking the card's look without a game."""
+        self.show_hint(title, text, secs)
+        return True
+
     def rpc_notice(self, action="done", minutes=10):
         """Buttons of a fired reminder/timer card (main window and HUD): done | snooze."""
         n = self.notice or ({"kind": self.last_fired[0], "text": self.last_fired[1].get("text") or
@@ -1854,6 +1910,7 @@ class Core:
                 "xtts": {"installed": XttsEngine.available(), "ready": self.tts.engines["xtts"].ready,
                          "error": self.tts.engines["xtts"].error},
                 "night": self.night_on(), "notice": self.notice, "conversation": self.conversation,
+                "hint": self.hint if self.hint and time.time() < self.hint["until"] else None,
                 "focus": self.extras.focus_state(),
                 "perf": {"lite": S.lite(self.cfg), "weak": S.weak_pc(), "light_model": getattr(self.listener, "model_light", False),
                          "ram_gb": round(psutil.virtual_memory().total / 2**30, 1), "cpus": os.cpu_count()}}

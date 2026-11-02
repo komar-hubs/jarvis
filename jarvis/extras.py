@@ -277,9 +277,62 @@ class Extras:
                 "cats": sorted(({"cat": k, "sec": v} for k, v in cats.items()), key=lambda c: -c["sec"]),
                 "focus": self.usage.items.get("_focus", {}).get(day, [])}
 
+    def usage_week(self, end=None):
+        """The last 7 days up to end (today): totals, per program, games, and the 7 days before for comparison."""
+        end = end or dt.date.today()
+
+        def span(last):
+            days = [last - dt.timedelta(days=i) for i in range(6, -1, -1)]
+            apps, total, games, per_day = {}, 0, 0, []
+            for d in days:
+                u = self.usage_day(d)
+                total += u["total"]
+                per_day.append(u["total"])
+                for a in u["apps"]:
+                    x = apps.setdefault(a["name"], {"name": a["name"], "cat": a["cat"], "sec": 0})
+                    x["sec"] += a["sec"]
+                games += next((c["sec"] for c in u["cats"] if c["cat"] == "Игры"), 0)
+            return {"total": total, "games": games, "apps": sorted(apps.values(), key=lambda a: -a["sec"]),
+                    "days": days, "per_day": per_day}
+        cur, prev = span(end), span(end - dt.timedelta(days=7))
+        cur["prev_total"], cur["prev_games"] = prev["total"], prev["games"]
+        return cur
+
+    def week_brief(self):
+        """(speech, markdown) for the week, or None when there is almost nothing counted."""
+        w = self.usage_week()
+        if w["total"] < 1800:
+            return None
+
+        def delta(now, before):
+            if before < 1800:
+                return ""
+            p = round((now - before) * 100 / before)
+            return "" if abs(p) < 10 else f" (на {abs(p)}% {'больше' if p > 0 else 'меньше'}, чем неделей раньше)"
+        top = w["apps"][0]["name"] if w["apps"] else ""
+        busiest = max(range(7), key=lambda i: w["per_day"][i])
+        wd = ["понедельник", "вторник", "среду", "четверг", "пятницу", "субботу", "воскресенье"][w["days"][busiest].weekday()]
+        speech = f"За неделю за компьютером {_hm(w['total'])}{delta(w['total'], w['prev_total'])}, больше всего — {top}."
+        if w["games"] >= 1800:
+            g = [a for a in w["apps"] if a["cat"] == "Игры"]
+            speech += f" В играх {_hm(w['games'])}{delta(w['games'], w['prev_games'])}" + (f", лидер — {g[0]['name']}." if g else ".")
+        speech += f" Самый долгий день — {wd}, {_hm(w['per_day'][busiest])}."
+        days = " · ".join(f"{d.day:02d}.{d.month:02d} {f'{int(s) // 3600}:{int(s) % 3600 // 60:02d}' if s >= 60 else '—'}"
+                          for d, s in zip(w["days"], w["per_day"]))
+        apps = "\n".join(f"- {a['name']} — {_hm(a['sec'])}" + (" (игра)" if a["cat"] == "Игры" else "") for a in w["apps"][:8])
+        md = (f"**Итоги недели** ({w['days'][0].day:02d}.{w['days'][0].month:02d}–{w['days'][-1].day:02d}.{w['days'][-1].month:02d})\n\n"
+              f"За компьютером: **{_hm(w['total'])}**" + (f", неделей раньше {_hm(w['prev_total'])}" if w["prev_total"] >= 1800 else "")
+              + (f"\nВ играх: **{_hm(w['games'])}**" if w["games"] >= 60 else "") + f"\n\nПо дням: {days}\n\n{apps}")
+        return speech, md
+
     def usage_brief(self, evening):
         if not evening:
             return None
+        if dt.date.today().weekday() == 6:        # Sunday evening: the week instead of the day
+            wb = self.week_brief()
+            if wb:
+                self.core._chat_add("assistant", wb[1], "voice")
+                return wb[0], "итоги недели — в чате"
         u = self.usage_day()
         if u["total"] < 600:
             return None
@@ -450,13 +503,24 @@ class Extras:
         if idle > 300:
             self.active_start = now        # a real pause: the "at the PC for too long" counter restarts
             self.last_water = max(self.last_water, now - 60 * 20)
+            fx = getattr(self.core, "gamefx", None)
+            if fx:
+                fx.marathon_until = 0              # "марафон" lasts until the first real pause
             return
         bm = int(self.cfg.get("extras.break_min", 90) or 0)
-        if bm and now - self.active_start > bm * 60 and now - self.last_break > 30 * 60:
-            if self._say(random.choice([
+        fx = getattr(self.core, "gamefx", None)
+        if fx and fx.marathon():
+            bm = 0
+        in_game = bool(fx and fx.game()[0])
+        # in a game: once an hour and on a card, not aloud over the game (it said "размяться" every 30 min for 8 hours)
+        if bm and now - self.active_start > bm * 60 and now - self.last_break > (60 if in_game else 30) * 60:
+            if in_game:
+                fx.break_card(_hm(now - self.active_start))
+                self.last_break = now
+            elif self._say(random.choice([
                     f"{self.addr().capitalize()}, вы за компьютером уже {_hm(now - self.active_start)}. Предлагаю размяться пару минут.",
                     f"Протокол заботы о пилоте: {_hm(now - self.active_start)} без перерыва. Встаньте, потянитесь, посмотрите вдаль.",
-                    "Сэр, даже броне нужна перезарядка. Пять минут перерыва?"])):
+                    f"{self.addr().capitalize()}, даже броне нужна перезарядка. Пять минут перерыва?"])):
                 self.last_break = now
         wm = int(self.cfg.get("extras.water_min", 0) or 0)
         if wm and now - self.last_water > wm * 60:
@@ -946,6 +1010,15 @@ def register(R, core):
             return "Сегодня я ещё почти ничего не насчитал."
         top = ", ".join(f"{a['name']} — {_hm(a['sec'])}" for a in u["apps"][:3])
         return f"Сегодня за компьютером {_hm(u['total'])}. Больше всего: {top}."
+
+    @R(r"^(?:(?:покажи\s+|дай\s+)?(?:отч[её]т|статистик\w*|итоги)\s+(?:за\s+)?(?:эту\s+|последнюю\s+)?недел\w+|итоги\s+недели|"
+       r"сколько\s+(?:я\s+)?(?:играл\w*|сидел\w*|провел\w*\s+за\s+компьютером)\s+(?:за|на)\s+(?:этой\s+|эту\s+)?недел\w+)$")
+    def _usage_week(m, t):
+        wb = X.week_brief()
+        if not wb:
+            return "За неделю я насчитал слишком мало, сэр: отчёт пока не из чего собрать."
+        core._chat_add("assistant", wb[1], "voice")
+        return wb[0] + " Подробности в чате."
 
     @R(r"^сколько\s+(?:я\s+)?(?:сегодня\s+)?(?:играл\w*|в\s+играх)(?:\s+сегодня)?$")
     def _usage_games(m, t):

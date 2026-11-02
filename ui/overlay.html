@@ -29,6 +29,17 @@
     background: rgba(255, 255, 255, .06); border: 1px solid var(--c); padding: 5px 8px; }
   .notice button:hover { background: rgba(255, 179, 71, .22); }
   body.night { filter: brightness(.62) sepia(.25); }
+  /* a hint over the game (jarvis/gamefx.py): the window grows for the time (run.py) */
+  .hint { display: none; }
+  body.has-hint { flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 6px; padding: 14px 18px; }
+  body.has-hint canvas, body.has-hint .txt { display: none; }
+  body.has-hint .hint { display: flex; flex-direction: column; gap: 8px; min-height: 0; flex: 1; }
+  .hint-t { font-size: 11px; letter-spacing: 3px; color: var(--c); text-transform: uppercase; font-weight: 700;
+    text-shadow: 0 0 8px var(--c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hint-x { font-size: 15.5px; line-height: 1.42; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 8; -webkit-box-orient: vertical; }
+  .hint-f { margin-top: auto; font-size: 11.5px; color: var(--dim); display: flex; gap: 10px; align-items: center; }
+  .hint-f button { margin-left: auto; font: 600 12px "Segoe UI", sans-serif; color: var(--text); background: rgba(255,255,255,.06);
+    border: 1px solid var(--c); padding: 3px 10px; cursor: pointer; }
 </style>
 </head>
 <body data-state="idle">
@@ -39,6 +50,8 @@
   <div class="line" id="line"></div>
   <div class="notice"><button onclick="notice('done')">Готово</button><button onclick="notice('snooze', 10)">+10 мин</button></div>
 </div>
+<div class="hint"><div class="hint-t pywebview-drag-region" id="hint-t"></div><div class="hint-x" id="hint-x"></div>
+  <div class="hint-f"><span>«Джарвис, скрой подсказку» · «открой подробнее»</span><button onclick="rpc('hint_hide'); showHint(null)">Скрыть</button></div></div>
 <script>
 const T = new URLSearchParams(location.search).get("t");
 const THEME = { jarvis: "#4fd8ff", mark3: "#ff4b5c", nano: "#9b86ff", emerald: "#3ff0a2", stealth: "#e4ecf2" };
@@ -51,12 +64,17 @@ function applyTheme(name) {
 const rpc = (method, params = {}) => fetch("/api/rpc", { method: "POST",
   headers: { "Content-Type": "application/json", "X-Jarvis-Token": T }, body: JSON.stringify({ method, params }) })
   .then((r) => r.json()).then((j) => j.result);
-rpc("state").then((s) => { applyTheme(s.config.theme); const pl = { friday: "F.R.I.D.A.Y.", ultron: "ULTRON" }[(s.config.persona || {}).id]; if (pl) { LABEL.idle = pl; setState(state); } document.body.classList.toggle("night", !!s.night); if (s.notice && s.notice.hud !== false) showNotice(s.notice); }).catch(() => {});
+rpc("state").then((s) => { applyTheme(s.config.theme); const pl = { friday: "F.R.I.D.A.Y.", ultron: "ULTRON" }[(s.config.persona || {}).id]; if (pl) { LABEL.idle = pl; setState(state); } document.body.classList.toggle("night", !!s.night); if (s.notice && s.notice.hud !== false) showNotice(s.notice); if (s.hint) showHint(s.hint); }).catch(() => {});
 function showNotice(n) {
   const on = !!(n && n.kind);
   document.body.classList.toggle("has-notice", on);
   if (on) { $("st").textContent = (n.kind === "timer" ? "Таймер · " : n.kind === "alarm" ? "Будильник · " : "Напоминание · ") + n.title; $("heard").textContent = ""; $("line").textContent = n.text; }
   else setState(state);
+}
+function showHint(h) {
+  const on = !!(h && h.text);
+  document.body.classList.toggle("has-hint", on);
+  if (on) { $("hint-t").textContent = h.title || "Подсказка"; $("hint-x").textContent = h.text; }
 }
 function notice(action, minutes) { rpc("notice", { action, minutes }); showNotice(null); }
 const LABEL = { idle: "J.A.R.V.I.S.", listening: "Слушаю", thinking: "Думаю", speaking: "Говорю" };
@@ -82,6 +100,7 @@ function connect() {
     else if (ev.type === "persona") { LABEL.idle = ev.logo || "J.A.R.V.I.S."; setState(state); }
     else if (ev.type === "notice") showNotice(ev.kind && ev.hud === false ? null : ev);  // the main window shows it
     else if (ev.type === "night") document.body.classList.toggle("night", !!ev.on);
+    else if (ev.type === "hint") showHint(ev.on ? ev : null);
     else if (ev.type === "mic_level") mic = ev.v;
     else if (ev.type === "tts_level") voice = Math.min(1, ev.v);
     else if (ev.type === "transcript") { $("heard").textContent = "«" + ev.text + "»"; $("line").textContent = ""; }

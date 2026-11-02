@@ -610,17 +610,24 @@ class Phone:
         # KDE Connect on Windows may keep a dead connection "on the line" for many minutes after the phone left
         # (Windows notices a vanished TCP peer late). While nobody is at the PC the phone is pinged as well:
         # two silent pings in a row (30 s) and it counts as gone; any answer brings it back.
+        # Four silent pings in a row (a minute), not two: a phone in doze skips ping replies for 30-60 s and then
+        # answers again — the log showed "пропал из сети / снова в сети" every couple of minutes.
         if reachable and S.idle_seconds() > 60:
             ip = self._phone_ip()
             self._ping_fail = 0 if not ip or self._ping(ip) else self._ping_fail + 1
-            if self._ping_fail >= 2:
+            if self._ping_fail >= 4:
                 reachable, why = False, "не отвечает на ping"
         else:
             self._ping_fail = 0
         was, self.present = self.present, reachable
         now = time.time()
         if was is not None and was != reachable:
-            self.core.log(f"Телефон {'снова в сети' if reachable else f'пропал из сети ({why})'}")
+            # a short dropout is not worth a line: only the return after 2+ minutes is logged, with how long it was
+            if not reachable:
+                self._gone_since, self._gone_why = now, why
+            elif now - getattr(self, "_gone_since", now) >= 120:
+                self.core.log(f"Телефон снова в сети (не было {int((now - self._gone_since) / 60)} мин, "
+                              f"{getattr(self, '_gone_why', '')})")
         if not reachable:
             if was is None:                        # unknown at start: never act on a phone that was never seen
                 return

@@ -1148,6 +1148,48 @@ def register(R, core):
             return "Ищу."
         return music(m.group(1))
 
+    def yandex_window():
+        """The Яндекс Музыка window: the desktop app, or a browser whose open tab is music.yandex.ru."""
+        import psutil
+        import win32gui
+        import win32process
+        found = []
+
+        def cb(h, _):
+            if not win32gui.IsWindowVisible(h):
+                return True
+            title = win32gui.GetWindowText(h)
+            try:
+                proc = psutil.Process(win32process.GetWindowThreadProcessId(h)[1]).name().lower()
+            except Exception:
+                proc = ""
+            if re.search(r"(?i)яндекс[\s.]*музык|yandex[\s.]*music", title) or re.search(r"yandex.?music|яндекс", proc):
+                found.append(h)
+            return True
+        win32gui.EnumWindows(cb, None)
+        return found[0] if found else None
+
+    # "лайкни трек", "поставь лайк", "добавь в мне нравится", "дизлайк": the button in Яндекс Музыка, pressed with UI
+    # Automation in the background (a game in front keeps running)
+    @R(r"^(?:(?P<dis>дизлайк\w*|не\s+нравится(?:\s+(?:этот\s+)?(?:трек|песня))?|поставь\s+дизлайк)|"
+       r"лайкни(?:\s+(?:этот\s+)?(?:трек|песню))?|поставь\s+лайк|лайк|мне\s+нравится\s+(?:этот\s+трек|эта\s+песня)|"
+       r"добавь\s+(?:трек\s+|песню\s+|это\s+)?в\s+(?:мне\s+нравится|избранное|любимые|понравившиеся))$")
+    def _like(m, t):
+        from . import mouse as MS
+        h = yandex_window()
+        if not h:
+            return "Яндекс Музыка не открыта, сэр."
+        rx = r"^(?:не\s+нравится|dislike)$" if m.group("dis") else r"^(?:нравится|мне\s+нравится|like|добавить\s+в\s+(?:мне\s+нравится|коллекцию))$"
+        name = MS.invoke_named(h, rx)
+        if not name:
+            return "Не нашёл кнопку «Нравится» в Яндекс Музыке, сэр. Если окно свёрнуто, разверните его."
+        try:
+            np = S.now_playing()
+            what = f": {np['title']}" if np and np.get("title") else ""
+        except Exception:
+            what = ""
+        return ("Дизлайк, сэр. Этот трек больше не будет попадаться." if m.group("dis") else f"Лайкнул{what}.")
+
     @R(r"^(?:включи|поставь|запусти|открой)\s+(?:мой\s+)?плейлист\s*(.*)$")
     def _playlist(m, t):
         q = (m.group(1) or "").strip()

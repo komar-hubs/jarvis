@@ -214,11 +214,19 @@ class Background:
         except Exception:
             fg_pid = 0
         me = os.getpid()
+        # a program that is playing sound right now (music in a browser, Discord, a video) is left alone: its audio
+        # thread would page its memory back in and the sound would drop out
+        try:
+            from . import system as S
+            playing = S.audio_snapshot()["playing"]
+        except Exception:
+            playing = set()
         k32, psapi = ctypes.windll.kernel32, ctypes.windll.psapi
         n = 0
         for p in psutil.process_iter(["pid", "name", "memory_info"]):
             pid = p.info["pid"]
-            if pid in (0, 4, me, fg_pid) or (p.info["name"] or "").lower() in ("audiodg.exe", "dwm.exe", "csrss.exe"):
+            if pid in (0, 4, me, fg_pid) or pid in playing or \
+                    (p.info["name"] or "").lower() in ("audiodg.exe", "dwm.exe", "csrss.exe", "kdeconnectd.exe", "kdeconnect-app.exe"):
                 continue
             try:   # a game behind an alt-tab would stutter for seconds when the user comes back to it
                 if self.core.extras.is_game(p.info["name"] or ""):

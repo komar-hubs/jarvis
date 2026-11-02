@@ -59,6 +59,8 @@ def register(R, core):
             ans = MS.describe_screen(core, f"Пользователь играет: окно «{title}». Посмотри на этот скриншот игры и ответь на "
                                            f"вопрос как опытный игрок: {q}. Коротко и конкретно: что сделать, куда идти, "
                                            f"что собрать. Если по скриншоту не понять — так и скажи.")
+            if ans and len(ans) > 160:
+                core.show_hint(q[:1].upper() + q[1:], ans)     # the whole answer stays on the card over the game
             core.say(ans or "Не разглядел, сэр. Попробуйте спросить, когда на экране будет нужное место.")
         threading.Thread(target=go, daemon=True, name="game-helper").start()
         return True

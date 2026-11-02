@@ -541,9 +541,43 @@ def main():
             h = hud()
             if h:
                 win32gui.ShowWindow(h, 0)
+
+        small = None   # the HUD's own rect while a hint card makes it bigger (the user may have dragged it)
+
+        def hint_size(on):
+            nonlocal small
+            h = hud()
+            if not h:
+                return
+            flags = win32con.SWP_NOACTIVATE
+            if on:
+                small = win32gui.GetWindowRect(h)
+                l, t, r, b = small
+                k = (r - l) / 430                       # the HUD was made 430 logical px wide: the DPI scale
+                w, hh = int(560 * k), int(280 * k)
+                import ctypes
+                from ctypes import wintypes
+                wa = wintypes.RECT()
+                ctypes.windll.user32.SystemParametersInfoW(0x30, 0, ctypes.byref(wa), 0)
+                gap = int(18 * k)
+                win32gui.SetWindowPos(h, win32con.HWND_TOPMOST, wa.right - w - gap, wa.top + gap, w, hh, flags)
+            elif small:
+                l, t, r, b = small
+                win32gui.SetWindowPos(h, win32con.HWND_TOPMOST, l, t, r - l, b - t, flags)
+                small = None
+        big = False
         while True:
             time.sleep(0.15)
-            busy = core.state in ("listening", "thinking", "speaking") or getattr(core, "dictating", False) \
+            hint_on = bool(core.hint) and time.time() < core.hint["until"]
+            if core.hint and not hint_on:
+                core.hide_hint()
+            if hint_on != big:
+                try:
+                    hint_size(hint_on)
+                except Exception:
+                    pass
+                big = hint_on
+            busy = hint_on or core.state in ("listening", "thinking", "speaking") or getattr(core, "dictating", False) \
                 or core.alarm_active or bool(core.notice) \
                 or core.conversation or time.time() < core.follow_until  # "говорите без имени" must be visible
             if busy:

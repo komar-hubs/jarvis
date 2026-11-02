@@ -1371,6 +1371,38 @@ def duck(on, level=0.5):
     _save_ducked()
 
 
+def audio_snapshot():
+    """{"master": (volume 0-100, muted), "apps": {exe: (volume 0-100, muted, playing)}} of the default speakers, and
+    the pids that are playing sound right now. Runs and releases its COM objects in the calling thread."""
+    import comtypes
+    import psutil
+    from comtypes import CLSCTX_ALL
+    from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume, IAudioSessionControl2, IAudioSessionManager2, ISimpleAudioVolume
+    comtypes.CoInitialize()
+    en = AudioUtilities.GetDeviceEnumerator()
+    dev = en.GetDefaultAudioEndpoint(0, 1)
+    ep = dev.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None).QueryInterface(IAudioEndpointVolume)
+    out = {"master": (round(ep.GetMasterVolumeLevelScalar() * 100), bool(ep.GetMute())), "apps": {}, "playing": set()}
+    mgr = dev.Activate(IAudioSessionManager2._iid_, CLSCTX_ALL, None).QueryInterface(IAudioSessionManager2)
+    ses = mgr.GetSessionEnumerator()
+    for i in range(ses.GetCount()):
+        ctl = ses.GetSession(i)
+        try:
+            pid = ctl.QueryInterface(IAudioSessionControl2).GetProcessId()
+            if not pid:
+                continue
+            v = ctl.QueryInterface(ISimpleAudioVolume)
+            active = ctl.GetState() == 1
+            out["apps"][psutil.Process(pid).name()] = (round(v.GetMasterVolume() * 100), bool(v.GetMute()), active)
+            if active:
+                out["playing"].add(pid)
+        except Exception:
+            pass
+        del ctl
+    del ses, mgr, ep, dev, en
+    return out
+
+
 def restore_ducked():
     """At start-up: give back volumes a previous run lowered and could not restore (crash, taskkill)."""
     try:

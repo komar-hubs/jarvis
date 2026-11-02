@@ -397,6 +397,11 @@ class Router:
         cfg = core.cfg
 
         def do_search(site, q):
+            if site == "google" and getattr(core, "gamefx", None):
+                exe, name = core.gamefx.game()
+                if exe:   # a game in front: the answer on a card over it, not a browser on top of the game
+                    core.gamefx.hint(q, name)
+                    return "Сейчас подскажу."
             if site == "google" and cfg.get("search_url"):
                 S.search_web(q, cfg.get("search_url"))
             else:
@@ -464,7 +469,7 @@ class Router:
         R = self.rule
         cfg = core.cfg
         from . import (automation, background, backup, extras, mail, messenger, mouse, notes, people, persona, phone, plugins,
-                       agent, boot, gamevoice, macros, marker, quick, screenmem, sentinel, skills, teach, watchers)
+                       agent, boot, gamefx, gamevoice, macros, marker, quick, screenmem, sentinel, skills, teach, watchers)
 
         def addr():
             return cfg.get("user.address", "сэр") or "сэр"
@@ -473,6 +478,7 @@ class Router:
         self._build_journal(R)    # undo, corrections, "что ты сделал": before everything, "отмени" must reach them
         self._build_search(R)     # "найди в ютубе котиков", "найди видео с котиками"
         gamevoice.register(R, core)  # "научи заклинание люмос на клавишу один": before teach's and memory's "запомни"
+        gamefx.register(R, core)     # "сохрани момент", "выключи микрофон в дискорде": before the generic mute/close
         mouse.register(R, core)   # clicks by name, nth link, fields, scrolling to, dragging (jarvis/mouse.py)
         phone.register(R, core)      # "найди телефон", "отправь ссылку на телефон", "смс маме …": before the messengers
         teach.register(R, core)      # "когда я говорю доброе утро, открой почту": a new command by voice

@@ -331,6 +331,42 @@ def _uia_elements(hwnd, limit=900):
         return []
 
 
+def invoke_named(hwnd, name_rx, prefer_bottom=True):
+    """Presses a button of a background window by its accessible name, with UI Automation (Invoke or Toggle): no
+    mouse, no focus change, so a game in front keeps running. Several matches (a "Нравится" on every track of a
+    list): the lowest one, the player bar. Returns the pressed element's name or ""."""
+    rx = re.compile(name_rx, re.I)
+
+    def work():
+        u = UIA.get()
+        arr = u.ElementFromHandle(hwnd).FindAllBuildCache(4, UIA.cond, UIA.cache)
+        best, best_y = None, None
+        for i in range(min(arr.Length, 3000)):
+            e = arr.GetElement(i)
+            if e.CachedControlType not in (50000, 50002) or not rx.search((e.CachedName or "").strip()):
+                continue
+            y = e.CachedBoundingRectangle.top
+            if best is None or (y > best_y if prefer_bottom else y < best_y):
+                best, best_y = e, y
+        if best is None:
+            return ""
+        name = (best.CachedName or "").strip()
+        for pid, iface in ((10000, UIA.mod.IUIAutomationInvokePattern), (10015, UIA.mod.IUIAutomationTogglePattern)):
+            try:
+                p = best.GetCurrentPattern(pid)
+                if p:
+                    pat = p.QueryInterface(iface)
+                    pat.Invoke() if pid == 10000 else pat.Toggle()
+                    return name
+            except Exception:
+                continue
+        return ""
+    try:
+        return UIA.run(work, timeout=6.0)
+    except Exception:
+        return ""
+
+
 def uia_elements(hwnd=None, taskbar=False):
     import win32gui
     from . import system as S
