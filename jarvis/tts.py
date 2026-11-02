@@ -317,10 +317,12 @@ class SileroEngine:
             # the file is there: loading takes a few seconds — wait for it, the phrase stays in the same voice (as before)
             if not self.start():
                 raise RuntimeError(self.error)
+        from .stress import apply as stress_marks
         from .textnorm import normalize_ru
-        t = normalize_ru(text)
+        t = normalize_ru(text, stress=True)
         if not re.search(r"[а-яё]", t, re.I):
             raise RuntimeError("нечего произносить")
+        t = stress_marks(t, self.cfg.get("voice.stress"))   # "+" before the stressed vowel: Silero keeps it
         spk = self.cfg.get("voice.silero_speaker", "aidar")
         rate = self.cfg.get("voice.silero_rate", "medium")
         pitch = self.cfg.get("voice.silero_pitch", "medium")
@@ -329,7 +331,9 @@ class SileroEngine:
                 audio = self.model.apply_tts(text=t, speaker=spk, sample_rate=48000, put_accent=True, put_yo=True)
             else:
                 ssml = f'<speak><prosody rate="{rate}" pitch="{pitch}">{t}</prosody></speak>'
-                audio = self.model.apply_tts(ssml_text=ssml, speaker=spk, sample_rate=48000)
+                # put_accent here too: without it every word of a non-default speed or pitch (Ultron, a slower voice)
+                # was stressed by guess
+                audio = self.model.apply_tts(ssml_text=ssml, speaker=spk, sample_rate=48000, put_accent=True, put_yo=True)
         return audio.numpy().astype(np.float32), 48000
 
 

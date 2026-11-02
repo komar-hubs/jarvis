@@ -476,7 +476,7 @@ class Router:
         R = self.rule
         cfg = core.cfg
         from . import (automation, background, backup, extras, mail, messenger, mouse, notes, people, persona, phone, plugins,
-                       agent, boot, diag, gamefx, gamevoice, macros, marker, quick, screenmem, sentinel, skills, steam, teach, voiceid, watchers)
+                       agent, boot, diag, gamefx, gamevoice, macros, marker, quick, screenmem, sentinel, skills, steam, stress, teach, voiceid, watchers)
 
         def addr():
             return cfg.get("user.address", "сэр") or "сэр"
@@ -489,6 +489,7 @@ class Router:
         diag.register(R, core)       # "собери отчёт для разработчика"
         steam.register(R, core)      # "запусти последнюю игру", "сколько у меня часов в OneShot", скидки из желаемого
         voiceid.register(R, core)    # "запомни мой голос", "забудь мой голос"
+        stress.register(R, core)     # "ударение в слове звонит на и", "ты неправильно сказал творог"
         mouse.register(R, core)   # clicks by name, nth link, fields, scrolling to, dragging (jarvis/mouse.py)
         phone.register(R, core)      # "найди телефон", "отправь ссылку на телефон", "смс маме …": before the messengers
         teach.register(R, core)      # "когда я говорю доброе утро, открой почту": a new command by voice

@@ -91,7 +91,8 @@ def _clock(m):
     return f"{_num(str(int(h)))} {tail}"  # "18:04" -> "восемнадцать ноль четыре", not "восемнадцать четыре"
 
 
-def normalize_ru(text):
+def normalize_ru(text, stress=False):
+    """stress: Silero — transliterated English words get "+" on the first syllable (jarvis/stress.py)."""
     t = text
     t = re.sub(r"(\d)\s(?=\d{3}\b)", r"\1", t)                     # "83 000" -> "83000"
     t = re.sub(r"\b(\d{1,2}):(\d{2})\b", _clock, t)
@@ -112,7 +113,12 @@ def normalize_ru(text):
     t = re.sub(r"(\d+(?:[.,]\d+)?)\s*₽", lambda m: f"{_num(m.group(1))} рублей", t)
     t = re.sub(r"(?<![\w.])-(\d)", r"минус \1", t)
     t = re.sub(r"\d+(?:[.,]\d+)?", lambda m: _num(m.group(0)), t)
-    t = re.sub(r"[A-Za-z][A-Za-z'\-]*", lambda m: _latin_word(m.group(0)), t)
+    if stress:
+        from .stress import latin_stress
+        t = re.sub(r"[A-Za-z][A-Za-z'\-]*", lambda m: _latin_word(m.group(0)) if m.group(0).lower() in LATIN or len(m.group(0)) <= 3
+                   else latin_stress(_latin_word(m.group(0))).replace("+", "ˈ"), t)   # not "плюс" below
+    else:
+        t = re.sub(r"[A-Za-z][A-Za-z'\-]*", lambda m: _latin_word(m.group(0)), t)
     t = t.replace("&", " и ").replace("+", " плюс ").replace("=", " равно ").replace("№", "номер ")
-    t = re.sub(r"[«»\"()\[\]{}*_#]", " ", t)
+    t = re.sub(r"[«»\"()\[\]{}*_#]", " ", t).replace("ˈ", "+")
     return re.sub(r"\s+", " ", t).strip()
