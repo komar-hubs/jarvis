@@ -1,6 +1,7 @@
 """One-button updates. The author publishes jarvis_share.zip as a GitHub release (tools/publish_update.py);
 every copy checks the latest release, downloads it and replaces its own code in place. Personal data, voice
 models and the virtual environments are never touched, and the previous code is kept as a backup zip."""
+import json
 import os
 import re
 import shutil
@@ -142,7 +143,30 @@ class Updater:
             self._state("deps")
             self._install_requirements()
         shutil.rmtree(work, ignore_errors=True)
+        self._save_whats_new(info)
         self._state("done", latest=info["latest"])
+
+    def _save_whats_new(self, info):
+        """data/whats_new.json: the notes of every version between the old one and the new one (several releases may
+        have been skipped), shown once in the chat after the restart (core._whats_new)."""
+        items = []
+        try:
+            repo = self.cfg.get("update.github") or "komar-hubs/jarvis"
+            r = requests.get(f"https://api.github.com/repos/{repo}/releases?per_page=40", headers=UA, timeout=15)
+            for rel in r.json() if r.ok else []:
+                v = (rel.get("tag_name") or "").lstrip("v")
+                if v and _vkey(info["current"]) < _vkey(v) <= _vkey(info["latest"]) and (rel.get("body") or "").strip():
+                    items.append({"version": v, "notes": rel["body"].strip()[:1500]})
+        except Exception:
+            pass
+        if not items and info.get("notes"):
+            items = [{"version": info["latest"], "notes": info["notes"]}]
+        try:
+            (ROOT / "data" / "whats_new.json").write_text(
+                json.dumps({"version": info["latest"], "items": sorted(items, key=lambda x: _vkey(x["version"]))},
+                           ensure_ascii=False), encoding="utf-8")
+        except Exception:
+            pass
 
     @staticmethod
     def _read(p):

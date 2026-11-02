@@ -231,6 +231,10 @@ class Core:
         self.gamefx = GameFx(self)         # clips, the hint card over a game, "марафон", per-program sound
         from .features import Features
         self.features = Features(self)     # Настройки → «Что делает Джарвис»: every background feature and its switch
+        from .diag import Diag
+        self.diag = Diag(self)             # «Отчёт для разработчика»: a zip without anything personal
+        from .voiceid import VoiceId
+        self.voiceid = VoiceId(self)       # «запомни мой голос»: dangerous commands only in the owner's voice
         from .extras import Extras
         self.extras = Extras(self)   # before the router: it registers voice rules of its own
         self.router = Router(self)
@@ -384,6 +388,7 @@ class Core:
             threading.Thread(target=lambda: self.bridges.warm(self.system_prompt(with_context=False), agent=agent),
                              daemon=True).start()
         self.log(f"J.A.R.V.I.S. {current_version()} запущен")
+        threading.Timer(15, self._whats_new).start()   # after the greeting: what the update brought
         if self.cfg.get("update.auto_check", True):
             threading.Thread(target=self._auto_update_check, daemon=True).start()
         if "windowsapps" in (sys.base_prefix + sys.executable).lower():
@@ -645,6 +650,12 @@ class Core:
                     self.log(f"Перебивание без имени: «{text}»")
         if not (meta.get("forced") or woke or confirm or window or nameless):
             return
+        # «только мой голос»: a dangerous command spoken in a stranger's voice is refused (jarvis/voiceid.py)
+        if not meta.get("forced"):
+            refusal = self.voiceid.check(norm or text, getattr(self.listener, "last_audio", None))
+            if refusal:
+                self.say(refusal)
+                return
         self.accept_until = 0
         self.follow_until = 0
         self.follow_chain = self.follow_chain + 1 if nameless else 0
@@ -1894,7 +1905,7 @@ class Core:
                                                           self.people, self.watchers, self.background, self.plugins,
                                                           self.automations, self.notebook, self.backup, self.persona, self.phone,
                                                           self.quick, self.marker, self.screenmem, self.macros, self.boot,
-                                                          self.gamevoice, self.features)
+                                                          self.gamevoice, self.features, self.diag)
                    if hasattr(o, "rpc_" + method)), None)
         if not fn:
             raise ValueError(f"unknown method {method}")
@@ -2352,6 +2363,27 @@ class Core:
     def _restart(self):
         self.updater.restart()
         self.ui("quit")
+
+    def _whats_new(self):
+        """The first start after an update: the notes of every new version in the chat, one short line aloud
+        (data/whats_new.json is written by the updater and removed here)."""
+        p = DATA / "whats_new.json"
+        try:
+            w = json.loads(p.read_text("utf-8"))
+        except Exception:
+            return
+        try:
+            p.unlink()
+        except OSError:
+            pass
+        if w.get("version") != current_version() or not w.get("items"):
+            return                          # the update did not finish, or there is nothing to tell
+        from .updater import version_human
+        md = "**Что нового в Джарвисе**\n\n" + "\n\n".join(
+            f"*Версия {version_human(x['version'])}*: {x['notes']}" for x in reversed(w["items"]))
+        self._chat_add("assistant", md, "voice")
+        first = re.split(r"(?<=[.!?])\s+", w["items"][-1]["notes"])[0][:180]
+        self.say(f"Я обновился, {self.persona.address()}. {first} Остальное — в чате.")
 
     def _auto_update_check(self):
         """Once per start: tell the user about a new version (once per version)."""

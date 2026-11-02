@@ -47,6 +47,8 @@ async function maintLoad() {
         <label class="switch"><input type="checkbox" id="dl-auto" ${bg.sort_downloads ? "checked" : ""}><span></span>Раскладывать сам раз в несколько часов</label></div></div>
     <div class="mt-sec"><b>Выключить, когда досмотрю</b><span class="dim">Жду, пока звук затихнет и вы не будете трогать мышь пару минут, предупреждаю голосом и выключаю через минуту. Работает на самом ПК: интернет и ИИ не нужны.</span>
       <div class="row" id="media-row"></div></div>
+    <div class="mt-sec"><b>Отчёт для разработчика</b><span class="dim">Что-то не работает? Соберу архив на рабочий стол: компьютер, микрофоны, распознавание, ИИ, журнал ошибок. Ключей, паролей, чата, заметок и услышанных фраз в нём нет — можно открыть и проверить.</span>
+      <div class="row"><button class="btn" id="diag-btn" onclick="diagReport()">${I("box", "lead")}Собрать отчёт</button><span class="dim">«Джарвис, собери отчёт для разработчика»</span></div></div>
     ${perfSection()}`;
   $("#bk-auto").onchange = (e) => rpc("backup_set", { auto: e.target.checked });
   $("#bk-keep").onchange = (e) => rpc("backup_set", { keep: +e.target.value || 5 });
@@ -219,3 +221,10 @@ async function updatesInstall() {
 
 const _settingsLoader = tabLoaders.settings;
 tabLoaders.settings = async () => { await _settingsLoader(); maintLoad(); };
+
+async function diagReport() {
+  const b = $("#diag-btn"); if (b) { b.disabled = true; b.textContent = "Собираю…"; }
+  try { const r = await rpc("diag_report"); toast(`Готово: «${r.name}» на рабочем столе. Перешлите этот файл разработчику.`, "Отчёт"); }
+  catch (e) { toast(e.message, "Отчёт", true); }
+  if (b) { b.disabled = false; b.innerHTML = I("box", "lead") + "Собрать отчёт"; }
+}

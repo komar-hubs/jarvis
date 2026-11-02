@@ -204,6 +204,36 @@ class Persona:
 def register(R, core):
     P = lambda: core.persona
 
+    # own names to call him by: "отзывайся на имя Кузя", "забудь имя Кузя", "на какие имена ты отзываешься"
+    @R(r"^(?:отзывайся|откликайся|реагируй)\s+(?:ещ[её]\s+)?(?:на\s+)?(?:имя|слово)?\s*([а-яёa-z-]{3,20})$|"
+       r"^(?:добавь|запомни)\s+(?:ещ[её]\s+)?(?:имя|слово)\s+(?:для\s+вызова\s+)?([а-яёa-z-]{3,20})$")
+    def _add_wake(m, t):
+        w = (m.group(1) or m.group(2)).lower().replace("ё", "е")
+        if w in ("меня", "мое", "мой", "это", "него"):
+            return False
+        words = list(core.cfg.get("stt.wake_words", []))
+        if w in words:
+            return f"Я и так отзываюсь на «{w}»."
+        core.cfg.set("stt.wake_words", words + [w])
+        return f"Теперь отзываюсь и на «{w.capitalize()}». Скажите: «{w.capitalize()}, который час?»"
+
+    @R(r"^(?:забудь|удали|убери)\s+(?:имя|слово)\s+(?:для\s+вызова\s+)?([а-яёa-z-]{3,20})$|^не\s+отзывайся\s+на\s+(?:имя\s+)?([а-яёa-z-]{3,20})$")
+    def _del_wake(m, t):
+        w = (m.group(1) or m.group(2)).lower().replace("ё", "е")
+        words = list(core.cfg.get("stt.wake_words", []))
+        if w in ("джарвис", "jarvis"):
+            return "Своё имя я оставлю, сэр: без него меня не позвать."
+        if w not in words:
+            return f"Я и не отзывался на «{w}»."
+        core.cfg.set("stt.wake_words", [x for x in words if x != w])
+        return f"Больше не отзываюсь на «{w}»."
+
+    @R(r"^(?:на\s+какие\s+(?:имена|слова)\s+(?:ты\s+)?(?:отзываешься|откликаешься|реагируешь)|как\s+(?:тебя|меня)\s+можно\s+позвать|как\s+тебя\s+звать)$")
+    def _list_wake(m, t):
+        words = core.cfg.get("stt.wake_words", [])
+        main = [w for w in words if not re.match(r"^(?:джар|jarv|жарв|джерв|дарв|чарв)", w)]
+        return "Отзываюсь на «Джарвис»" + (f", а ещё на {', '.join('«' + w.capitalize() + '»' for w in main)}." if main else ". Добавить имя: «отзывайся на имя Кузя».")
+
     @R(r"^(?:позови|включи|давай|переключись\s+на|верни|хочу)\s+пятниц\w*$|^пятница\s+(?:на\s+связь|выходи|включайся)$")
     def _friday(m, t):
         if P().id == "friday":

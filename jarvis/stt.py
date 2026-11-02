@@ -700,6 +700,7 @@ class Listener:
         if forced:
             self.force_next = False
         if text:
+            self.last_audio = audio      # the phrase's sound, for the owner's voice check (jarvis/voiceid.py)
             self.on_utterance(text, meta)
         elif forced:
             self.on_state("idle")

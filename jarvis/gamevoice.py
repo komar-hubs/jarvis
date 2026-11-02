@@ -161,6 +161,10 @@ class GameVoice:
         t = norm(text, self.cfg.get("stt.wake_words", []))
         if CLICK.match(t):
             return {"id": "key:lmb", "keys": "lmb", "hold": 60}
+        # a bare digit is a hotbar slot: "три", "пятёрка", "3" ("Джарвис, три" went to the AI and cost a request)
+        d = S.DIGIT_WORDS.get(t.replace("ё", "е")) or (t if re.fullmatch(r"\d", t) else "")
+        if d and len(d) == 1:
+            return {"id": f"key:{d}", "keys": d, "hold": 60}
         m = KEY_CMD.match(t)
         if not m:
             return None

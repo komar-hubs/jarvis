@@ -41,12 +41,19 @@ WAKE_CANON = ("джарвис", "jarvis")
 def _wakeish(tok, wake_words):
     if any(tok.startswith(w) and len(tok) <= len(w) + 3 for w in wake_words):
         return True
+    # an own name ("отзывайся на имя Кузя"): another ending is forgiven ("кузе", "кузю"), a different word is not
+    # ("куда"); long names also take one misheard letter (below)
+    own = [w for w in wake_words if len(w) >= 4 and w not in WAKE_CANON]
+    if any(tok[:len(w) - 1] == w[:-1] and len(tok) <= len(w) + 1 for w in own):
+        return True
     if len(tok) < 5:
         return False
     # speech recognisers mangle the name in many ways: "гарвис", "джавис", "харвис", "джарвас"...
     from rapidfuzz import fuzz
     # "джарвюз" scored 71: long tokens get a slightly lower bar
-    return max(fuzz.ratio(tok[:9], w) for w in WAKE_CANON) >= (70 if len(tok) >= 6 else 75)
+    if max(fuzz.ratio(tok[:9], w) for w in WAKE_CANON) >= (70 if len(tok) >= 6 else 75):
+        return True
+    return any(len(w) >= 6 and fuzz.ratio(tok[:len(w) + 2], w) >= 80 for w in own)
 
 
 def wake_split(text, wake_words):
@@ -469,7 +476,7 @@ class Router:
         R = self.rule
         cfg = core.cfg
         from . import (automation, background, backup, extras, mail, messenger, mouse, notes, people, persona, phone, plugins,
-                       agent, boot, gamefx, gamevoice, macros, marker, quick, screenmem, sentinel, skills, teach, watchers)
+                       agent, boot, diag, gamefx, gamevoice, macros, marker, quick, screenmem, sentinel, skills, steam, teach, voiceid, watchers)
 
         def addr():
             return cfg.get("user.address", "сэр") or "сэр"
@@ -479,6 +486,9 @@ class Router:
         self._build_search(R)     # "найди в ютубе котиков", "найди видео с котиками"
         gamevoice.register(R, core)  # "научи заклинание люмос на клавишу один": before teach's and memory's "запомни"
         gamefx.register(R, core)     # "сохрани момент", "выключи микрофон в дискорде": before the generic mute/close
+        diag.register(R, core)       # "собери отчёт для разработчика"
+        steam.register(R, core)      # "запусти последнюю игру", "сколько у меня часов в OneShot", скидки из желаемого
+        voiceid.register(R, core)    # "запомни мой голос", "забудь мой голос"
         mouse.register(R, core)   # clicks by name, nth link, fields, scrolling to, dragging (jarvis/mouse.py)
         phone.register(R, core)      # "найди телефон", "отправь ссылку на телефон", "смс маме …": before the messengers
         teach.register(R, core)      # "когда я говорю доброе утро, открой почту": a new command by voice
