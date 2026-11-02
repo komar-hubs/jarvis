@@ -117,11 +117,11 @@ class Background:
             try:
                 vm = psutil.virtual_memory()
                 self._ram_high = self._ram_high + 1 if vm.percent >= 90 else 0
-                if self._ram_high >= 4 and time.time() - self._last["ram"] > 15 * 60:
+                if self._ram_high >= 4 and time.time() - self._last["ram"] > 15 * 60 and self.cfg.get("background.ram", True):
                     self._last["ram"] = time.time()
                     self.submit("ram", "Освобождаю память", self.trim_memory, user=False)
                 free = psutil.disk_usage(os.path.splitdrive(str(Path.home()))[0] + "\\").free
-                if free < 8 * 2**30 and time.time() - self._last["disk"] > 6 * 3600:
+                if free < 8 * 2**30 and time.time() - self._last["disk"] > 6 * 3600 and self.cfg.get("background.clean", True):
                     self._last["disk"] = time.time()
                     self.submit("clean", "Чищу временные файлы", self.clean_junk, user=False)
                 if self.cfg.get("background.sort_downloads", False) and time.time() - self._last["sort"] > 6 * 3600:

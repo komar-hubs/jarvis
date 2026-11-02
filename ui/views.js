@@ -396,6 +396,7 @@ async function loadSettings() {
   const whose = { friday: "Пятницы", ultron: "Альтрона" }[(c.persona || {}).id] || "Джарвиса";
   // sections in a fixed logical order; panels added later by maint.js go into #sec-help / #sec-service
   $("#settings").innerHTML = `
+  <section class="s-sec" id="sec-trust"><div class="panel" id="feat-panel"></div></section>
   <section class="s-sec"><h3 class="s-h">Основное и голос</h3><div class="s-grid" id="sec-main">
   <div class="panel"><h3>Профиль</h3><div class="sgrid">
     <label>Ваше имя</label><input id="s-name" value="${esc(c.user.name)}" placeholder="Тони">

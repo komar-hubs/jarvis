@@ -229,6 +229,8 @@ class Core:
         self.listener.game_end_ms = self.gamevoice.end_ms
         from .gamefx import GameFx
         self.gamefx = GameFx(self)         # clips, the hint card over a game, "марафон", per-program sound
+        from .features import Features
+        self.features = Features(self)     # Настройки → «Что делает Джарвис»: every background feature and its switch
         from .extras import Extras
         self.extras = Extras(self)   # before the router: it registers voice rules of its own
         self.router = Router(self)
@@ -548,7 +550,9 @@ class Core:
 
     def _heard_log(self, text, woke, meta):
         """Everything the microphone recognised, with the wake decision: data/heard.log explains
-        "he did not react to his name" (was it heard at all, and as what?)."""
+        "he did not react to his name" (was it heard at all, and as what?). Off: stt.heard_log."""
+        if not self.cfg.get("stt.heard_log", True):
+            return
         try:
             p = DATA / "heard.log"
             if p.exists() and p.stat().st_size > 400_000:
@@ -1692,7 +1696,7 @@ class Core:
             time.sleep(0.15)
             if self.tts_busy() or self.player.busy():
                 last_busy = time.time()
-            if time.time() - snap_t > 2:
+            if time.time() - snap_t > 2 and self.cfg.get("audio_watch", True):
                 snap_t = time.time()
                 snap = self._audio_watch(snap, ducked)
             want = self.cfg.get("duck_media", True) and time.time() - last_busy < 0.8
@@ -1890,7 +1894,7 @@ class Core:
                                                           self.people, self.watchers, self.background, self.plugins,
                                                           self.automations, self.notebook, self.backup, self.persona, self.phone,
                                                           self.quick, self.marker, self.screenmem, self.macros, self.boot,
-                                                          self.gamevoice)
+                                                          self.gamevoice, self.features)
                    if hasattr(o, "rpc_" + method)), None)
         if not fn:
             raise ValueError(f"unknown method {method}")
