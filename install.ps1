@@ -4,14 +4,12 @@
 param([switch]$Xtts)
 
 $ErrorActionPreference = 'Continue'
-$ProgressPreference = 'SilentlyContinue'          # Invoke-WebRequest is very slow with the progress bar
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 [Console]::OutputEncoding = [Text.Encoding]::UTF8 # read Python's UTF-8 output (paths may be Cyrillic)
 $env:PYTHONIOENCODING = 'utf-8'
 Set-Location -LiteralPath $PSScriptRoot
 try { $Host.UI.RawUI.WindowTitle = if ($Xtts) { 'J.A.R.V.I.S. - голос XTTS' } else { 'J.A.R.V.I.S. - установка' } } catch {}
-# files unpacked from an archive downloaded from the internet are marked as untrusted
-Get-ChildItem -LiteralPath $PSScriptRoot -Recurse -File -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue
+# The "downloaded from the internet" mark, the speech models and the shortcuts are handled by jarvis/prefetch.py:
+# antivirus heuristics took this script for a downloader when it did those things itself (Kaspersky, 2026-11-02).
 
 function Say($text, $color = 'Cyan') { Write-Host $text -ForegroundColor $color }
 function Fail($text) {
@@ -50,18 +48,13 @@ function Install-Python {
     } else {
         Step 'Python не найден — устанавливаю Python 3.12 (около 25 МБ)...'
     }
+    # through winget only: a script that downloads an .exe into TEMP and runs it silently looks like a dropper to
+    # antivirus heuristics. Without winget the python.org page is opened for a manual install.
     if (Get-Command winget -ErrorAction SilentlyContinue) {
         winget install -e --id Python.Python.3.12 --scope user --silent --accept-package-agreements --accept-source-agreements | Out-Host
-        $p = Get-PyExe
-        if ($p) { return $p }
+        return Get-PyExe
     }
-    $url = 'https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe'
-    $tmp = Join-Path $env:TEMP 'python-3.12.10-amd64.exe'
-    Say 'Скачиваю установщик с python.org...'
-    try { Invoke-WebRequest -Uri $url -OutFile $tmp -UseBasicParsing } catch { return $null }
-    Start-Process -FilePath $tmp -Wait -ArgumentList '/quiet', 'InstallAllUsers=0', 'PrependPath=1',
-        'Include_launcher=1', 'InstallLauncherAllUsers=0', 'Include_test=0'
-    return Get-PyExe
+    return $null
 }
 
 function Pip($py, [string[]]$pkgs) {
@@ -135,26 +128,14 @@ if ($LASTEXITCODE -ne 0) {
     if (-not (Pip $vp @('torch', '--index-url', 'https://download.pytorch.org/whl/cpu'))) { Fail 'Ошибка установки PyTorch' }
 }
 
-# GigaAM (a weak laptop gets the light int8 model) and Silero: jarvis/prefetch.py
-Step 'Скачиваю модели распознавания и голоса (0,4–1 ГБ, на слабом ПК меньше)...'
+# GigaAM (a weak laptop gets the light int8 model), Silero, the shortcuts: jarvis/prefetch.py
+Step 'Скачиваю модели распознавания и голоса (0,4–1 ГБ, на слабом ПК меньше) и создаю ярлык...'
 & $vp -m jarvis.prefetch
 
 if ($hasNvidia) {
     Step 'Найдена видеокарта NVIDIA: ставлю CUDA-библиотеки для распознавания Whisper...'
     Pip $vp @('nvidia-cublas-cu12', 'nvidia-cudnn-cu12>=9,<10') | Out-Null
 }
-
-# desktop shortcut, so the friend does not have to look for Jarvis.bat
-try {
-    $lnk = Join-Path ([Environment]::GetFolderPath('Desktop')) 'J.A.R.V.I.S..lnk'
-    $sh = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk)
-    $sh.TargetPath = Join-Path $PSScriptRoot 'Jarvis.bat'
-    $sh.WorkingDirectory = $PSScriptRoot
-    $sh.WindowStyle = 7
-    $sh.IconLocation = "$env:SystemRoot\System32\shell32.dll,277"
-    $sh.Save()
-    Say 'Ярлык J.A.R.V.I.S. создан на рабочем столе.' 'Green'
-} catch {}
 
 Say ''
 Say '  Готово! Запуск: ярлык J.A.R.V.I.S. на рабочем столе или Jarvis.bat' 'Green'

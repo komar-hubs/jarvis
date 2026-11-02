@@ -47,9 +47,9 @@ def icon_path():
     return str(ICO)
 
 
-def ensure_shortcut(log=None):
+def ensure_shortcut(log=None, lnk=None):
     """Start menu → J.A.R.V.I.S..lnk with Jarvis's AppUserModelID: the taskbar takes the group's name and icon from it.
-    Rewritten only when missing or pointing elsewhere (the folder moved)."""
+    lnk: another place (the desktop shortcut made at install). Rewritten only when missing or pointing elsewhere."""
     try:
         import os
         import pythoncom
@@ -57,7 +57,7 @@ def ensure_shortcut(log=None):
         from win32com.shell import shell
         ico = icon_path()
         target = str(ROOT / "Jarvis.bat")
-        lnk = Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "J.A.R.V.I.S..lnk"
+        lnk = Path(lnk) if lnk else Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "J.A.R.V.I.S..lnk"
         pythoncom.CoInitialize()
         link = pythoncom.CoCreateInstance(shell.CLSID_ShellLink, None, pythoncom.CLSCTX_INPROC_SERVER, shell.IID_IShellLink)
         if lnk.exists():

@@ -1,7 +1,8 @@
 """Publish a new Jarvis version for friends: bump VERSION, build jarvis_share.zip (without personal data)
 and upload it as the latest GitHub release. Friends' copies then offer "Обновить" in Settings.
 
-    python tools/publish_update.py "что нового"            publish
+    python tools/publish_update.py "что нового"            publish (then VirusTotal, see tools/virustotal.py)
+    python tools/publish_update.py "что нового" --no-vt    publish without the VirusTotal check
     python tools/publish_update.py --create                create the public release repository once
 
 Needs the GitHub CLI logged in (gh auth login)."""
@@ -45,6 +46,13 @@ def main():
     if r.returncode != 0:
         sys.exit("Не удалось опубликовать: " + (r.stderr or r.stdout))
     print(f"Опубликована версия {ver}: {r.stdout.strip()}")
+    if "--no-vt" not in sys.argv:
+        # the archive and the release link through VirusTotal; README and the channel post get the new numbers
+        try:
+            from tools.virustotal import check_release
+            check_release(ver)
+        except Exception as e:
+            print(f"VirusTotal: проверка не удалась ({e}). Повторить: python tools/virustotal.py")
 
 
 if __name__ == "__main__":
