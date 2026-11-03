@@ -10,7 +10,7 @@ async function gamePanel() {
   box.innerHTML = `<h3><span>${I("bolt", "lead")}Голос в играх</span><span class="h3-meta">${st.active ? "активен: " + esc(st.exe || "") : "без ИИ и интернета"}</span></h3>
     <p class="hint">Пока игра на экране, Джарвис нажимает клавиши по голосу сразу, без «Джарвис». Без всякой настройки работает «жми пробел», «нажми е три раза», «зажми шифт», «клик». Свои слова — в списке ниже: срабатывает только фраза целиком, поэтому обычная речь ничего не нажимает. Придуманные слова («люмос») лучше записать с голоса. Голосом: «когда я скажу прыжок, жми пробел» или «научи заклинание люмос на клавишу один» — сказанное в игре привязывается к этой игре. Игры с античитом могут не принимать программные нажатия.</p>
     <div class="row"><span class="dim">Работает</span><select id="gv-mode" style="flex:none">${opt("auto", "когда игра на экране", st.mode)}${opt("on", "всегда", st.mode)}${opt("off", "выключено", st.mode)}</select>
-      <span class="dim">Конец фразы</span><select id="gv-end" style="flex:none">${[250, 350, 450, 600].map((v) => opt(v, v + " мс", st.end_ms)).join("")}</select></div>
+      <span class="dim" title="Через столько тишины фраза проверяется на игровую команду. Остальные фразы ждут обычную паузу из раздела «Слух»">Команда через</span><select id="gv-end" style="flex:none">${[250, 350, 450, 600].map((v) => opt(v, v + " мс", st.end_ms)).join("")}</select></div>
     <div class="gv-head dim"><span>Фразы (через запятую)</span><span>Клавиши</span><span>Игра</span><span>Держать, мс</span><span></span></div>
     <div id="gv-list">${st.binds.map(gvRow).join("") || '<div class="empty">Фраз пока нет</div>'}</div>
     <div class="row"><button class="btn" id="gv-add">${I("plus", "lead")}Фраза</button>

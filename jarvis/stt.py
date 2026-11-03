@@ -192,6 +192,12 @@ class Listener:
         # phrase could be handled before the first one
         self.jobs = queue.Queue()
         threading.Thread(target=self._jobs_worker, daemon=True, name="stt-jobs").start()
+        # a game in front: after a short pause the phrase so far is recognised on the side; a game command fires at
+        # once, anything else waits for the usual pause ("что за проблема в… э… игре" was cut after 350 ms)
+        self.peeks = queue.Queue()
+        self.seg_no = 0
+        self.peek_hit = -1
+        threading.Thread(target=self._peek_worker, daemon=True, name="stt-peek").start()
 
     # ------------------------------------------------------------ model
     def engine(self):
@@ -648,6 +654,7 @@ class Listener:
                 pre.append(buf)
                 if sum(recent) >= 5:
                     in_speech = True
+                    self.seg_no += 1
                     voiced = list(pre)
                     seg_tts = self.is_speaking()
                     silence = 0
@@ -662,17 +669,24 @@ class Listener:
                 end_ms = int(self.cfg.get("stt.silence_ms", 650))
                 gf = getattr(self, "game_fast", None)
                 if gf is not None and gf():          # a game in front: a spell must fire sooner (jarvis/gamevoice.py)
-                    end_ms = min(end_ms, self.game_end_ms())
+                    fast = min(end_ms, self.game_end_ms())
+                    if getattr(self, "game_peek", None) is None:
+                        end_ms = fast
+                    elif silence == fast // 30 and len(voiced) <= 100 and not self.force_next:
+                        # up to 3 s of speech: a spell or "жми пробел", never a question
+                        self.peeks.put((self.seg_no, b"".join(voiced), seg_tts or self.is_speaking()))
                 max_sil = end_ms // 30
                 too_long = len(voiced) > 600  # 18 s
-                if silence >= max_sil or too_long:
+                hit = self.peek_hit == self.seg_no   # the side check already pressed the game command
+                if silence >= max_sil or too_long or hit:
                     in_speech = False
                     self.recording = False
                     recent.clear()
                     pre.clear()
                     seg = b"".join(voiced)
                     voiced = []
-                    if len(seg) / 2 / SR < 0.35:
+                    self.seg_no += 1             # a side check still running for this phrase is dropped
+                    if hit or len(seg) / 2 / SR < 0.35:
                         continue
                     audio = np.frombuffer(seg, np.int16).astype(np.float32) / 32768.0
                     forced, target = self.force_next and time.time() < self.force_until, self.force_target
@@ -687,6 +701,26 @@ class Listener:
                 self._handle(*args)
             except Exception as e:
                 self.log(f"Распознавание: {e}", "warn")
+
+    def _peek_worker(self):
+        while True:
+            seg_no, seg, during_tts = self.peeks.get()
+            try:
+                if seg_no != self.seg_no or len(seg) / 2 / SR < 0.3:
+                    continue                   # the phrase is already over
+                audio = np.frombuffer(seg, np.int16).astype(np.float32) / 32768.0
+                t = time.time()
+                with self.model_lock:
+                    text, meta = self.transcribe(audio)
+                if not text or seg_no != self.seg_no or not self.game_peek(text):
+                    continue
+                self.peek_hit = seg_no
+                self.last_audio = audio
+                meta.update({"forced": False, "target": None, "during_tts": during_tts, "peek": True,
+                             "stt_ms": int((time.time() - t) * 1000), "dur": round(len(audio) / SR, 2)})
+                self.on_utterance(text, meta)
+            except Exception as e:
+                self.log(f"Распознавание (игра): {e}", "warn")
 
     def _handle(self, audio, forced, target, during_tts):
         if self.model is None:

@@ -227,6 +227,7 @@ class Core:
         self.gamevoice = GameVoice(self)   # in a game: a phrase without the name presses keys ("люмос" -> 1)
         self.listener.game_fast = self.gamevoice.fast
         self.listener.game_end_ms = self.gamevoice.end_ms
+        self.listener.game_peek = self.gamevoice.would_press
         from .gamefx import GameFx
         self.gamefx = GameFx(self)         # clips, the hint card over a game, "марафон", per-program sound
         from .features import Features

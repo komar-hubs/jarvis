@@ -8,7 +8,8 @@ no AI, no network. "Люмос" -> 1, "щит" -> Q held for half a second, "р�
   nothing. Mode "on" works everywhere, "off" turns it off.
 - A phrase may belong to one game ("game": exe): taught by voice inside a game, it is that game's.
 - The keys go out as scan codes with a real hold (60 ms by default): games read scan codes and miss a 12 ms tap.
-- While a game is in front the end of a phrase is detected sooner (350 ms of silence instead of ~0.6 s).
+- While a game is in front the phrase so far is recognised after 350 ms of silence (`would_press`): a game command
+  fires at once, any other phrase still waits for the usual pause (stt.silence_ms). Launchers are not games here.
 - Phrases for invented words are best taught by voice: "С голоса" in Settings remembers exactly how the recogniser
   hears the word.
 
@@ -22,6 +23,10 @@ import time
 import uuid
 
 from . import system as S
+
+# the store and the launcher count as "Игры" in the stats, but a phrase there is a question, not a spell
+LAUNCHERS = {"steam.exe", "steamwebhelper.exe", "epicgameslauncher.exe", "battle.net.exe", "galaxyclient.exe",
+             "eadesktop.exe", "origin.exe", "ubisoftconnect.exe", "upc.exe", "riotclientux.exe", "riotclientservices.exe"}
 
 PRESETS = {
     "spells": [  # an example: the keys are to be changed to the game's own
@@ -130,8 +135,18 @@ class GameVoice:
         return on, exe
 
     def fast(self):
-        """For the recogniser: True while phrases should end sooner."""
-        return self.active()[0]
+        """For the recogniser: True while a phrase is checked for a game command after a short pause."""
+        on, exe = self.active()
+        return on and (exe or "").lower() not in LAUNCHERS
+
+    def would_press(self, text):
+        """For the recogniser's side check: True when handle(text) would press something (or learning waits)."""
+        if self.learning:
+            return True
+        on, exe = self.active()
+        if not on:
+            return False
+        return bool(self.match(text, exe)[0] or self.key_command(text))
 
     def end_ms(self):
         return int(self.conf().get("end_ms", 350))
