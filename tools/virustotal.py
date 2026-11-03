@@ -19,7 +19,10 @@ import requests
 ROOT = Path(__file__).resolve().parent.parent
 ZIP = ROOT.parent / "jarvis_share.zip"
 API = "https://www.virustotal.com/api/v3"
-POST = Path.home() / "Desktop" / "jarvis-telegram-channel" / "ПОСТЫ.md"
+# the channel folder was moved into Desktop\Проекты: both places are looked at
+POST = next((p for p in (Path.home() / "Desktop" / "Проекты" / "jarvis-telegram-channel" / "ПОСТЫ.md",
+                         Path.home() / "Desktop" / "jarvis-telegram-channel" / "ПОСТЫ.md") if p.exists()),
+            Path.home() / "Desktop" / "Проекты" / "jarvis-telegram-channel" / "ПОСТЫ.md")
 MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"]
 
 
@@ -161,6 +164,11 @@ def check_release(version=None):
         for eng, verdict in f["flagged"]:
             print(f"  {eng}: {verdict}")
         return False
+    if f.get("kaspersky") != "undetected":
+        # the users are in Russia: a check without Kaspersky's answer does not replace one with it
+        print("Касперский не ответил (VirusTotal перегружен): README оставлен с прошлой полной проверкой. "
+              "Повторить позже: python tools/virustotal.py --recheck")
+        return False
     update_docs(version, f, u)
     print("README.md и пост для канала обновлены: закоммитьте README вместе с VERSION.")
     return True
@@ -188,6 +196,9 @@ def recheck(version=None, wait=600):
         print(f"VirusTotal, ссылка не проверена: {e}")
     if f["flagged"]:
         print("ВНИМАНИЕ: есть срабатывания, README не обновлён:", f["flagged"])
+        return False
+    if f.get("kaspersky") != "undetected":
+        print("Касперский не ответил: README оставлен с прошлой полной проверкой. Повторить позже: python tools/virustotal.py --recheck")
         return False
     update_docs(version, f, u)
     print("README.md и пост для канала обновлены.")
