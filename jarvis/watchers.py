@@ -26,6 +26,35 @@ NS = {"a": "http://www.w3.org/2005/Atom", "yt": "http://www.youtube.com/xml/sche
 PARTIAL = (".crdownload", ".part", ".partial", ".download", ".opdownload", ".tmp")
 
 
+# heard in place of a letter or a digit when a login is spelled ("ты дв икс два" was "т два икс два")
+SPELL_EXTRA = {"ты": "t", "дв": "2", "эс": "s", "зед": "z", "зэт": "z", "дубль": "w", "икса": "x"}
+
+
+def spoken_login(name):
+    """'т два икс два' -> 't2x2', 'эс один мпл' -> 's1mple'-ish: a login spelled by letters and digits, else None."""
+    from .system import DIGIT_WORDS, LETTER_WORDS, translit
+    s = re.sub(r"\bдабл\s+ю\b", "w", (name or "").lower().replace("ё", "е"))
+    toks = re.findall(r"[\w]+", s)
+    if len(toks) < 2:
+        return None
+    spelled = sum(1 for t in toks if t in DIGIT_WORDS or t.isdigit() or t in SPELL_EXTRA or (len(t) <= 4 and t in LETTER_WORDS))
+    if spelled < max(2, len(toks) - 1):      # one ordinary word is allowed: "эс один мпл"
+        return None
+    out = []
+    for t in toks:
+        if t.isascii():
+            out.append(t)
+        elif t in DIGIT_WORDS:
+            out.append(DIGIT_WORDS[t])
+        elif t in SPELL_EXTRA:
+            out.append(SPELL_EXTRA[t])
+        elif t in LETTER_WORDS:
+            out.append(LETTER_WORDS[t])
+        else:
+            out.append(translit(t))
+    return "".join(out)
+
+
 def youtube_channel(name):
     """'Robzi' / 'робзи' / '@robzi' / a channel URL -> (channel_id, title) or (None, None)."""
     from rapidfuzz import fuzz
@@ -36,7 +65,7 @@ def youtube_channel(name):
         return m.group(1), name
     handle = re.search(r"@([\w.-]+)", name)
     cands = [handle.group(1)] if handle else []
-    cands += [name.replace(" ", ""), translit(name).replace(" ", "")]
+    cands += [spoken_login(name) or "", name.replace(" ", ""), translit(name).replace(" ", "")]
     for h in dict.fromkeys(c for c in cands if c and re.fullmatch(r"[\w.-]+", c) and c.isascii()):
         try:
             r = requests.get(f"https://www.youtube.com/@{h}", headers=H, timeout=15)
@@ -70,6 +99,27 @@ def youtube_latest(channel_id):
 def twitch_live(login):
     r = requests.get(f"https://www.twitch.tv/{login}", headers=H, timeout=15)
     return '"isLiveBroadcast":true' in r.text
+
+
+def twitch_page(login):
+    """(exists, live): a missing channel's page has no description meta (the status is 200 either way)."""
+    r = requests.get(f"https://www.twitch.tv/{login}", headers=H, timeout=15)
+    return '<meta name="description"' in r.text, '"isLiveBroadcast":true' in r.text
+
+
+def twitch_login(name):
+    """Spoken name -> (login, live) of a channel that exists, or (first guess, None) when none does."""
+    from .system import translit
+    raw = (name or "").strip().strip("«»\"").lower().replace("ё", "е")
+    raw = re.sub(r"^(?:https?://)?(?:www\.)?twitch\.tv/", "", raw)
+    cands = [spoken_login(raw) or "", raw if raw.isascii() else "", translit(raw)]
+    cands = [re.sub(r"[^a-z0-9_]", "", c) for c in cands]
+    cands = list(dict.fromkeys(c for c in cands if len(c) >= 3))[:3]
+    for c in cands:
+        ok, live = twitch_page(c)
+        if ok:
+            return c, live
+    return (cands[0] if cands else ""), None
 
 
 def page_text(url):
@@ -157,10 +207,13 @@ class Watchers:
         last = f" Последнее видео — «{vids[0]['title']}»." if vids else ""
         return w, f"Слежу за каналом {title}. Скажу, как только выйдет новое видео.{last}"
 
-    def watch_twitch(self, login):
-        from .system import translit
-        login = re.sub(r"[^\w]", "", translit(login.lower()) if not login.isascii() else login.lower())
-        live = twitch_live(login)
+    def watch_twitch(self, name):
+        login, live = twitch_login(name)
+        if live is None:
+            return None, (f"Не нашёл канал «{name}» на Twitch, сэр." + (f" Проверил {login}." if login else "")
+                          + " Скажите логин по буквам, например «тэ два икс два».")
+        if any(w["kind"] == "twitch" and w.get("login") == login for w in self.items):
+            return None, f"Я уже слежу за {login} на Twitch."
         w = self.add("twitch", login=login, live=live)
         return w, (f"Слежу за {login} на Twitch." + (" Кстати, он уже в эфире." if live else " Скажу, когда начнётся стрим."))
 
@@ -391,12 +444,14 @@ def register(R, core):
        + rf"|^(?:следи|следить|подпишись)\s+(?:за\s+)?(?:каналом|ютубером|блогером|новыми\s+видео|видео)\s+(?:у\s+|от\s+)?(.+)$")
     def _yt(m, t):
         name = next(g for g in m.groups() if g)
+        if re.search(r"\s(?:на\s+)?(?:твиче|твитче|twitch)$", name):   # "следи за каналом … на твиче"
+            return bg(lambda: W().watch_twitch(re.sub(r"\s+(?:на\s+)?(?:твиче|твитче|twitch)$", "", name).strip()))
         name = re.sub(r"\s+(?:на\s+)?(?:ютубе|youtube)$", "", name).strip()
         return bg(lambda: W().watch_youtube(name))
 
-    @R(TELL + r"(.+?)\s+(?:начнет|запустит|включит|начинает)\s+(?:стрим|трансляцию|эфир)\w*$"
+    @R(TELL + r"(.+?)\s+(?:начнет|начнешь|запустит|включит|начинает|начинаешь|выйдет\s+на|пойдет\s+на)\s+(?:стрим|трансляцию|эфир)\w*$"
        r"|" + TELL + r"(?:начнется|начнет|будет)\s+(?:стрим|трансляция|эфир)\s+(?:у\s+)?(.+)$"
-       r"|^(?:следи|следить)\s+за\s+(?:стримами|стримером|трансляциями)\s+(.+)$")
+       r"|^(?:следи|следить)\s+за\s+(?:стримами|стримером|стримершей|трансляциями|твичем)\s+(.+)$")
     def _tw(m, t):
         name = next(g for g in m.groups() if g)
         name = re.sub(r"\s+(?:на\s+)?(?:твиче|twitch)$", "", name).strip()
