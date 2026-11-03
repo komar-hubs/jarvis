@@ -80,7 +80,9 @@ function onEvent(ev) {
       break;
     case "focus": S.focus = ev.minutes ? ev : null; if (window.hubFocus) hubFocus(); break;
     case "hub": if (window.hubChanged) hubChanged(ev); break;
-    case "game_voice": if (window.gamePanel && $("#game-panel")) gamePanel(); break;   // a phrase taught by voice
+    case "game_voice": if (window.gamePanel && $("#game-panel")) gamePanel(); break;
+    case "settings_section": if (window.settingsSection) settingsSection(ev.id); break;   // «открой настройки голоса»
+    case "voiceid": if (window.voiceidPanel && $("#voiceid-panel")) { voiceidPanel(); featuresPanel(); } break;   // a phrase taught by voice
     case "party": if (window.party) party(ev.seconds || 10, ev.birthday); break;
     case "recording": document.body.classList.toggle("recording", !!ev.on); toast(ev.on ? "Идёт запись экрана" : "Запись остановлена", "Запись"); break;
     case "files_found":

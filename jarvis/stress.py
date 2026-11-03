@@ -79,6 +79,43 @@ def latin_stress(word):
     return word[:vow[0]] + "+" + word[vow[0]:]
 
 
+class Stress:
+    """Settings → Голос → «Ударения»: the same dictionary as the voice commands."""
+
+    def __init__(self, core):
+        self.core = core
+
+    def _table(self):
+        return dict(self.core.cfg.get("voice.stress") or {})
+
+    def rpc_stress_list(self):
+        return {"items": [{"word": k, "marked": v} for k, v in sorted(self._table().items())],
+                "builtin": len(BUILTIN)}
+
+    def rpc_stress_set(self, word, spec):
+        word = (word or "").strip().lower().replace("+", "")
+        if "+" in (spec or "") and spec.replace("+", "").lower() == word:
+            marked = spec.lower()                 # typed with the mark: "твор+ог"
+        else:
+            marked, why = mark(word, spec)
+            if not marked:
+                raise ValueError(why)
+        t = self._table()
+        t[word] = marked
+        self.core.cfg.set("voice.stress", t)
+        return self.rpc_stress_list()
+
+    def rpc_stress_delete(self, word):
+        t = self._table()
+        t.pop((word or "").lower(), None)
+        self.core.cfg.set("voice.stress", t)
+        return self.rpc_stress_list()
+
+    def rpc_stress_say(self, word):
+        self.core.say(word)
+        return True
+
+
 def register(R, core):
     def table():
         return dict(core.cfg.get("voice.stress") or {})

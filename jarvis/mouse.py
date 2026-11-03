@@ -990,7 +990,7 @@ def register(R, core):
         release("right" if "прав" in t else "left")
         return True
 
-    @R(r"^(?:что\s+(?:тут|здесь|на\s+экране)\s+можно\s+нажать|какие\s+(?:кнопки|ссылки)\s+(?:есть\s+)?на\s+экране)$")
+    @R(r"^(?:что\s+(?:тут\s+|здесь\s+|на\s+экране\s+)?можно\s+нажать|какие\s+(?:кнопки|ссылки)\s+(?:есть\s+)?на\s+экране)$")
     def _what_clickable(m, t):
         def go():
             items = snapshot_elements(60)

@@ -4,9 +4,9 @@ function fmtSize(n) { return n > 2 ** 20 ? (n / 2 ** 20).toFixed(1) + " МБ" : 
 
 // a panel with this id inside a Settings section, created once: (section, id, where: "first" | "after:<n>" | "end")
 function sPanel(secId, id, where) {
-  const sec = $("#" + secId); if (!sec) return null;
   let el = $("#" + id);
-  if (el) return el;
+  if (el) return el;                       // the settings template has a place for every panel
+  const sec = $("#" + secId); if (!sec) return null;
   el = document.createElement("div"); el.id = id; el.className = "panel";
   if (where === "first") sec.prepend(el);
   else if (where && where.startsWith("after:")) { const ref = sec.children[+where.slice(6)]; ref ? ref.after(el) : sec.appendChild(el); }
@@ -21,9 +21,7 @@ async function maintLoad() {
   const bg = (S.config && S.config.background) || {};
   const last = b.last ? new Date(b.last * 1000).toLocaleString("ru-RU") : "ещё не делалась";
   // Обслуживание: PC upkeep, then backups, then Jarvis's own updates (already there)
-  const svc = sPanel("sec-service", "svc-panel", "first");
-  const bk = sPanel("sec-service", "bk-panel", "after:0");
-  sPanel("sec-help", "phone-panel", "after:0");          // Помощь в делах: after «Забота и продуктивность»
+  const svc = $("#svc-panel"), bk = $("#bk-panel"), perf = $("#perf-panel"), diag = $("#diag-panel");
   if (!svc || !bk) return;
   bk.innerHTML = `<h3><span>${I("box", "lead")}Резервные копии</span><span class="h3-meta">последняя: ${esc(last)}</span></h3>
     <p class="hint">В копию входят настройки, команды, автоматизации, интеграции, плагины с их данными, заметки, задачи, напоминания, привычки, контакты и чат. Модели и кэш не входят: они скачаются сами. <b class="warn-t">В копии ваши ключи ИИ и пароли почты: не отправляйте её другим.</b> Чтобы поделиться плагином, используйте экспорт плагина.</p>
@@ -31,7 +29,7 @@ async function maintLoad() {
       <button class="btn" onclick="backupPick()">${I("import", "lead")}Восстановить из файла…</button>
       <button class="btn" onclick="rpc('backup_open_folder')">${I("folder", "lead")}Открыть папку</button>
       <button class="btn" onclick="backupFolder()">Сменить папку</button></div>
-    <div class="row"><label class="switch"><input type="checkbox" id="bk-auto" ${b.auto ? "checked" : ""}><span></span>Автоматически раз в неделю</label>
+    <div class="row"><span class="dim">раз в неделю сама:</span>${featChip("backup")}
       <span class="dim">хранить последних</span><input id="bk-keep" type="number" min="1" max="50" value="${b.keep}" style="width:70px;flex:none"></div>
     <div class="dim bk-folder">Папка: ${esc(b.folder)}</div>
     <div class="bk-list">${b.items.slice(0, 8).map((x) => `<div class="bk"><span class="bk-n">${esc(x.at)}</span>
@@ -44,15 +42,15 @@ async function maintLoad() {
     <div class="mt-sec"><b>Папка «Загрузки»</b><span class="dim">Раскладываю по папкам: Документы, Картинки, Видео, Музыка, Архивы, Установщики, Торренты, Код. Файлы младше 10 минут и неизвестные типы не трогаю.</span>
       <div class="row"><button class="btn" onclick="rpc('downloads_sort')">${I("folder", "lead")}Разложить сейчас</button>
         <button class="btn" onclick="rpc('downloads_sort',{undo:true})">${I("undo", "lead")}Вернуть как было</button>
-        <label class="switch"><input type="checkbox" id="dl-auto" ${bg.sort_downloads ? "checked" : ""}><span></span>Раскладывать сам раз в несколько часов</label></div></div>
+        <span class="dim">сам раз в 6 часов:</span>${featChip("sort")}</div></div>
     <div class="mt-sec"><b>Выключить, когда досмотрю</b><span class="dim">Жду, пока звук затихнет и вы не будете трогать мышь пару минут, предупреждаю голосом и выключаю через минуту. Работает на самом ПК: интернет и ИИ не нужны.</span>
       <div class="row" id="media-row"></div></div>
-    <div class="mt-sec"><b>Отчёт для разработчика</b><span class="dim">Что-то не работает? Соберу архив на рабочий стол: компьютер, микрофоны, распознавание, ИИ, журнал ошибок. Ключей, паролей, чата, заметок и услышанных фраз в нём нет — можно открыть и проверить.</span>
-      <div class="row"><button class="btn" id="diag-btn" onclick="diagReport()">${I("box", "lead")}Собрать отчёт</button><span class="dim">«Джарвис, собери отчёт для разработчика»</span></div></div>
-    ${perfSection()}`;
-  $("#bk-auto").onchange = (e) => rpc("backup_set", { auto: e.target.checked });
+`;
+  if (perf) perf.innerHTML = `<h3><span>${I("chip", "lead")}Производительность</span></h3>${perfSection()}`;
+  if (diag) diag.innerHTML = `<h3><span>${I("box", "lead")}Отчёт для разработчика</span></h3>
+    <p class="hint">Что-то не работает? Соберу архив на рабочий стол: компьютер, микрофоны, распознавание, ИИ, журнал ошибок. Ключей, паролей, чата, заметок и услышанных фраз в нём нет — можно открыть и проверить.</p>
+    <div class="row"><button class="primary" id="diag-btn" onclick="diagReport()">${I("box", "lead")}Собрать отчёт</button><span class="dim">«Джарвис, собери отчёт для разработчика»</span></div>`;
   $("#bk-keep").onchange = (e) => rpc("backup_set", { keep: +e.target.value || 5 });
-  $("#dl-auto").onchange = (e) => saveConfig({ background: { sort_downloads: e.target.checked } });
   const pl = $("#perf-lite"), pq = $("#perf-quant");
   if (pl) pl.onchange = (e) => { saveConfig({ perf: { lite: e.target.value === "auto" ? "auto" : e.target.value === "on" } }); $("#perf-note").textContent = "Изменится после перезапуска Джарвиса."; };
   if (pq) pq.onchange = (e) => { saveConfig({ stt: { gigaam_quant: e.target.value } }); $("#perf-note").textContent = "Модель сменится после перезапуска Джарвиса."; };
@@ -62,7 +60,9 @@ async function maintLoad() {
   phonePanel();
   overlaysPanel();
   memPanel();
+  if (window.macroPanel) macroPanel();
   gamePanel();
+  if (window.settingsExtras) settingsExtras();   // ui/settings_nav.js: stress, own voice, game helpers, menu and search
   if (window.featuresPanel) featuresPanel();
 }
 // Settings → Обслуживание ПК → Производительность: the light mode for weak laptops (jarvis/system.py lite())
@@ -72,7 +72,7 @@ function perfSection() {
   const quant = (c.stt || {}).gigaam_quant || "auto";
   const hw = p.ram_gb ? `${p.ram_gb} ГБ памяти, ${p.cpus} потоков процессора` : "";
   const opt = (v, t, cur) => `<option value="${v}" ${v === cur ? "selected" : ""}>${t}</option>`;
-  return `<div class="mt-sec"><b>Производительность</b><span class="dim">Сейчас: <b>${p.lite ? "лёгкий режим" : "обычный режим"}</b>${hw ? ` (${esc(hw)})` : ""}${p.light_model ? ", лёгкая модель распознавания" : ""}.
+  return `<div class="mt-sec"><span class="dim">Сейчас: <b>${p.lite ? "лёгкий режим" : "обычный режим"}</b>${hw ? ` (${esc(hw)})` : ""}${p.light_model ? ", лёгкая модель распознавания" : ""}.
       Лёгкий режим для слабых ноутбуков: распознавание речи занимает на 600 МБ меньше памяти, сторож проверяет систему реже, память экрана и заставка загрузки по умолчанию выключены. «Авто» включает его на ПК до 10 ГБ памяти или до 4 потоков.</span>
     <div class="row"><span class="dim" style="min-width:110px">Режим</span><select id="perf-lite" style="flex:none">${opt("auto", "авто", mode)}${opt("on", "лёгкий", mode)}${opt("off", "обычный", mode)}</select></div>
     <div class="row"><span class="dim" style="min-width:110px">Распознавание</span><select id="perf-quant" style="flex:none">${opt("auto", "по режиму", quant)}${opt("int8", "лёгкое (260 МБ)", quant)}${opt("full", "полное (880 МБ)", quant)}</select></div>
@@ -118,7 +118,8 @@ async function phonePanel() {
       <button class="btn" ${dev ? "" : "disabled"} onclick="phoneAct('photo')">${I("eye", "lead")}Фото с телефона</button>
       <button class="btn small" ${dev ? "" : "disabled"} onclick="rpc('phone_find',{on:false}).then((r)=>toast(r,'Телефон'))">${I("check", "lead")}Нашёл</button></div>
     <p class="hint">«Найти телефон» звонит каждые 8 секунд до двух минут, пока не скажете «нашёл». Если на телефоне приходит только тихое уведомление: Настройки телефона → Приложения → KDE Connect → разрешите «Всплывающие окна в фоне», «Экран блокировки» и «Полноэкранные уведомления», а в KDE Connect → «Найти телефон» выберите громкую мелодию.</p>
-    <div class="ph-sw">${sw("enabled", "Следить за телефоном")}${sw("calls", "Говорить, кто звонит")}${sw("announce", "Озвучивать уведомления")}${sw("filter", "Отсеивать неважное: рекламу, загрузки, системные")}</div>
+    <div class="ph-sw">${sw("enabled", "Следить за телефоном")}${sw("filter", "Отсеивать неважное: рекламу, загрузки, системные")}</div>
+    <div class="ph-chips"><span>Озвучивать уведомления</span>${featChip("phone")}<span>Говорить, кто звонит</span>${featChip("calls")}<span>«Ушёл — вернулся»</span>${featChip("away")}<span>Блокировать ПК, когда ушли</span>${featChip("lock")}</div>
     <div class="sgrid ph-rules"><label>Мессенджеры</label>${ruleSel("ph-mrule", r.rule_titles, s.messenger_rule)}
       <label>Остальные приложения</label>${ruleSel("ph-drule", r.rule_titles, s.default_rule)}</div>
     <div class="field"><label>Правила для приложений <span class="dim">— как принимать уведомления от каждого</span></label>
@@ -155,6 +156,7 @@ async function phonePanel() {
     e.target.value.split("\n").forEach((l) => { const [k, v] = l.split("="); if (k && v && /\d{5,}/.test(v.replace(/\D/g, ""))) book[k.trim()] = v.trim(); });
     rpc("phone_set", { contacts: book }).then(() => toast("Сохранено", "Контакты для SMS"));
   };
+  if (window.featChipsFill) featChipsFill();
 }
 function ruleSel(id, titles, cur, app) {
   return `<select ${id ? `id="${id}"` : ""} ${app ? `data-app="${esc(app)}"` : ""}>${Object.entries(titles).map(([k, t]) => `<option value="${k}" ${k === cur ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>`;

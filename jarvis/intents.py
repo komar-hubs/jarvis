@@ -19,8 +19,12 @@ def normalize(text, wake_words=()):
     t = re.sub(r"[«»\"!?…]", " ", t)
     # dots go only at the end of a word: "igor@firm.ru", "habr.com" stay whole (they were cut into "igor@firm ru")
     t = re.sub(r"(?<!\d)[,;](?!\d)|[,;](?=\s|$)|(?<!\d)\.(?=\s|$)|\.(?=\.)", " ", t)
+    # the name is cut where it is an address: at the start ("Джарвис, открой", a misheard ending too) and as the last
+    # word in its own form ("открой почту, Джарвис"). In other places it is a word of the command: "верни Джарвиса",
+    # "позови Пятницу", "забудь имя Кузя" lost the name and were not understood.
     for w in sorted(wake_words, key=len, reverse=True):
-        t = re.sub(rf"\b{re.escape(w)}\w{{0,2}}\b", " ", t)
+        t = re.sub(rf"^\s*{re.escape(w)}\w{{0,2}}\b", " ", t)
+        t = re.sub(rf"(?<!имя)(?<!слово)(?<!\bна)\s{re.escape(w)}\s*$", " ", t)   # "забудь имя Кузя" keeps it
     t = re.sub(POLITE, " ", t)
     # "а" only as a lead-in ("а сколько времени"): in the middle it means "but" — "не котиков, а собачек"
     t = re.sub(r"^\s*а\s+", " ", t)
@@ -353,9 +357,10 @@ class Router:
             core.planner.add_timer(secs, last.get("label") or "")
             return f"Таймер теперь на {say_duration(secs)}."
 
-        @R(r"^(?:добавь|прибавь|накинь)\s+(?:к\s+)?таймер\w*\s+(.+)$|^(?:добавь|прибавь)\s+(.+?)\s+к\s+таймер\w*$")
+        @R(r"^(?:добавь|прибавь|накинь)\s+(?:к\s+)?таймер\w*\s+(.+)$|^(?:добавь|прибавь)\s+(.+?)\s+к\s+таймер\w*$|"
+           r"^(?:добавь|прибавь|накинь)\s+ещ[её]\s+(\d+\s+(?:минут\w*|секунд\w*|час\w*)|минутку|минуту|полминуты|пару\s+минут)$")
         def _timer_add_more(m, t):
-            secs = parse_duration(m.group(1) or m.group(2))
+            secs = parse_duration(m.group(1) or m.group(2) or m.group(3))
             ts = list(core.planner.timers.items)
             if not secs or not ts:
                 return False
@@ -476,7 +481,7 @@ class Router:
         R = self.rule
         cfg = core.cfg
         from . import (automation, background, backup, extras, mail, messenger, mouse, notes, people, persona, phone, plugins,
-                       agent, boot, diag, gamefx, gamevoice, macros, marker, quick, screenmem, sentinel, skills, steam, stress, teach, voiceid, watchers)
+                       agent, boot, diag, features, gamefx, gamevoice, macros, marker, quick, screenmem, sentinel, skills, steam, stress, teach, voiceid, watchers)
 
         def addr():
             return cfg.get("user.address", "сэр") or "сэр"
@@ -490,6 +495,7 @@ class Router:
         steam.register(R, core)      # "запусти последнюю игру", "сколько у меня часов в OneShot", скидки из желаемого
         voiceid.register(R, core)    # "запомни мой голос", "забудь мой голос"
         stress.register(R, core)     # "ударение в слове звонит на и", "ты неправильно сказал творог"
+        features.register(R, core)   # "открой настройки голоса" -> Settings at that section
         mouse.register(R, core)   # clicks by name, nth link, fields, scrolling to, dragging (jarvis/mouse.py)
         phone.register(R, core)      # "найди телефон", "отправь ссылку на телефон", "смс маме …": before the messengers
         teach.register(R, core)      # "когда я говорю доброе утро, открой почту": a new command by voice
@@ -1011,7 +1017,7 @@ class Router:
             return f"Прошло {say_duration(v)}."
 
         # ---------------- alarms & reminders
-        @R(r"^(?:разбуди меня|(?!(?:отмени|удали|убери|выключи|сбрось|останови|стоп|закрой|отключи|сотри|покажи|какие|мои|сколько)\b)(?:(?:поставь|поставить|постав|заведи|завести|запусти|включи|установи|установить|засеки|сделай|сделать|создай|создать|добавь|добавить|сделаешь|можешь|мне|пожалуйста|еще|ещё|один|одно|новый|новое)\s+){0,3}будильник)\s*(?:на\s+)?(.*)$")
+        @R(r"^(?:разбуди(?:\s+меня)?(?=\s+(?:в|во|через|на|завтра|утром|рано)\b)|разбуди меня|(?!(?:отмени|удали|убери|выключи|сбрось|останови|стоп|закрой|отключи|сотри|покажи|какие|мои|сколько)\b)(?:(?:поставь|поставить|постав|заведи|завести|запусти|включи|установи|установить|засеки|сделай|сделать|создай|создать|добавь|добавить|сделаешь|можешь|мне|пожалуйста|еще|ещё|один|одно|новый|новое)\s+){0,3}будильник)\s*(?:на\s+)?(.*)$")
         def _alarm(m, t):
             spec = m.group(1) or ""
             when, rest = parse_when(spec)
@@ -1396,7 +1402,7 @@ class Router:
             core.look(t)
             return True
 
-        @R(r"^(?:включи |начни |режим )?диктовк\w*$|^(?:записывай|печатай) (?:то )?что я (?:говорю|скажу)$")
+        @R(r"^(?:включи |начни |режим )?диктовк\w*$|^диктуй$|^(?:начни\s+)?диктовать$|^(?:записывай|печатай) (?:то )?что я (?:говорю|скажу)$")
         def _dictation(m, t):
             core.say("Диктовка включена. Говорите, я печатаю. Скажите «конец диктовки», чтобы закончить.")
             core.after_speech(lambda: core.dictation(True), 0.1)
@@ -1445,7 +1451,7 @@ class Router:
         def _home(m, t):
             return f"С возвращением, {addr()}. " + random.choice(["Всё было спокойно.", "Без вас было скучно.", "Чай не приготовлю, но морально поддерживаю."])
 
-        @R(r"^(?:расскажи шутку|пошути|анекдот|рассмеши меня|шутка)$")
+        @R(r"^(?:расскажи шутку|расскажи анекдот|пошути|анекдот|рассмеши меня|шутка|расскажи что-нибудь смешное)$")
         def _joke(m, t):
             return info.joke()
 

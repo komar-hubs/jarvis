@@ -53,8 +53,16 @@ def is_imperative(word):
     return any("impr" in p.tag and p.score >= 0.3 for p in _parse(word))
 
 
+# words that look like infinitives but are not commands at the start of a phrase: "есть новые сообщения" (there are)
+# became "ешь новые сообщения", "печь" is a stove
+NOT_INFINITIVE = {"есть", "быть", "стать", "печь", "течь", "мочь", "лечь"}
+
+
 def to_imperative(word):
-    """открыть -> открой, посмотреть -> посмотри; anything else unchanged."""
+    """открыть -> открой, посмотреть -> посмотри; anything else unchanged. A word that already is an imperative
+    stays: "спрячь" is also the infinitive of a rare verb and became "спряги"."""
+    if word in NOT_INFINITIVE or any("impr" in p.tag and p.score >= 0.3 for p in _parse(word)):
+        return word
     for p in _parse(word):
         if p.tag.POS == "INFN" and p.score >= 0.5:
             f = p.inflect({"impr", "excl", "sing"})

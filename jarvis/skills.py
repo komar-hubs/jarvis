@@ -774,12 +774,13 @@ def register(R, core):
                 tasks.update_task(x["id"], due=new.isoformat(timespec="minutes"))
         return f"Перенёс «{r['text']}» на {say_when(new)}."
 
-    @R(r"^(?:очисти|освободи)\s+(?:мой\s+)?(?:календарь|расписание|день|планы)\s+(?:на\s+)?(сегодня|завтра)$")
+    @R(r"^(?:очисти|освободи)\s+(?:мой\s+)?(?:календарь|расписание|день|планы)(?:\s+(?:на\s+)?(сегодня|завтра))?$")
     def _clear_day(m, t):
-        day = dt.date.today() + dt.timedelta(days=1 if m.group(1) == "завтра" else 0)
+        when = m.group(1) or "сегодня"
+        day = dt.date.today() + dt.timedelta(days=1 if when == "завтра" else 0)
         ts, rs = agenda(day)
         if not ts and not rs:
-            return f"На {m.group(1)} и так пусто."
+            return f"На {when} и так пусто."
 
         def go():
             for r in rs:
@@ -877,16 +878,18 @@ def register(R, core):
                 tasks.add_task(it[:1].upper() + it[1:], None, tags=["покупки"])
         return "Добавил в список покупок: " + ", ".join(items) + "."
 
-    @R(r"^(?:что|покажи|прочитай|какой)\s+(?:у\s+меня\s+)?(?:в\s+)?(?:списке?|список)\s+(?:покупок|продуктов)$|^что\s+(?:мне\s+)?(?:нужно|надо)\s+купить$")
+    @R(r"^(?:что|покажи|прочитай|какой)\s+(?:у\s+меня\s+)?(?:в\s+)?(?:списке?|список)\s+(?:покупок|продуктов)$|^что\s+(?:мне\s+)?(?:нужно\s+|надо\s+)?купить$")
     def _shop_list(m, t):
         lst = tagged("покупки")
         core.show_tab("tasks")
         return ("В списке покупок: " + ", ".join(x["text"].lower() for x in lst) + ".") if lst else "Список покупок пуст."
 
-    @R(rf"^(?:удали|убери|вычеркни|сотри)\s+(.+?)\s+из\s+(?:списка\s+)?(?:покупок|продуктов)$|^(?:я\s+)?купил\w*\s+(.+)$")
+    # "удали хлеб": a bare word is the shopping list's only when it is in the list (else another rule or the AI)
+    @R(rf"^(?:удали|убери|вычеркни|сотри)\s+(.+?)\s+из\s+(?:списка\s+)?(?:покупок|продуктов)$|^(?:я\s+)?купил\w*\s+(.+)$|"
+       rf"^(?:удали|вычеркни)\s+([а-яё][а-яё,\s-]{{1,40}})$")
     def _shop_del(m, t):
         from rapidfuzz import fuzz
-        names = [x.strip() for x in re.split(r",|\s+и\s+", m.group(1) or m.group(2)) if x.strip()]
+        names = [x.strip() for x in re.split(r",|\s+и\s+", m.group(1) or m.group(2) or m.group(3)) if x.strip()]
         removed = []
         for nm in names:
             best = max(tagged("покупки"), key=lambda x: fuzz.ratio(nm.lower(), x["text"].lower()), default=None)
@@ -894,10 +897,10 @@ def register(R, core):
                 tasks.delete_task(best["id"])
                 removed.append(best["text"].lower())
         if not removed:
-            return False if m.group(2) else "Такого в списке нет."
+            return False if (m.group(2) or m.group(3)) else "Такого в списке нет."
         return "Вычеркнул: " + ", ".join(removed) + "."
 
-    @R(r"^(?:очисти|удали|сотри)\s+(?:весь\s+)?(?:список\s+)?(?:покупок|продуктов)$|^очисти\s+покупки$")
+    @R(r"^(?:очисти|удали|сотри)\s+(?:весь\s+)?(?:список\s+)?(?:покупок|продуктов)$|^очисти\s+(?:покупки|список)$")
     def _shop_clear(m, t):
         lst = tagged("покупки")
         for x in lst:
@@ -1053,7 +1056,7 @@ def register(R, core):
         S.hotkey("ctrl+shift+o")
         return True
 
-    @R(r"^(?:удали|убери|почисти)\s+(?:все\s+)?пуст\w+\s+папк\w*$")
+    @R(r"^(?:удали|убери|почисти|найди)\s+(?:все\s+)?пуст\w+\s+папк\w*$|^пуст\w+\s+папк\w*$")
     def _empty_dirs(m, t):
         folder, _ = explorer_context(require_foreground=True)
         if not folder:
@@ -1240,7 +1243,7 @@ def register(R, core):
         res = S.media_control("shuffle", True)
         return True if res.get("ok") else "Плеер не даёт перемешать, сэр."
 
-    @R(r"^(?:включи|поставь)\s+(?:на\s+)?повтор\w*(?:\s+(?:этой|этого|эту)\s+(?:песни|трека|песню|трек|видео))?$|^повтори\s+(?:эту\s+)?(?:песню|трек)$")
+    @R(r"^повторяй(?:\s+(?:эту\s+песню|этот\s+трек|это))?$|^(?:включи|поставь)\s+(?:на\s+)?повтор\w*(?:\s+(?:этой|этого|эту)\s+(?:песни|трека|песню|трек|видео))?$|^повтори\s+(?:эту\s+)?(?:песню|трек)$")
     def _repeat(m, t):
         res = S.media_control("repeat", "track")
         return True if res.get("ok") else "Плеер не даёт включить повтор, сэр."

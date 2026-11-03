@@ -678,12 +678,12 @@ def register(R, core):
             M().say_letter(hs[0])
         return bg(go)
 
-    @R(r"^(?:найди|покажи|поищи)\s+(?:все\s+)?письма\s+(?:от\s+(.+?)|про\s+(.+?)|о\s+(.+?)|с\s+темой\s+(.+?))$")
+    @R(r"^(?:найди|покажи|поищи)\s+(?:все\s+)?письма\s+(?:от\s+(.+?)|про\s+(.+?)|о\s+(.+?)|с\s+темой\s+(.+?))$|^письма\s+от\s+(.+?)$")
     def _find(m, t):
         n = need()
         if n:
             return n
-        who, about = m.group(1), m.group(2) or m.group(3) or m.group(4)
+        who, about = m.group(1) or m.group(5), m.group(2) or m.group(3) or m.group(4)
 
         def go():
             hs = M().find(who=who, about=about)

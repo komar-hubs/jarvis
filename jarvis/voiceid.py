@@ -9,7 +9,6 @@ is the owner's. The family talks next to the microphone, and "Джарвис, в
 - Local: onnxruntime is already there for the speech recogniser; no network after the one download."""
 import re
 import threading
-from pathlib import Path
 
 import numpy as np
 
@@ -184,12 +183,25 @@ class VoiceId:
         self.cfg.set("voiceid.threshold", thr)
         self.cfg.set("voiceid.enabled", True)
         self.core.log(f"Голос запомнен: сходство фраз {self_sim:.2f}, порог {thr}")
+        self.core.emit("voiceid")
         self.core.say("Запомнил ваш голос. Теперь выключение, удаление и отправку сообщений выполняю только по нему. "
                       "Остальное работает для всех.")
 
     def forget(self):
         self.cfg.set("voiceid.print", None)
         self.cfg.set("voiceid.enabled", False)
+
+    # ---------------------------------------------------------------- settings panel
+    def rpc_voiceid_state(self):
+        return {"enrolled": self.enrolled(), "enabled": bool(self.cfg.get("voiceid.enabled", False)),
+                "threshold": self.cfg.get("voiceid.threshold", 0.45), "model": ready()}
+
+    def rpc_voiceid_enroll(self):
+        return self.enroll()
+
+    def rpc_voiceid_forget(self):
+        self.forget()
+        return self.rpc_voiceid_state()
 
 
 def register(R, core):

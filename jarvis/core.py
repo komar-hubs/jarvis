@@ -235,6 +235,8 @@ class Core:
         self.diag = Diag(self)             # «Отчёт для разработчика»: a zip without anything personal
         from .voiceid import VoiceId
         self.voiceid = VoiceId(self)       # «запомни мой голос»: dangerous commands only in the owner's voice
+        from .stress import Stress
+        self.stress = Stress(self)         # Settings → Голос → «Ударения»
         from .extras import Extras
         self.extras = Extras(self)   # before the router: it registers voice rules of its own
         self.router = Router(self)
@@ -1905,7 +1907,8 @@ class Core:
                                                           self.people, self.watchers, self.background, self.plugins,
                                                           self.automations, self.notebook, self.backup, self.persona, self.phone,
                                                           self.quick, self.marker, self.screenmem, self.macros, self.boot,
-                                                          self.gamevoice, self.features, self.diag)
+                                                          self.gamevoice, self.features, self.diag, self.gamefx,
+                                                          self.voiceid, self.stress)
                    if hasattr(o, "rpc_" + method)), None)
         if not fn:
             raise ValueError(f"unknown method {method}")

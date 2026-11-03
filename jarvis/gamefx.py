@@ -112,6 +112,21 @@ class GameFx:
             pass
         return "", ""
 
+    def rpc_gamefx_state(self):
+        folder = captures_dir()
+        try:
+            n = len(list(folder.glob("*.mp4")))
+        except OSError:
+            n = 0
+        return {"recording_ok": background_recording(), "clips": n, "folder": str(folder), "marathon": self.marathon()}
+
+    def rpc_gamebar_settings(self):
+        S.open_target("ms-settings:gaming-gamedvr")
+        return True
+
+    def rpc_clips_open(self):
+        return self.open_clips()
+
     # ---------------------------------------------------------------- clips
     def save_moment(self):
         if not background_recording():

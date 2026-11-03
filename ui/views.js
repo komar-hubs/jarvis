@@ -394,25 +394,56 @@ async function loadSettings() {
   const sel = (id, opts, val) => `<select id="${id}">${opts.map(([v, n]) => `<option value="${esc(v)}" ${String(v) === String(val) ? "selected" : ""}>${esc(n)}</option>`).join("")}</select>`;
   const sw_ = (id, val, lbl = "") => `<label class="switch"><input type="checkbox" id="${id}" ${val ? "checked" : ""}><span></span>${lbl}</label>`;
   const whose = { friday: "Пятницы", ultron: "Альтрона" }[(c.persona || {}).id] || "Джарвиса";
-  // sections in a fixed logical order; panels added later by maint.js go into #sec-help / #sec-service
+  // a menu of sections on the left, search on top; one section = one kind of thing (ui/settings_nav.js scrolls and
+  // filters). Switches of background features live only in «Приватность» (jarvis/features.py): panels link to them.
+  const ag = c.agent || {}, ini = (c.initiative || {}).level ?? 2;
+  const NAV = [["main", "user", "Основное"], ["voice", "speaker", "Голос"], ["hear", "mic", "Слух"], ["ai", "chip", "Интеллект"],
+    ["games", "bolt", "Игры"], ["phone", "chat", "Телефон"], ["help", "tasks", "Дела"], ["pc", "wrench", "Компьютер"],
+    ["upd", "refresh", "Обновления"], ["priv", "shield", "Приватность"]];
+  const head = (id, ic, title, desc) => `<h3 class="s-h">${I(ic, "lead")}${title}<span class="s-h-d">${desc}</span></h3>`;
+  const tip = (t) => `<span class="dim tip">${t}</span>`;
   $("#settings").innerHTML = `
-  <section class="s-sec" id="sec-trust"><div class="panel" id="feat-panel"></div></section>
-  <section class="s-sec"><h3 class="s-h">Основное и голос</h3><div class="s-grid" id="sec-main">
+  <div class="set-layout">
+  <nav class="set-nav" id="set-nav">${NAV.map(([id, ic, t]) => `<a href="#" data-sec="${id}">${I(ic, "lead")}<span>${t}</span></a>`).join("")}</nav>
+  <div class="set-body">
+  <div class="set-search">${I("search", "set-q-ic")}<input id="set-q" placeholder="Поиск по настройкам: микрофон, ударения, тема, телефон…" spellcheck="false" autocomplete="off"><span class="dim" id="set-q-res"></span></div>
+  <div class="set-trust">${I("shield", "lead")}<span>Всё, что Джарвис делает сам, без команды, видно и выключается в разделе</span> <a href="#" data-sec="priv">«Приватность»</a></div>
+  <div class="empty set-empty" id="set-empty" hidden>Ничего не нашлось. Попробуйте другое слово.</div>
+
+  <section class="s-sec" id="ss-main">${head("main", "user", "Основное", "кто вы, как Джарвис запускается и выглядит")}<div class="s-grid" id="sec-main">
   <div class="panel"><h3>Профиль</h3><div class="sgrid">
     <label>Ваше имя</label><input id="s-name" value="${esc(c.user.name)}" placeholder="Тони">
     <label>Обращение</label><input id="s-addr" value="${esc(c.user.address)}" list="addr-l"><datalist id="addr-l"><option value="сэр"><option value="мэм"><option value="босс"><option value="мистер Старк"></datalist>
     <label>Город (погода)</label><div class="inline"><input id="s-city" value="${esc(c.location.city)}"><button class="btn" onclick="setCity()">Найти</button></div>
-    <label>Приветствие при запуске</label>${sw_("s-greet", c.greeting)}
-    <label>Автозапуск с Windows</label>${sw_("s-auto", c.autostart)}
-    <label>Запускать свёрнутым</label>${sw_("s-hidden", c.start_hidden)}
-    <label>Утренний брифинг</label><div class="inline"><input id="s-brief" type="time" value="${esc(c.briefing_time || "")}" style="color-scheme:dark;max-width:130px"><span style="color:var(--dim);font-size:13px">погода, задачи и напоминания — при первом появлении за ПК</span></div>
-    <label>Тема</label><div class="themes" id="s-themes">${Object.entries(FX.THEMES).map(([k, t]) => `<div class="theme-sw ${(c.theme || "jarvis") === k ? "sel" : ""}" data-th="${k}" title="${esc(t.name)}" style="color:${t.acc};background:radial-gradient(circle at 35% 35%, #fff 0 8%, ${t.acc} 30%, ${t.hot} 75%, #000 100%)"><span>${esc(t.name)}</span></div>`).join("")}</div>
-    <label style="margin-top:14px">Звуки интерфейса</label>${sw_("s-uisnd", c.ui_sounds !== false, "тихие щелчки и сигналы")}
-    <label>HUD-плашка</label>${sw_("s-overlay", c.overlay !== false, "показывать поверх окон, когда я слушаю и говорю")}
-    <label>Поисковик</label>${sel("s-search", [["https://www.google.com/search?q={q}", "Google"], ["https://yandex.ru/search/?text={q}", "Яндекс"], ["https://duckduckgo.com/?q={q}", "DuckDuckGo"], ["https://www.bing.com/search?q={q}", "Bing"]], c.search_url)}
-    <label>Музыка голосом</label>${sel("s-music", [["youtube", "YouTube: сразу играет, дальше похожие"], ["ytmusic", "YouTube Music: сразу играет, дальше похожие"], ["yandex", "Яндекс Музыка: только открыть поиск"]], c.music_service || "youtube")}
   </div></div>
 
+  <div class="panel"><h3>Запуск</h3><div class="sgrid">
+    <label>Автозапуск с Windows</label>${sw_("s-auto", c.autostart)}
+    <label>Запускать свёрнутым</label>${sw_("s-hidden", c.start_hidden, "сразу в трей, без окна")}
+    <label>Приветствие</label>${sw_("s-greet", c.greeting, "сказать пару слов при запуске")}
+    <label>Загрузка костюма</label><div class="inline"><select id="boot-mode"><option value="startup">при включении ПК и первом запуске за день</option><option value="always">при каждом запуске</option><option value="off">выключена</option></select><button class="btn" onclick="rpc('boot_play')">${I("play", "lead")}Показать</button></div>
+    <label>Утренний брифинг</label><div class="inline"><input id="s-brief" type="time" value="${esc(c.briefing_time || "")}" style="color-scheme:dark;max-width:130px">${tip("погода, задачи и напоминания — при первом появлении за ПК")}</div>
+  </div></div>
+
+  <div class="panel"><h3>Внешний вид</h3><div class="sgrid">
+    <label>Тема</label><div class="themes" id="s-themes">${Object.entries(FX.THEMES).map(([k, t]) => `<div class="theme-sw ${(c.theme || "jarvis") === k ? "sel" : ""}" data-th="${k}" title="${esc(t.name)}" style="color:${t.acc};background:radial-gradient(circle at 35% 35%, #fff 0 8%, ${t.acc} 30%, ${t.hot} 75%, #000 100%)"><span>${esc(t.name)}</span></div>`).join("")}</div>
+    <label style="margin-top:14px">Звуки интерфейса</label>${sw_("s-uisnd", c.ui_sounds !== false, "тихие щелчки и сигналы")}
+    <label>Ночной режим</label>${sw_("s-night", c.night && c.night.enabled, "тёмный тёплый интерфейс, тихий голос, без щелчков")}
+    <label>По расписанию</label><div class="inline">${sw_("s-nauto", c.night && c.night.auto)}<input id="s-nfrom" type="time" value="${esc((c.night && c.night.from) || "23:00")}" style="color-scheme:dark;max-width:120px"><span class="dim">—</span><input id="s-nto" type="time" value="${esc((c.night && c.night.to) || "08:00")}" style="color-scheme:dark;max-width:120px"></div>
+    <label>Громкость ночью</label><div class="inline"><input id="s-nvol" type="range" min="15" max="90" value="${Math.round(((c.night && c.night.volume) || 0.45) * 100)}"><span id="s-nvol-v" style="width:50px">${Math.round(((c.night && c.night.volume) || 0.45) * 100)}%</span></div>
+    <label>HUD поверх окон</label>${featChip("hud")}
+  </div></div>
+
+  <div class="panel"><h3>Поиск и музыка</h3><div class="sgrid">
+    <label>Поисковик</label>${sel("s-search", [["https://www.google.com/search?q={q}", "Google"], ["https://yandex.ru/search/?text={q}", "Яндекс"], ["https://duckduckgo.com/?q={q}", "DuckDuckGo"], ["https://www.bing.com/search?q={q}", "Bing"]], c.search_url)}
+    <label>Музыка голосом</label>${sel("s-music", [["youtube", "YouTube: сразу играет, дальше похожие"], ["ytmusic", "YouTube Music: сразу играет, дальше похожие"], ["yandex", "Яндекс Музыка: только открыть поиск"]], c.music_service || "youtube")}
+    <div class="full hint">«Включи песню Группа крови», «открой ютуб и включи AC/DC» — первое видео сразу. «Найди на ютубе…» — список.</div>
+  </div></div>
+
+  <div class="panel" id="ovl-panel"></div>
+  </div></section>
+
+  <section class="s-sec" id="ss-voice">${head("voice", "speaker", "Голос", "чей голос, как звучит, как произносит слова")}<div class="s-grid" id="sec-voice">
   <div class="panel" id="voice-panel"><h3>Личность и голос</h3>
     <div id="persona-block"></div>
     <div class="sgrid">
@@ -431,24 +462,18 @@ async function loadSettings() {
     <label data-eng="edge">Скорость Edge</label><input data-eng="edge" id="s-rate" type="range" min="-30" max="40" value="${parseInt(c.voice.edge_rate)}">
     <label data-eng="edge">Высота Edge</label><input data-eng="edge" id="s-pitch" type="range" min="-30" max="20" value="${parseInt(c.voice.edge_pitch)}">
     <label data-eng="xtts">Скорость XTTS</label><input data-eng="xtts" id="s-xspeed" type="range" min="80" max="140" value="${Math.round(c.voice.xtts_speed * 100)}">
-    <label>Громкость</label><input id="s-vol" type="range" min="0" max="100" value="${Math.round(c.voice.volume * 100)}">
-    <label>HUD-эффект голоса</label>${sw_("s-fx", c.voice.effect)}
-    <label>Озвучка включена</label>${sw_("s-ven", c.voice.enabled)}
-    <div class="full row"><button class="primary" onclick="rpc('voice_test')">Проверить голос</button><button class="btn" data-eng="xtts" onclick="rpc('xtts_reload')">Перезапустить XTTS</button></div>
+    <div class="full s-sub">Звук</div>
+    <label>Громкость голоса</label><input id="s-vol" type="range" min="0" max="100" value="${Math.round(c.voice.volume * 100)}">
+    <label>Музыку тише, пока говорю</label><div class="inline"><select id="s-ducklvl">${[[0.3, "до 30%"], [0.5, "до 50%"], [0.7, "до 70%"]].map(([v, n]) => `<option value="${v}" ${Math.abs((c.duck_level || 0.5) - v) < 0.01 ? "selected" : ""}>${n}</option>`).join("")}</select>${featChip("duck")}</div>
+    <label>HUD-эффект голоса</label>${sw_("s-fx", c.voice.effect, "лёгкая обработка «как в шлеме»")}
+    <label>Озвучка</label>${sw_("s-ven", c.voice.enabled, "говорить ответы вслух")}
+    <div class="full row"><button class="primary" onclick="rpc('voice_test')">${I("speaker", "lead")}Проверить голос</button><button class="btn" data-eng="xtts" onclick="rpc('xtts_reload')">Перезапустить XTTS</button></div>
   </div></div>
-
-  <div class="panel"><h3>Ночной режим и звук</h3><div class="sgrid">
-    <label>Ночной режим</label>${sw_("s-night", c.night && c.night.enabled, "тёмный тёплый интерфейс, тихий голос, без щелчков")}
-    <label>Громкость ночью</label><div class="inline"><input id="s-nvol" type="range" min="15" max="90" value="${Math.round(((c.night && c.night.volume) || 0.45) * 100)}"><span id="s-nvol-v" style="width:50px">${Math.round(((c.night && c.night.volume) || 0.45) * 100)}%</span></div>
-    <label>По расписанию</label><div class="inline">${sw_("s-nauto", c.night && c.night.auto)}<input id="s-nfrom" type="time" value="${esc((c.night && c.night.from) || "23:00")}" style="color-scheme:dark;max-width:120px"><span style="color:var(--dim)">—</span><input id="s-nto" type="time" value="${esc((c.night && c.night.to) || "08:00")}" style="color-scheme:dark;max-width:120px"></div>
-    <label>Приглушать музыку</label><div class="inline">${sw_("s-duck", c.duck_media !== false, "пока говорит Джарвис")}<select id="s-ducklvl">${[[0.3, "до 30%"], [0.5, "до 50%"], [0.7, "до 70%"]].map(([v, n]) => `<option value="${v}" ${Math.abs((c.duck_level || 0.5) - v) < 0.01 ? "selected" : ""}>${n}</option>`).join("")}</select></div>
-    <label>Уведомления Windows</label>${sw_("s-wintoast", c.windows_notifications, "дублировать напоминания в центр уведомлений Windows")}
-  </div></div>
-
+  <div class="panel" id="stress-panel"></div>
   </div></section>
 
-  <section class="s-sec"><h3 class="s-h">Речь и интеллект</h3><div class="s-grid" id="sec-ai">
-  <div class="panel"><h3>Распознавание речи</h3><div class="sgrid">
+  <section class="s-sec" id="ss-hear">${head("hear", "mic", "Слух", "микрофон, распознавание речи и как позвать Джарвиса")}<div class="s-grid" id="sec-hear">
+  <div class="panel"><h3>Микрофон и распознавание</h3><div class="sgrid">
     <label>Микрофон</label>${sel("s-mic", [["", "По умолчанию системы"], ...mics.map((m) => [m.id, m.name])], c.stt.mic ?? "")}
     <label>Уровень</label><div class="meter"><i class="mic-meter"></i></div>
     <label>Проверка</label><div class="inline"><button class="btn" onclick="micTest()">Проверить микрофон</button><button class="btn" onclick="micBoost()" title="снять «выключен» и поставить громкость микрофона в Windows на 100%">Громкость микрофона 100%</button></div>
@@ -457,17 +482,24 @@ async function loadSettings() {
     <label data-stt="whisper">Модель Whisper</label>${sel("s-model", [["large-v3-turbo", "large-v3-turbo — быстро и точно (GPU)"], ["large-v3", "large-v3 — максимум точности"], ["medium", "medium"], ["small", "small — для слабых ПК"], ["base", "base"], ["tiny", "tiny — самый быстрый"]], c.stt.model)}
     <label data-stt="whisper">Устройство</label>${sel("s-dev", [["auto", "Авто"], ["cuda", "NVIDIA GPU"], ["cpu", "Процессор"]], c.stt.device)}
     <label>Сейчас</label><span style="font-size:14px">${esc(st.stt.model || "—")} на ${esc((st.stt.device || "—").toUpperCase())}${st.stt.mic_error ? ' · <span style="color:var(--red)">' + esc(st.stt.mic_error) + "</span>" : ""}</span>
-    <label>Слова активации</label><div id="s-wake"></div>
-    <label>Слушать постоянно</label>${sw_("s-always", c.stt.always_listen, "фоновое прослушивание")}
-    <label>Без имени после ответа</label><div class="inline"><input id="s-follow" type="number" min="0" max="60" value="${c.stt.follow_up_sec}" style="width:80px"><span style="color:var(--dim);font-size:13px">сек.: после ответа следующую фразу можно сказать без «Джарвис» (0 — выключить)</span></div>
-    <label>Режим разговора</label><div class="inline"><input id="s-convidle" type="number" min="20" max="900" value="${c.stt.conversation_idle_sec || 120}" style="width:80px"><span style="color:var(--dim);font-size:13px">сек. тишины — и режим выключится. Включить: «Джарвис, давай поговорим» или кнопка с двумя облачками слева внизу</span></div>
     <label>Пауза конца фразы</label><div class="inline"><input id="s-sil" type="range" min="350" max="1400" step="50" value="${c.stt.silence_ms}"><span id="s-sil-v" style="width:60px">${c.stt.silence_ms} мс</span></div>
     <label>Фильтр шума (VAD)</label>${sel("s-vad", [[0, "0 — чувствительно"], [1, "1"], [2, "2 — оптимально"], [3, "3 — строго"]], c.stt.vad)}
-    <label>Звук активации</label>${sw_("s-chime", c.stt.chime)}
     <label>Отладка</label>${sw_("s-ign", c.stt.show_ignored, "показывать в журнале всё услышанное")}
-    <label>Горячие клавиши</label><span style="font-size:14px"><code>${esc(c.stt.ptt_hotkey)}</code> слушать · <code>${esc(c.stt.show_hotkey)}</code> окно · <code>${esc((c.quick || {}).hotkey || "ctrl+alt+q")}</code> быстрая панель</span>
+    <label>Постоянное прослушивание</label>${featChip("listen")}
   </div></div>
 
+  <div class="panel"><h3>Вызов и разговор</h3><div class="sgrid">
+    <label>Имена для вызова</label><div id="s-wake"></div>
+    <div class="full hint">Добавьте своё имя — Джарвис будет отзываться и на него («Кузя, который час?»). Голосом: «отзывайся на имя Кузя».</div>
+    <label>Звук активации</label>${sw_("s-chime", c.stt.chime, "короткий сигнал, когда услышал имя")}
+    <label>Без имени после ответа</label><div class="inline"><input id="s-follow" type="number" min="0" max="60" value="${c.stt.follow_up_sec}" style="width:80px">${tip("сек.: следующую фразу можно без «Джарвис» (0 — выключить)")}</div>
+    <label>Режим разговора</label><div class="inline"><input id="s-convidle" type="number" min="20" max="900" value="${c.stt.conversation_idle_sec || 120}" style="width:80px">${tip("сек. тишины до выключения. Включить: «давай поговорим»")}</div>
+    <label>Горячие клавиши</label><span style="font-size:14px"><code>${esc(c.stt.ptt_hotkey)}</code> слушать · <code>${esc(c.stt.show_hotkey)}</code> окно · <code>${esc((c.quick || {}).hotkey || "ctrl+alt+q")}</code> быстрая панель</span>
+  </div></div>
+  <div class="panel" id="voiceid-panel"></div>
+  </div></section>
+
+  <section class="s-sec" id="ss-ai">${head("ai", "chip", "Интеллект", "какой ИИ отвечает, его характер, что ему можно")}<div class="s-grid" id="sec-ai">
   <div class="panel"><h3>Искусственный интеллект</h3><div class="sgrid">
     <label>Провайдер</label><select id="s-prov"></select>
     <label>Адрес API</label><input id="s-url" value="${esc(pv.base_url || "")}" ${pv.kind === "bridge" ? "disabled" : ""}>
@@ -477,36 +509,56 @@ async function loadSettings() {
     <div class="full row"><button class="btn" onclick="ollamaSetup('', this)" title="Ollama: ИИ на этом ПК, без ключей и интернета">Бесплатный локальный ИИ в один клик</button><span class="dim" id="ollama-res">без ключей и интернета · Ollama</span></div>
     <label>Температура</label><input id="s-temp" type="range" min="0" max="120" value="${Math.round(c.ai.temperature * 100)}">
     <label>Память диалога</label><input id="s-hist" type="number" min="2" max="60" value="${c.ai.history}">
-    <label>ИИ управляет ПК</label>${sw_("s-tools", c.ai.agent_tools, "инструменты")}
-    <label>ИИ: консоль</label>${sw_("s-shell", c.ai.allow_shell, "разрешить консольные команды")}
-    <label>ИИ: интернет и зрение</label>${sw_("s-web", c.ai.web_tools !== false, "поиск в сети и «что на экране» (мост Claude)")}
-    <label>Уровень юмора</label><div class="inline"><input id="s-humor" type="range" min="0" max="100" step="5" value="${c.ai.humor ?? 60}"><span id="s-humor-v" style="width:60px">${c.ai.humor ?? 60}%</span></div>
-    <label>Характер</label><textarea id="s-persona" rows="2" placeholder="Дополнительные инструкции: например, отвечай с юмором">${esc(c.ai.persona_extra || "")}</textarea>
   </div></div>
 
-  <div class="panel"><h3>Инициатива и сторож</h3><div class="sgrid">
-    <label>Говорить первым</label>${sel("s-ini", [[0, "никогда — только отвечать"], [1, "только о критичном"], [2, "о важном (рекомендуется)"], [3, "обо всём, что заметил"]], (c.initiative || {}).level ?? 2)}
-    <label>Сторож системы</label>${sw_("s-sent", !c.sentinel || c.sentinel.enabled !== false, "автозагрузка, неподписанные программы, майнеры, зависания, hosts, Защитник, сеть")}
-    <label>Зрение для мыши</label>${sw_("s-mvis", !c.mouse || c.mouse.vision !== false, "искать иконки без подписи по скриншоту (модель с картинками)")}
-    <label>Фоновый режим</label>${sw_("s-bg", !c.background || c.background.enabled !== false, "сам освобождаю память и чищу временные файлы при нехватке — без мыши и клавиатуры")}
-    <label>Мессенджер</label><div class="inline">${sel("s-msgapp", [["telegram", "Telegram"], ["discord", "Discord"], ["whatsapp", "WhatsApp"], ["vk", "ВКонтакте (в браузере)"]], (c.messenger || {}).default || "telegram")}${sw_("s-msgconf", !c.messenger || c.messenger.confirm !== false, "спрашивать «Отправить?»")}</div>
-    <label>Разбор почты</label>${sw_("s-bgmail", c.background && c.background.mail_sort, "раз в полчаса убирать старые рассылки в папку Newsletters")}
-    <div class="full hint">Во время игр и видео на весь экран, в режиме фокуса, «не беспокой» и когда вас нет за ПК я жду удобного момента. С вопросом («Закрыть её?») можно ответить просто «да».</div>
+  <div class="panel"><h3>Характер</h3><div class="sgrid">
+    <label>Уровень юмора</label><div class="inline"><input id="s-humor" type="range" min="0" max="100" step="5" value="${c.ai.humor ?? 60}"><span id="s-humor-v" style="width:60px">${c.ai.humor ?? 60}%</span></div>
+    <label>Свои инструкции</label><textarea id="s-persona" rows="3" placeholder="Например: отвечай короче, зови меня по имени">${esc(c.ai.persona_extra || "")}</textarea>
+  </div></div>
+
+  <div class="panel"><h3>Что можно ИИ</h3><div class="sgrid">
+    <label>Управлять ПК</label>${sw_("s-tools", c.ai.agent_tools, "открывать, нажимать, искать по команде")}
+    <label>Консоль</label>${sw_("s-shell", c.ai.allow_shell, "разрешить консольные команды")}
+    <label>Интернет и зрение</label>${sw_("s-web", c.ai.web_tools !== false, "поиск в сети и «что на экране» (мост Claude)")}
+    <label>Зрение для мыши</label>${sw_("s-mvis", !c.mouse || c.mouse.vision !== false, "искать иконки без подписи по скриншоту")}
+    <div class="full s-sub">«Сделай за меня»</div>
+    <label>Шагов не больше</label><select id="ag-steps">${[6, 8, 12, 16, 20].map((d) => `<option ${d === (ag.max_steps || 12) ? "selected" : ""}>${d}</option>`).join("")}</select>
+    <label>Показывать шаги</label>${sw_("ag-show", ag.show_steps !== false, "маркером на экране, куда нажимает")}
+    <div class="full hint">«Джарвис, сделай за меня: …» — ИИ сам выполняет задачу по шагам. Пароли, оплату и отправку сообщений не делает — скажет вам.</div>
   </div></div>
 
   <div class="panel"><h3>Память ассистента</h3><p class="hint">«Запомни, что я люблю кофе без сахара». ИИ учитывает эти факты.</p><div id="s-notes"></div></div>
   </div></section>
 
-  <section class="s-sec"><h3 class="s-h">Помощь в делах</h3><div class="s-grid" id="sec-help">
-  <div class="panel"><h3>Забота и продуктивность</h3><div class="sgrid">
-    <label>Сторож ПК</label>${sw_("s-watch", ex.watchdog !== false, "предупреждать о нехватке памяти, перегреве, месте на диске")}
-    <label>Мессенджеры</label>${sw_("s-msg", ex.messengers !== false, "говорить о новых сообщениях Telegram / Discord / WhatsApp")}
-    <label>Статистика программ</label>${sw_("s-usage", ex.usage_tracking !== false, "считать время в программах (только на этом ПК)")}
-    <label>История копирования</label>${sw_("s-clip", ex.clipboard_history !== false, "25 последних текстов, только в памяти; пароли не сохраняются")}
-    <label>Перерыв</label><div class="inline"><input id="s-break" type="number" min="0" max="300" value="${ex.break_min ?? 90}" style="width:80px"><span style="color:var(--dim);font-size:13px">мин. за ПК без паузы — предложу размяться (0 — выключить)</span></div>
-    <label>Вода</label><div class="inline"><input id="s-water" type="number" min="0" max="300" value="${ex.water_min || 0}" style="width:80px"><span style="color:var(--dim);font-size:13px">напоминать пить воду каждые N минут (0 — выключить)</span></div>
+  <section class="s-sec" id="ss-games">${head("games", "bolt", "Игры", "голос в играх, клипы, подсказки, перерывы")}<div class="s-grid s-wide" id="sec-games">
+  <div class="panel" id="game-panel"></div>
+  <div class="panel" id="gamehelp-panel"></div>
+  </div></section>
+
+  <section class="s-sec" id="ss-phone">${head("phone", "chat", "Телефон", "уведомления, звонки, SMS и «ушёл — вернулся» через KDE Connect")}<div class="s-grid s-wide" id="sec-phone">
+  <div class="panel" id="phone-panel"></div>
+  </div></section>
+
+  <section class="s-sec" id="ss-help">${head("help", "tasks", "Дела", "забота, напоминания, сообщения, память и макросы")}<div class="s-grid" id="sec-help">
+  <div class="panel"><h3>Забота и фокус</h3><div class="sgrid">
+    <label>Перерыв</label><div class="inline"><input id="s-break" type="number" min="0" max="300" value="${ex.break_min ?? 90}" style="width:80px">${tip("мин. за ПК без паузы — предложу размяться (в игре — тихой карточкой)")}</div>
+    <label>Вода</label><div class="inline"><input id="s-water" type="number" min="0" max="300" value="${ex.water_min || 0}" style="width:80px">${tip("напоминать пить воду каждые N минут (0 — выключить)")}</div>
     <label>Фокус: свернуть</label><input id="s-fapps" value="${esc((ex.focus_apps || []).join(", "))}" placeholder="telegram, discord">
     <label>Фокус: отвлечения</label><input id="s-fdist" value="${esc((ex.distractions || []).join(", "))}" placeholder="youtube, vk.com, twitch">
+    <div class="full hint">«Режим фокуса на 25 минут» сворачивает эти программы и предупреждает, если открыть отвлечение.</div>
+  </div></div>
+
+  <div class="panel"><h3>Когда говорить первым</h3><div class="sgrid">
+    <label>Инициатива</label>${sel("s-ini", [[0, "никогда — только отвечать"], [1, "только о критичном"], [2, "о важном (рекомендуется)"], [3, "обо всём, что заметил"]], ini)}
+    <label>Уведомления Windows</label>${sw_("s-wintoast", c.windows_notifications, "дублировать напоминания в центр уведомлений")}
+    <div class="full hint">Во время игр и видео на весь экран, в режиме фокуса, «не беспокой» и когда вас нет за ПК я жду удобного момента. На вопрос («Закрыть её?») можно ответить просто «да».</div>
+  </div></div>
+
+  <div class="panel"><h3>Сообщения</h3><div class="sgrid">
+    <label>Мессенджер</label>${sel("s-msgapp", [["telegram", "Telegram"], ["discord", "Discord"], ["whatsapp", "WhatsApp"], ["vk", "ВКонтакте (в браузере)"]], (c.messenger || {}).default || "telegram")}
+    <label>Перед отправкой</label>${sw_("s-msgconf", !c.messenger || c.messenger.confirm !== false, "зачитать и спросить «Отправить?»")}
+    <label>Счётчик сообщений</label>${featChip("msg")}
+    <div class="full hint">«Напиши Саше в телеграм, что я опоздаю», «…распиши красиво». Отправляю только после «да».</div>
   </div></div>
 
   <div class="panel"><h3>Псевдонимы приложений</h3>
@@ -516,23 +568,42 @@ async function loadSettings() {
     <div class="row"><input id="app-q" placeholder="поиск по найденным приложениям…"><button class="btn" onclick="rpc('apps_rebuild');toast('Пересканирую меню Пуск…')">Пересканировать</button></div>
     <div id="app-list" style="max-height:180px;overflow:auto;font-size:14px;color:var(--dim)"></div></div>
 
+  <div class="panel" id="mem-panel"></div>
+  <div class="panel" id="macro-panel"></div>
   </div></section>
 
-  <section class="s-sec"><h3 class="s-h">Обслуживание</h3><div class="s-grid" id="sec-service">
+  <section class="s-sec" id="ss-pc">${head("pc", "wrench", "Компьютер", "обслуживание, производительность, резервные копии")}<div class="s-grid" id="sec-pc">
+  <div class="panel" id="svc-panel"></div>
+  <div class="panel" id="perf-panel"></div>
+  <div class="panel" id="bk-panel"></div>
+  </div></section>
+
+  <section class="s-sec" id="ss-upd">${head("upd", "refresh", "Обновления и помощь", "новые версии, отчёт об ошибке, о программе")}<div class="s-grid" id="sec-upd">
   <div class="panel" id="upd-panel"><h3>Обновления Джарвиса</h3><div class="sgrid">
     <label>Версия</label><span style="font-size:14px">${esc(st.version || "dev")}</span>
     <label>Статус</label><span id="upd-status" style="font-size:14px;color:var(--dim)">проверяю…</span>
     <div class="full row"><button class="btn" onclick="updCheck()">Проверить</button><button class="primary" id="upd-go" onclick="updApply()" disabled>Обновить</button><div class="meter" style="flex:1;align-self:center"><i id="upd-bar"></i></div></div>
-    <label>Автопроверка</label>${sw_("s-updauto", !c.update || c.update.auto_check !== false, "при запуске Джарвиса")}
+    <label>Автопроверка</label>${featChip("update")}
     <div class="full hint" id="upd-notes" style="white-space:pre-line"></div>
     <p class="full hint">Ваши настройки, ключи, чат и задачи при обновлении не трогаются. Старая версия сохраняется в data/backup. Голосом: «Джарвис, обновись».</p>
   </div></div>
-  </div></section>`;
+  <div class="panel" id="diag-panel"></div>
+  <div class="panel" id="about-panel"><h3>О Джарвисе</h3>
+    <p class="hint">J.A.R.V.I.S. — голосовой помощник для Windows. Открытый код: только Python и JavaScript, ни одного .exe. Каждый релиз проверяется на VirusTotal.</p>
+    <div class="row"><button class="btn" onclick="rpc('open',{target:'https://github.com/komar-hubs/jarvis'})">${I("globe", "lead")}Страница на GitHub</button>
+      <button class="btn" onclick="go('help')">${I("help", "lead")}Справка: что умеет</button></div>
+  </div>
+  </div></section>
+
+  <section class="s-sec" id="ss-priv">${head("priv", "shield", "Приватность", "всё, что Джарвис делает сам, и выключатели")}<div class="s-grid s-wide" id="sec-priv">
+  <div class="panel" id="feat-panel"></div>
+  </div></section>
+  </div></div>`;
 
   fillProviderSelect($("#s-prov"), prov);
   $("#s-prov").onchange = async (e) => { await saveConfig({ ai: { provider: e.target.value } }); chatHeadInit(); await loadSettings(); if (window.maintLoad) maintLoad(); };
   chipsInput($("#s-wake"), [...c.stt.wake_words], "добавить слово", (v) => saveConfig({ stt: { wake_words: v } }));
-  const bind = (id, fn, ev = "change") => $(id).addEventListener(ev, (e) => fn(e.target));
+  const bind = (id, fn, ev = "change") => { const el = $(id); if (el) el.addEventListener(ev, (e) => fn(e.target)); };
   bind("#s-name", (t) => saveConfig({ user: { name: t.value } }));
   bind("#s-addr", (t) => saveConfig({ user: { address: t.value } }));
   bind("#s-greet", (t) => saveConfig({ greeting: t.checked }));
@@ -619,6 +690,11 @@ async function loadSettings() {
   }));
   bind("#s-brief", (t) => saveConfig({ briefing_time: t.value }).then(() => toast(t.value ? "Брифинг каждый день в " + t.value : "Брифинг выключен")));
   bind("#s-persona", (t) => saveConfig({ ai: { persona_extra: t.value } }));
+  const bm = $("#boot-mode");
+  if (bm) bm.value = (c.boot || {}).mode || (st.perf && st.perf.lite ? "off" : "startup");
+  bind("#boot-mode", (t) => saveConfig({ boot: { mode: t.value } }));
+  bind("#ag-steps", (t) => saveConfig({ agent: { max_steps: +t.value } }));
+  bind("#ag-show", (t) => saveConfig({ agent: { show_steps: t.checked } }));
   bind("#app-q", (t) => appSearch(t.value), "input");
   renderAliases(); renderNotes(); appSearch("");
 }
