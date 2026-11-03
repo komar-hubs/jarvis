@@ -82,7 +82,13 @@ def scan_file(key, path):
               f"прошу повторную проверку…")
         r = requests.post(f"{API}/files/{sha}/analyse", headers={"x-apikey": key}, timeout=30)
         r.raise_for_status()
-        _wait(key, r.json()["data"]["id"], "архив повторно")
+        try:
+            _wait(key, r.json()["data"]["id"], "архив повторно")
+        except TimeoutError:
+            # a busy VirusTotal: the first answers stand (the Kaspersky note is added only when it really answered);
+            # "python tools/virustotal.py --recheck" reads the finished report later
+            print("  повторная проверка не закончилась, беру первые ответы")
+            return rep
         t0 = time.time()
         while True:
             again = file_report(key, sha, settle=False)
@@ -160,5 +166,33 @@ def check_release(version=None):
     return True
 
 
+def recheck(version=None, wait=600):
+    """The release archive is already on VirusTotal: wait until Kaspersky has answered (up to `wait` seconds), scan the
+    link, update the docs. No new upload."""
+    key = api_key()
+    version = version or (ROOT / "VERSION").read_text("utf-8").strip()
+    sha = hashlib.sha256(ZIP.read_bytes()).hexdigest()
+    t0 = time.time()
+    while True:
+        f = file_report(key, sha, settle=False)
+        if f.get("kaspersky") not in ("", "timeout") or time.time() - t0 > wait:
+            break
+        print(f"  Касперский ещё не ответил ({int(time.time() - t0)} с), всего ответили {f['total']}")
+        time.sleep(30)
+    print(f"VirusTotal, архив: {f['stats'].get('malicious', 0)} из {f['total']} (Касперский: {f.get('kaspersky') or 'нет ответа'})")
+    u = None
+    try:
+        u = scan_url(key, f"https://github.com/komar-hubs/jarvis/releases/download/v{version}/jarvis_share.zip")
+        print(f"VirusTotal, ссылка: {u['stats'].get('malicious', 0)} из {u['total']}")
+    except Exception as e:
+        print(f"VirusTotal, ссылка не проверена: {e}")
+    if f["flagged"]:
+        print("ВНИМАНИЕ: есть срабатывания, README не обновлён:", f["flagged"])
+        return False
+    update_docs(version, f, u)
+    print("README.md и пост для канала обновлены.")
+    return True
+
+
 if __name__ == "__main__":
-    sys.exit(0 if check_release() else 1)
+    sys.exit(0 if (recheck() if "--recheck" in sys.argv else check_release()) else 1)
