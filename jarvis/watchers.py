@@ -20,6 +20,7 @@ from .config import JsonStore
 
 H = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130 Safari/537.36",
      "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.6", "Cookie": "CONSENT=YES+1; SOCS=CAI"}
+TWITCH_WEB_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko"
 EVERY = {"youtube": 900, "twitch": 180, "page": 600, "process": 5, "download": 5, "media": 5}
 MEDIA_ACTS = {"shutdown": "выключу компьютер", "sleep": "переведу компьютер в сон", "pause": "поставлю на паузу и выключу звук"}
 NS = {"a": "http://www.w3.org/2005/Atom", "yt": "http://www.youtube.com/xml/schemas/2015"}
@@ -107,19 +108,64 @@ def twitch_page(login):
     return '<meta name="description"' in r.text, '"isLiveBroadcast":true' in r.text
 
 
+def twitch_search(query):
+    """Channels by name, the most followed first: [(login, followers)]. The public client id of twitch.tv itself; the
+    search knows Latin only, and a login is often not the name: Братишкин is bratishkinoff."""
+    q = "query($q:String!){searchUsers(userQuery:$q,first:5){edges{node{login followers{totalCount}}}}}"
+    r = requests.post("https://gql.twitch.tv/gql", headers={"Client-ID": TWITCH_WEB_ID}, timeout=15,
+                      json={"query": q, "variables": {"q": query}})
+    r.raise_for_status()
+    edges = ((r.json().get("data") or {}).get("searchUsers") or {}).get("edges") or []
+    found = [(e["node"]["login"], (e["node"].get("followers") or {}).get("totalCount") or 0) for e in edges if e.get("node")]
+    return sorted(found, key=lambda x: -x[1])
+
+
 def twitch_login(name):
-    """Spoken name -> (login, live) of a channel that exists, or (first guess, None) when none does."""
+    """Spoken name -> (login, live) of a channel that exists, or (first guess, None) when none does. A login spelled
+    by letters or given in Latin is tried as it is, a spoken name goes through the search first."""
+    from rapidfuzz import fuzz
     from .system import translit
     raw = (name or "").strip().strip("«»\"").lower().replace("ё", "е")
     raw = re.sub(r"^(?:https?://)?(?:www\.)?twitch\.tv/", "", raw)
-    cands = [spoken_login(raw) or "", raw if raw.isascii() else "", translit(raw)]
-    cands = [re.sub(r"[^a-z0-9_]", "", c) for c in cands]
-    cands = list(dict.fromkeys(c for c in cands if len(c) >= 3))[:3]
-    for c in cands:
-        ok, live = twitch_page(c)
+    clean = lambda c: re.sub(r"[^a-z0-9_]", "", c)
+    spelled, exact = clean(spoken_login(raw) or ""), clean(raw) if raw.isascii() else ""
+    words = sorted(raw.split(), key=len)
+    # "братишки н ш": the recogniser tore the name, so its longest word is searched too
+    names = [translit(raw).replace(" ", ""), translit(words[-1]) if words else ""]
+    names = list(dict.fromkeys(c for c in map(clean, names) if len(c) >= 3))
+    sure = list(dict.fromkeys(c for c in (spelled, exact) if len(c) >= 3))
+    failed = None
+
+    def page(c):
+        nonlocal failed
+        try:
+            return twitch_page(c)
+        except requests.RequestException as e:
+            failed = e
+            return False, False
+
+    for c in sure:
+        ok, live = page(c)
         if ok:
             return c, live
-    return (cands[0] if cands else ""), None
+    for q in names:
+        try:
+            found = twitch_search(q)
+        except requests.RequestException as e:
+            failed = e
+            continue
+        for login, _ in found:
+            if fuzz.partial_ratio(q, login) >= 85:
+                ok, live = page(login)
+                if ok:
+                    return login, live
+    for c in names:
+        ok, live = page(c)
+        if ok:
+            return c, live
+    if failed:
+        raise failed                    # no answer is not "no such channel"
+    return (sure + names + [""])[0], None
 
 
 def page_text(url):
@@ -138,6 +184,7 @@ class Watchers:
             self.store.items = []
         self._t = {}
         self._rt = {}                 # watch id -> runtime state not worth writing to disk every 5 s
+        self._fails = {}              # watch id -> failed checks in a row
         self._sleep_timer = None
         self._lock = threading.RLock()
 
@@ -277,9 +324,15 @@ class Watchers:
                 self._t[w["id"]] = time.time()
                 try:
                     getattr(self, "_check_" + w["kind"])(w)
+                    self._fails.pop(w["id"], None)
+                    if w.pop("error", None):       # the "нет связи" mark used to stay for ever after one timeout
+                        self.save()
                 except Exception as e:
                     if w["kind"] in ("youtube", "twitch", "page"):
-                        w["error"] = str(e)[:200]  # network hiccups: try again next round
+                        # network hiccups: try again next round, and say so only when it lasts
+                        self._fails[w["id"]] = self._fails.get(w["id"], 0) + 1
+                        if self._fails[w["id"]] >= 3:
+                            w["error"] = str(e)[:200]
                     else:
                         self.core.log(f"Отслеживание {self.title(w)}: {e}", "warn")
 
@@ -449,12 +502,13 @@ def register(R, core):
         name = re.sub(r"\s+(?:на\s+)?(?:ютубе|youtube)$", "", name).strip()
         return bg(lambda: W().watch_youtube(name))
 
-    @R(TELL + r"(.+?)\s+(?:начнет|начнешь|запустит|включит|начинает|начинаешь|выйдет\s+на|пойдет\s+на)\s+(?:стрим|трансляцию|эфир)\w*$"
+    @R(TELL + r"(.+?)\s+(?:начнет|начнешь|запустит|включит|начинает|начинаешь|выйдет\s+на|пойдет\s+на)\s+(?:стрим|трансляцию|эфир)\w*(?:\s+на\s+(?:твиче|твитче|twitch))?$"
        r"|" + TELL + r"(?:начнется|начнет|будет)\s+(?:стрим|трансляция|эфир)\s+(?:у\s+)?(.+)$"
        r"|^(?:следи|следить)\s+за\s+(?:стримами|стримером|стримершей|трансляциями|твичем)\s+(.+)$")
     def _tw(m, t):
         name = next(g for g in m.groups() if g)
-        name = re.sub(r"\s+(?:на\s+)?(?:твиче|twitch)$", "", name).strip()
+        name = re.sub(r"\s+(?:на\s+)?(?:твиче|твитче|twitch)$", "", name).strip()
+        name = re.sub(r"^на\s+(?:твиче|твитче|twitch)\s+", "", name).strip()
         return bg(lambda: W().watch_twitch(name))
 
     @R(TELL + r"(?:закончится|завершится|кончится)\s+(?:загрузка|скачивание|закачка)(?:\s+(.+))?$"
