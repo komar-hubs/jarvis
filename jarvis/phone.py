@@ -16,7 +16,11 @@ from pathlib import Path
 CREATE_NO_WINDOW = 0x08000000
 CANDIDATES = [Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "KDE Connect" / "bin",
               Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "KDE Connect" / "bin"]
-CALL_RX = re.compile(r"(?i)входящ\w*\s+(?:вызов|звонок)|звонит|incoming\s+call|calling")
+# only the start or the end of a short notification: "звонит" anywhere in the line took a channel's advert with
+# "пишите, звоните" for a ringing phone, and the whole post was read out as the caller's name, again and again
+CALL_RX = re.compile(r"(?i)^\W*(?:входящ\w*\s+(?:\w+\s+)?(?:вызов|звонок|аудиозвонок|видеозвонок)|звонит\b|incoming\s+(?:\w+\s+)?call|calling\b)"
+                     r"|\b(?:звонит(?:\s+вам)?|is\s+calling)\W*$")
+CALL_MAX = 80
 # a missed call is news, not a ringing phone: it was announced as "Звонит Мама: Пропущенный вызов"
 # only a real missed call: the bare word "missed" inside a Telegram message became "Пропущенный звонок от missed"
 MISSED_RX = re.compile(r"(?i)пропущенн\w*\s+(?:вызов|звонок|аудиозвонок|видеозвонок)|missed\s+(?:voice\s+|video\s+)?call")
@@ -358,9 +362,11 @@ class Phone:
             return {}
 
     def _mark_announced(self, app, key):
-        """True if this message (app + sender + text) is new in the last 12 hours; remembers it either way."""
+        """True if this message (app + sender + text) is new in the last 12 hours; remembers it either way. Words only,
+        the first 120 letters: a channel's post comes back with an invisible character or a line added at the end."""
         import hashlib
         import json
+        key = tuple(re.sub(r"\W+", " ", str(k).lower()).strip()[:120] for k in key)
         h = hashlib.sha1("\x1f".join((app.lower(), *key)).encode("utf-8")).hexdigest()[:16]   # no message text on disk
         new = h not in self._announced
         self._announced[h] = time.time()
@@ -461,11 +467,27 @@ class Phone:
             return self.cfg.get("phone.messenger_rule", "ask"), "мессенджер"
         return self.cfg.get("phone.default_rule", "name"), ""
 
+    @staticmethod
+    def _is_call(app, text):
+        """A ringing phone: the notification is short and starts or ends with it ("Мама: Входящий звонок")."""
+        return len(text) <= CALL_MAX and any(CALL_RX.search(x) for x in (app, text, text.partition(": ")[2]) if x)
+
+    @staticmethod
+    def _short(text, limit=280):
+        """For reading aloud: no links and hashtags; a long post is cut at a sentence, the rest stays on the phone."""
+        t = re.sub(r"https?://\S+|\b(?:t\.me|vk\.com)/\S+|#\w+", " ", text)
+        t = re.sub(r"\s{2,}", " ", t).strip()
+        if len(t) <= limit:
+            return t
+        head = t[:limit]
+        cut = max(head.rfind(c) for c in ".!?")
+        return (head[:cut + 1] if cut >= 80 else head.rsplit(" ", 1)[0] + "…") + " Дальше на телефоне."
+
     def _new(self, line, quiet=False):
         app, _, text = line.partition(": ")
         app, text = EMOJI_RX.sub("", app).strip(), re.sub(r"\s{2,}", " ", EMOJI_RX.sub("", text)).strip()
-        missed = bool(MISSED_RX.search(line)) or (app.lower().startswith(DIALERS) and bool(re.search(r"(?i)пропущен", text)))
-        call = not missed and (CALL_RX.search(line) or (app.lower().startswith(DIALERS) and text))
+        missed = (len(text) <= CALL_MAX and bool(MISSED_RX.search(line))) or (app.lower().startswith(DIALERS) and bool(re.search(r"(?i)пропущен", text)))
+        call = not missed and (self._is_call(app, text) or (app.lower().startswith(DIALERS) and text))
         # the phone's "silent" mark is not used: messengers set it when they add a message to a chat's notification
         rule, why = ("call", "") if call else self.rule_for(app, text)
         item = {"app": app, "text": text, "at": dt.datetime.now().strftime("%H:%M"), "call": bool(call), "rule": rule, "why": why}
@@ -474,8 +496,8 @@ class Phone:
         if call:
             if self.cfg.get("phone.calls", True):
                 src = line if CALL_RX.search(app) else text      # "Входящий вызов: Мама" or "Телефон: Входящий вызов Мама"
-                who = re.sub(r"(?i)входящ\w*\s+(?:вызов|звонок)\s*(?:от\s+)?[:•·-]?\s*|incoming call\s*(?:from\s+)?[:•-]?\s*|звонит\s*", "",
-                             src).strip(" :•·-") or "кто-то"
+                who = re.sub(r"(?i)входящ\w*\s+(?:\w+\s+)?(?:вызов|звонок|аудиозвонок|видеозвонок)\s*(?:от\s+)?[:•·-]?\s*"
+                             r"|incoming\s+(?:\w+\s+)?call\s*(?:from\s+)?[:•-]?\s*|звонит\s*", "", src).strip(" :•·-") or "кто-то"
                 self.core.initiative.propose(f"call:{who}", f"Звонит {who}.", priority=4, title="Телефон", cooldown_min=1, kind="phone")
             return
         if missed:
@@ -504,13 +526,13 @@ class Phone:
         # shown, and with no toast nothing happened at all). One sender: once per 30 s — a chat sends several updates
         key = f"phone:{app.lower()}:{who.strip().lower()}"
         if rule == "read":
-            self.core.initiative.propose(f"phone:{line}", f"{app}{frm}: {body}", priority=3, title=f"Телефон · {app}", cooldown_min=0, kind="phone")
+            self.core.initiative.propose(f"phone:{line}", f"{app}{frm}: {self._short(body)}", priority=3, title=f"Телефон · {app}", cooldown_min=0, kind="phone")
         elif rule == "ask":
             # the text stays on the phone until "да": no toast with it either
             self.core.initiative.propose(key, f"SMS{frm}. Прочитать?" if messenger and self._is(app, SMS_APPS) else
                                          f"Сообщение в {app}{frm}. Прочитать?" if messenger else
                                          f"Уведомление от {app}. Прочитать?", priority=3, title=f"Телефон · {app}",
-                                         on_yes=lambda: self.core.say(body or "Текста нет."), cooldown_min=0.5, toast=False, kind="phone")
+                                         on_yes=lambda: self.core.say(self._short(body) or "Текста нет."), cooldown_min=0.5, toast=False, kind="phone")
         else:
             self.core.initiative.propose(key, f"На телефоне SMS{frm}." if messenger and self._is(app, SMS_APPS) else
                                          f"На телефоне сообщение в {app}{frm}." if messenger
