@@ -1,5 +1,6 @@
 """LLM providers with streaming: OpenAI-compatible, Ollama native, Anthropic Messages, and agent CLI bridges."""
 import json
+import time
 
 import requests
 
@@ -98,6 +99,10 @@ def stream_chat(prov, messages, temperature=0.6, max_tokens=1500, bridges=None, 
             r = requests.post(base + "/chat/completions", json=body, headers=headers, stream=True, timeout=(10, 90))
         if r.status_code == 400 and "temperature" in r.text:
             body.pop("temperature")
+            r = requests.post(base + "/chat/completions", json=body, headers=headers, stream=True, timeout=(10, 90))
+        if r.status_code in (429, 502, 503, 504) and not cancel():
+            # a busy proxy ("HTTP 503: No channel is available for model …") usually answers a second later
+            time.sleep(2)
             r = requests.post(base + "/chat/completions", json=body, headers=headers, stream=True, timeout=(10, 90))
         _check(r)
         for data in _sse_lines(r):

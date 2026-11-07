@@ -364,10 +364,17 @@ class Watchers:
         self._fire(w, f"Новое видео у {w['name']}: «{v['title']}».{more}", f"https://www.youtube.com/watch?v={v['id']}")
 
     def _check_twitch(self, w):
-        live = twitch_live(w["login"])
+        live, now = twitch_live(w["login"]), time.time()
         was = w.get("live")
+        if live:
+            w.pop("off_since", None)
+        elif was:
+            # the page now and then comes without the live flag in the middle of a stream: "offline" counts only
+            # after 20 minutes of it, so one stream is announced once
+            w.setdefault("off_since", now)
+            live = now - w["off_since"] < 20 * 60
         w["live"] = live
-        if live and not was:
+        if live and not was and now - w.get("fired", 0) > 30 * 60:
             self._fire(w, f"{w['login']} начал стрим на Twitch.", f"https://www.twitch.tv/{w['login']}")
         else:
             self.store.save()

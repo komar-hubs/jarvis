@@ -131,7 +131,7 @@ class Extras:
         self._ram_high = 0
         self._cpu_high = 0
         self.active_start = time.time()
-        self.last_break = time.time()
+        self.last_break = self.active_start
         self.last_water = time.time()
         self.rec = None
         self._t = {"watch": 0.0, "msg": 0.0}
@@ -502,6 +502,7 @@ class Extras:
         idle = S.idle_seconds()
         if idle > 300:
             self.active_start = now        # a real pause: the "at the PC for too long" counter restarts
+            self.break_gap = 30
             self.last_water = max(self.last_water, now - 60 * 20)
             fx = getattr(self.core, "gamefx", None)
             if fx:
@@ -513,7 +514,10 @@ class Extras:
             bm = 0
         in_game = bool(fx and fx.game()[0])
         # in a game: once an hour and on a card, not aloud over the game (it said "размяться" every 30 min for 8 hours)
-        if bm and now - self.active_start > bm * 60 and now - self.last_break > (60 if in_game else 30) * 60:
+        gap = getattr(self, "break_gap", 30)
+        if bm and now - self.active_start > bm * 60 and now - self.last_break > max(gap, 60 if in_game else 30) * 60:
+            # no pause after a reminder: the next one waits twice as long, up to 2 hours
+            self.break_gap = min(120, gap * 2) if self.last_break > self.active_start else gap
             if in_game:
                 fx.break_card(_hm(now - self.active_start))
                 self.last_break = now

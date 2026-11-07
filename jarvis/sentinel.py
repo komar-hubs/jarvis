@@ -387,6 +387,20 @@ class Sentinel:
         name = Path(exe).name
         if name.lower() in BENIGN_HELPERS:   # crash reporters shipped inside games and portable apps
             return
+        try:
+            # a helper started by a program that is itself in Downloads/Temp: only that program is asked about
+            for a in psutil.Process(pid).parents():
+                ae = (a.exe() or "").lower()
+                if ae and any(d in ae for d in SUSPECT_DIRS):
+                    self.core.log(f"Сторож ПК: {name} запущен из {Path(ae).name}, не спрашиваю отдельно")
+                    return
+        except Exception:
+            pass
+        now = time.time()
+        if now - getattr(self, "_proc_asked", 0) < 90:
+            self.core.log(f"Сторож ПК: ещё одна неподписанная программа {name} ({exe}), вопрос уже был")
+            return
+        self._proc_asked = now
         where = "Temp" if "\\temp\\" in exe.lower() else "Загрузки" if "\\downloads\\" in exe.lower() else Path(exe).parent.name
 
         def kill():
