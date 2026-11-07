@@ -9,7 +9,7 @@ function featChip(id) {
 }
 
 function featChipsFill() {
-  $$("#settings [data-fchip]").forEach((a) => {
+  $$("[data-fchip]").forEach((a) => {
     const r = FT.rows.find((x) => x.id === a.dataset.fchip);
     if (!r) return;
     a.classList.toggle("on", !!r.on);
@@ -19,6 +19,7 @@ function featChipsFill() {
 }
 
 function featGoto(id) {
+  if (S.tab !== "settings") { go("settings"); setTimeout(() => featGoto(id), 450); return; }   // a chip on another tab
   const row = $(`#feat-panel tr[data-row="${id}"]`);
   if (!row) return;
   if (window.setSearchClear) setSearchClear();

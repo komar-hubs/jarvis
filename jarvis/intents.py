@@ -481,13 +481,18 @@ class Router:
         R = self.rule
         cfg = core.cfg
         from . import (automation, background, backup, extras, mail, messenger, mouse, notes, people, persona, phone, plugins,
-                       agent, boot, diag, features, gamefx, gamevoice, macros, marker, quick, screenmem, sentinel, skills, steam, stress, teach, voiceid, watchers)
+                       agent, boot, diag, features, gamefx, gamevoice, macros, marker, quick, screenmem, sentinel, skills, steam, stress, teach, voiceid, watchers,
+                       audiomem, filesearch, school, screentrans)
 
         def addr():
             return cfg.get("user.address", "сэр") or "сэр"
 
         people.register(R, core)  # "мой шеф — Антон", "под шефом я имею в виду…": before the generic corrections
         self._build_journal(R)    # undo, corrections, "что ты сделал": before everything, "отмени" must reach them
+        school.register(R, core)       # "что мне сейчас делать", "задали по биологии §12", "какие уроки завтра"
+        filesearch.register(R, core)   # "найди файл про …": before the web search's "найди …"
+        screentrans.register(R, core)  # "переведи экран", "переводи субтитры": before "переведи что на экране" (vision)
+        audiomem.register(R, core)     # "что он сказал?", "перескажи последние 5 минут"
         self._build_search(R)     # "найди в ютубе котиков", "найди видео с котиками"
         gamevoice.register(R, core)  # "научи заклинание люмос на клавишу один": before teach's and memory's "запомни"
         gamefx.register(R, core)     # "сохрани момент", "выключи микрофон в дискорде": before the generic mute/close

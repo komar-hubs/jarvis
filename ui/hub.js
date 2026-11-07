@@ -9,6 +9,7 @@ function fmtHM(sec) {
 }
 
 async function hubLoad() {
+  if (window.hubFiles) hubFiles();
   try { HUB = await rpc("hub"); } catch (e) { return; }
   S.focus = HUB.focus;
   hubRender();

@@ -344,6 +344,10 @@ class Phone:
         self._last_text[nid] = (title, text)
         if not self._mark_announced(app, (title, text)):
             return                       # the same message again under a new id (phone reconnected, Jarvis restarted)
+        try:
+            self.core.school.feed_phone(app, title, text)    # a class chat's homework (jarvis/school.py)
+        except Exception as e:
+            self.core.log(f"Учёба: {e}", "warn")
         body = f"{title}: {text}" if title and title.lower() != app.lower() and text else (text or title)
         self._remember_reply(d, live=True)
         self._new(f"{app}: {body}", quiet=bool(d.get("silent")))

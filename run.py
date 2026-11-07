@@ -480,6 +480,8 @@ def main():
                             lambda: show() if not window_visible() else window.hide())
         if quick:
             keyboard.add_hotkey(core.cfg.get("quick.hotkey", "ctrl+alt+q"), quick_toggle)
+        keyboard.add_hotkey(core.cfg.get("screentrans.hotkey", "ctrl+alt+t"), core.screentrans.hotkey_once)
+        keyboard.add_hotkey(core.cfg.get("screentrans.live_hotkey", "ctrl+alt+l"), core.screentrans.hotkey_live)
     except Exception as e:
         core.log(f"Горячие клавиши: {e}", "warn")
 

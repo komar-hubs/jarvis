@@ -85,7 +85,10 @@ function onEvent(ev) {
     case "voiceid": if (window.voiceidPanel && $("#voiceid-panel")) { voiceidPanel(); featuresPanel(); } break;   // a phrase taught by voice
     case "party": if (window.party) party(ev.seconds || 10, ev.birthday); break;
     case "recording": document.body.classList.toggle("recording", !!ev.on); toast(ev.on ? "Идёт запись экрана" : "Запись остановлена", "Запись"); break;
+    case "school": if (S.tab === "school") schoolLoad(); else schBadge(); break;
+    case "screentrans": if (window.transPanel && $("#trans-panel")) transPanel(); break;
     case "files_found":
+      if (ev.rich && window.hubFilesShow) { hubFiles(); hubFilesShow(ev.rich); }
       if (ev.files.length) toast(ev.files.slice(0, 5).map((f) => f.split("\\").pop()).join("\n"), `Найдено: ${ev.files.length}`, false, 7000);
       break;
     case "mic_level":

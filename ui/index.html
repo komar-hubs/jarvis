@@ -76,6 +76,9 @@
     <symbol id="i-export" viewBox="0 0 24 24"><path d="M12 13.5v-10M8 7.5l4-4 4 4M4 14.5v4A1.5 1.5 0 005.5 20h13a1.5 1.5 0 001.5-1.5v-4"/></symbol>
     <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l8.5-8.5M16 7l2.5 2.5M14 9l2 2"/></symbol>
     <symbol id="i-ruble" viewBox="0 0 24 24"><path d="M8.5 20V4.5h5a4 4 0 010 8h-7M6.5 16h8"/></symbol>
+    <symbol id="i-school" viewBox="0 0 24 24"><path d="M2.5 9L12 4.5 21.5 9 12 13.5z"/><path d="M6.5 11v4.5c0 1.5 2.5 3 5.5 3s5.5-1.5 5.5-3V11M21.5 9v5.5"/></symbol>
+    <symbol id="i-open" viewBox="0 0 24 24"><path d="M13.5 4.5h6v6M19.5 4.5L11 13"/><path d="M18 14v4.5a1.5 1.5 0 01-1.5 1.5h-11A1.5 1.5 0 014 18.5v-11A1.5 1.5 0 015.5 6H10"/></symbol>
+    <symbol id="i-translate" viewBox="0 0 24 24"><path d="M3.5 5.5h9M8 3.5v2M5.5 5.5c.8 3.2 3 5.6 6 7M10.5 5.5c-.8 3.6-3 6.6-6.5 8.5"/><path d="M12.5 20.5l4-9 4 9M14 17.5h5"/></symbol>
     <symbol id="w-sun" viewBox="0 0 48 48"><circle class="w-core" cx="24" cy="24" r="8"/><g class="w-rays"><path d="M24 6v6M24 36v6M6 24h6M36 24h6M11.3 11.3l4.2 4.2M32.5 32.5l4.2 4.2M11.3 36.7l4.2-4.2M32.5 15.5l4.2-4.2"/></g></symbol>
     <symbol id="w-cloud" viewBox="0 0 48 48"><path class="w-cl" d="M14 34h21a7 7 0 000-14 10 10 0 00-19-2.5A8 8 0 0014 34z"/></symbol>
     <symbol id="w-rain" viewBox="0 0 48 48"><path class="w-cl" d="M14 28h21a7 7 0 000-14 10 10 0 00-19-2.5A8 8 0 0014 28z"/><g class="w-drops"><path d="M17 33l-2 5M25 33l-2 5M33 33l-2 5"/></g></symbol>
@@ -106,6 +109,7 @@
     <button data-tab="home" class="active"><svg class="ico"><use href="#i-home"/></svg><span>Главная</span></button>
     <button data-tab="chat"><svg class="ico"><use href="#i-chat"/></svg><span>ИИ-чат</span></button>
     <button data-tab="hub"><svg class="ico"><use href="#i-hub"/></svg><span>Сегодня</span><b class="badge" id="badge-focus"></b></button>
+    <button data-tab="school"><svg class="ico"><use href="#i-school"/></svg><span>Учёба</span><b class="badge" id="badge-hw"></b></button>
     <button data-tab="mail"><svg class="ico"><use href="#i-mail"/></svg><span>Почта</span><b class="badge" id="badge-mail"></b></button>
     <button data-tab="tasks"><svg class="ico"><use href="#i-tasks"/></svg><span>Задачи</span><b class="badge" id="badge-tasks"></b></button>
     <button data-tab="notes"><svg class="ico"><use href="#i-note"/></svg><span>Заметки</span></button>
@@ -235,6 +239,7 @@
           <div class="cat-legend" id="cat-legend"></div>
           <div class="usage-list" id="usage-list"></div>
         </div>
+        <div class="panel hub-files" id="hub-files"></div>
         <div class="panel habits-panel">
           <h3>Привычки <button class="mini" onclick="hubHabitNew()">+</button></h3>
           <div id="habits"></div>
@@ -276,6 +281,17 @@
     </section>
 
     <!-- ============ MAIL ============ -->
+    <section class="tab" id="tab-school">
+      <h2>Учёба <span class="h2-sub">расписание, домашка и что делать сейчас</span></h2>
+      <div class="sch-layout">
+        <div class="panel sch-plan" id="sch-plan"></div>
+        <div class="panel" id="sch-hw"></div>
+        <div class="panel sch-tt" id="sch-tt"></div>
+        <div class="panel" id="sch-ev"></div>
+        <div class="panel" id="sch-set"></div>
+      </div>
+    </section>
+
     <section class="tab" id="tab-mail">
       <h2>Почта <span class="h2-sub" id="mail-sub"></span>
         <span class="hub-actions">
@@ -486,6 +502,8 @@
   <script src="/ui/gamevoice.js"></script>
   <script src="/ui/features.js"></script>
   <script src="/ui/settings_nav.js"></script>
+  <script src="/ui/school.js"></script>
+  <script src="/ui/tools.js"></script>
   <script src="/ui/maint.js"></script>
 <script src="/ui/setup.js"></script>
 </body>

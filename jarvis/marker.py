@@ -116,6 +116,42 @@ def _shape(style, l, t, r, b, seed):
     return []
 
 
+def blit(hwnd, img, origin, alpha=255):
+    """Puts an RGBA PIL image on a layered window at origin (physical pixels), with per-pixel alpha; shows the
+    window without activating it. Shared by the marker and the screen translator."""
+    import win32con
+    import win32gui
+    W, H = img.size
+    a = np.asarray(img, dtype=np.uint16)
+    al = a[..., 3:4]
+    bgra = np.empty((H, W, 4), np.uint8)                        # premultiplied BGRA for UpdateLayeredWindow
+    bgra[..., 0] = (a[..., 2:3] * al // 255)[..., 0]
+    bgra[..., 1] = (a[..., 1:2] * al // 255)[..., 0]
+    bgra[..., 2] = (a[..., 0:1] * al // 255)[..., 0]
+    bgra[..., 3] = al[..., 0]
+    screen = user32.GetDC(None)
+    mem = gdi32.CreateCompatibleDC(screen)
+    bi = BITMAPINFOHEADER(ctypes.sizeof(BITMAPINFOHEADER), W, -H, 1, 32, 0, 0, 0, 0, 0, 0)
+    bits = ctypes.c_void_p()
+    bmp = gdi32.CreateDIBSection(mem, ctypes.byref(bi), 0, ctypes.byref(bits), None, 0)
+    old = gdi32.SelectObject(mem, bmp)
+    try:
+        ctypes.memmove(bits, bgra.ctypes.data, W * H * 4)
+        ox, oy = origin
+        blend = BLENDFUNCTION(0, 0, max(0, min(255, alpha)), 1)
+        user32.UpdateLayeredWindow(hwnd, screen, ctypes.byref(wintypes.POINT(ox, oy)), ctypes.byref(wintypes.SIZE(W, H)),
+                                   mem, ctypes.byref(wintypes.POINT(0, 0)), 0, ctypes.byref(blend), 2)
+        if not win32gui.IsWindowVisible(hwnd):
+            win32gui.ShowWindow(hwnd, 4)                         # SW_SHOWNOACTIVATE
+            win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0,
+                                  win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_NOACTIVATE)
+    finally:
+        gdi32.SelectObject(mem, old)
+        gdi32.DeleteObject(bmp)
+        gdi32.DeleteDC(mem)
+        user32.ReleaseDC(None, screen)
+
+
 class Marker:
     def __init__(self, core):
         self.core = core
@@ -297,40 +333,8 @@ class Marker:
         job["img"] = img
 
     def _blit(self, hwnd, job, alpha):
-        import win32con
-        import win32gui
-        img = job["img"]
-        if img is None:
-            return
-        W, H = img.size
-        a = np.asarray(img, dtype=np.uint16)
-        al = a[..., 3:4]
-        bgra = np.empty((H, W, 4), np.uint8)                        # premultiplied BGRA for UpdateLayeredWindow
-        bgra[..., 0] = (a[..., 2:3] * al // 255)[..., 0]
-        bgra[..., 1] = (a[..., 1:2] * al // 255)[..., 0]
-        bgra[..., 2] = (a[..., 0:1] * al // 255)[..., 0]
-        bgra[..., 3] = al[..., 0]
-        screen = user32.GetDC(None)
-        mem = gdi32.CreateCompatibleDC(screen)
-        bi = BITMAPINFOHEADER(ctypes.sizeof(BITMAPINFOHEADER), W, -H, 1, 32, 0, 0, 0, 0, 0, 0)
-        bits = ctypes.c_void_p()
-        bmp = gdi32.CreateDIBSection(mem, ctypes.byref(bi), 0, ctypes.byref(bits), None, 0)
-        old = gdi32.SelectObject(mem, bmp)
-        try:
-            ctypes.memmove(bits, bgra.ctypes.data, W * H * 4)
-            ox, oy = job["origin"]
-            blend = BLENDFUNCTION(0, 0, max(0, min(255, alpha)), 1)
-            user32.UpdateLayeredWindow(hwnd, screen, ctypes.byref(wintypes.POINT(ox, oy)), ctypes.byref(wintypes.SIZE(W, H)),
-                                       mem, ctypes.byref(wintypes.POINT(0, 0)), 0, ctypes.byref(blend), 2)
-            if not win32gui.IsWindowVisible(hwnd):
-                win32gui.ShowWindow(hwnd, 4)                         # SW_SHOWNOACTIVATE
-                win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0,
-                                      win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_NOACTIVATE)
-        finally:
-            gdi32.SelectObject(mem, old)
-            gdi32.DeleteObject(bmp)
-            gdi32.DeleteDC(mem)
-            user32.ReleaseDC(None, screen)
+        if job["img"] is not None:
+            blit(hwnd, job["img"], job["origin"], alpha)
 
     # ---------------------------------------------------------------- AI tool and RPC
     def tool_highlight(self, a):

@@ -239,6 +239,14 @@ class Core:
         self.voiceid = VoiceId(self)       # «запомни мой голос»: dangerous commands only in the owner's voice
         from .stress import Stress
         self.stress = Stress(self)         # Settings → Голос → «Ударения»
+        from .school import School
+        self.school = School(self)         # tab «Учёба»: timetable, homework from the class chat, "что делать сейчас"
+        from .screentrans import ScreenTranslator
+        self.screentrans = ScreenTranslator(self)  # "переведи экран": the translation drawn over the original text
+        from .audiomem import AudioMemory
+        self.audiomem = AudioMemory(self)  # "что он сказал?": the last minutes of the PC's sound, in RAM only
+        from .filesearch import FileSearch
+        self.filesearch = FileSearch(self)  # "найди файл про …": documents indexed by their words and meaning
         from .extras import Extras
         self.extras = Extras(self)   # before the router: it registers voice rules of its own
         self.router = Router(self)
@@ -384,6 +392,8 @@ class Core:
         self.backup.start()
         self.phone.start()
         self.screenmem.start()
+        self.audiomem.start()
+        self.filesearch.start()
         if self.cfg.get("ai.provider") == "ollama":      # the local AI must be awake when the first question comes
             threading.Thread(target=lambda: self.background.ollama_state(start=True, wait=0), daemon=True, name="ollama-wake").start()
         threading.Thread(target=lambda: nlu.morph(), daemon=True).start()  # word-form dictionary: load ahead
@@ -1630,6 +1640,14 @@ class Core:
         if overdue:
             speech.append(f"И {len(overdue)} {plural(len(overdue), 'просроченная', 'просроченные', 'просроченных')}.")
             card.append(("warn", "Просрочено", " · ".join(t["text"] for t in overdue[:4])))
+        try:   # lessons of the day (tomorrow's in the evening), when the timetable is filled in
+            ls = self.school.lessons(day)
+            if ls:
+                speech.append(f"{'Завтра' if evening else 'Сегодня'} {len(ls)} {plural(len(ls), 'урок', 'урока', 'уроков')}, "
+                              f"первый — {ls[0]['subject']} в {ls[0]['start']:%H:%M}.")
+                card.append(("tasks", "Уроки", " · ".join(l["subject"] for l in ls)))
+        except Exception:
+            pass
         if evening:
             done = [t for t in self.planner.tasks.items if t.get("done") and (t.get("done_at") or "")[:10] == now.date().isoformat()]
             if done:
@@ -1910,7 +1928,8 @@ class Core:
                                                           self.automations, self.notebook, self.backup, self.persona, self.phone,
                                                           self.quick, self.marker, self.screenmem, self.macros, self.boot,
                                                           self.gamevoice, self.features, self.diag, self.gamefx,
-                                                          self.voiceid, self.stress)
+                                                          self.voiceid, self.stress, self.school, self.screentrans,
+                                                          self.audiomem, self.filesearch)
                    if hasattr(o, "rpc_" + method)), None)
         if not fn:
             raise ValueError(f"unknown method {method}")
