@@ -219,6 +219,11 @@ class SileroEngine:
     Model: models.silero.ai (CC BY-NC-SA, personal use)."""
     name = "silero"
     URL = "https://models.silero.ai/models/tts/ru/v5_ru.pt"
+    # models.silero.ai does not open from some countries (.ru-hosted, blocked even behind a VPN): the same file,
+    # unchanged (CC BY-NC-SA, authors: Silero team), is kept in this project's release "models"; a copy is used only
+    # when its SHA-256 matches the original, because a torch.package model runs its own code when loaded
+    MIRRORS = ["https://github.com/komar-hubs/jarvis/releases/download/models/silero_v5_ru.pt"]
+    SHA256 = "7ba04d42340fe0398042eed2e0d12d62e23096d626b1b9feff4dcb1309197ab4"
     SPEAKERS = ["aidar", "eugene", "baya", "kseniya", "xenia"]
 
     def __init__(self, cfg, log=print):
@@ -233,14 +238,44 @@ class SileroEngine:
         self.fails = 0
 
     def _download(self):
-        """The model file, resumable: a dropped connection continues from the same byte, a few attempts, progress in the log.
+        """The official server first, then the project's copy (checked by SHA-256). Each source gets its attempts."""
+        urls = [self.cfg.get("voice.silero_url") or self.URL] + self.MIRRORS
+        errors = []
+        for i, url in enumerate(urls):
+            mirror = i > 0
+            try:
+                self._fetch(url, attempts=2 if not mirror else 4)
+            except Exception as e:
+                errors.append(f"{url.split('/')[2]}: {str(e)[:70]}")
+                continue                 # the part kept: it is the same file, the next source goes on from it
+            if mirror and self._sha(self.path.with_suffix(".part")) != self.SHA256:
+                self.path.with_suffix(".part").unlink(missing_ok=True)
+                errors.append(f"{url.split('/')[2]}: файл не совпал с оригиналом")
+                continue
+            os.replace(self.path.with_suffix(".part"), self.path)
+            if mirror:
+                self.log("Голос Silero скачан с запасного сервера (GitHub), файл проверен")
+            return
+        raise RuntimeError("не удалось скачать голос: " + "; ".join(errors) + f". Можно скачать файл вручную: "
+                           f"{self.MIRRORS[0]} и положить сюда: {self.path}")
+
+    @staticmethod
+    def _sha(path):
+        import hashlib
+        h = hashlib.sha256()
+        with open(path, "rb") as f:
+            for block in iter(lambda: f.read(1 << 20), b""):
+                h.update(block)
+        return h.hexdigest()
+
+    def _fetch(self, url, attempts=4):
+        """One source, resumable: a dropped connection continues from the same byte, progress in the log.
         (It used to restart from zero with no timeout, and again on every spoken phrase: "постоянно качает Silero".)"""
         import requests
-        url = self.cfg.get("voice.silero_url") or self.URL
         tmp = self.path.with_suffix(".part")
         self.path.parent.mkdir(parents=True, exist_ok=True)
         err = None
-        for attempt in range(4):
+        for attempt in range(attempts):
             have = tmp.stat().st_size if tmp.exists() else 0
             try:
                 with requests.get(url, stream=True, timeout=(15, 45), headers={"Range": f"bytes={have}-"} if have else {}) as r:
@@ -263,15 +298,13 @@ class SileroEngine:
                 break
             except Exception as e:
                 err = e
-                self.log(f"Голос Silero: попытка {attempt + 1} из 4 не вышла ({str(e)[:90]})", "warn")
+                self.log(f"Голос Silero ({url.split('/')[2]}): попытка {attempt + 1} из {attempts} не вышла ({str(e)[:90]})", "warn")
                 time.sleep(2 + attempt * 3)
         if err is not None:
-            raise RuntimeError(f"не удалось скачать голос с models.silero.ai ({str(err)[:80]}). Скачанное сохранено, следующая попытка продолжит "
-                               f"с того же места. Можно скачать файл вручную: {url} -> {self.path}")
+            raise err
         if tmp.stat().st_size < 20 * 2**20:
             tmp.unlink(missing_ok=True)
-            raise RuntimeError("скачался слишком маленький файл (не модель): проверьте интернет, прокси и VPN")
-        os.replace(tmp, self.path)
+            raise RuntimeError("скачался слишком маленький файл (не модель)")
 
     def start(self):
         if not self.ready and time.time() < self.retry_at:
@@ -282,7 +315,7 @@ class SileroEngine:
             try:
                 import torch
                 if not self.path.exists():
-                    self.log("Скачиваю голос Silero (~60 МБ)...")
+                    self.log("Скачиваю голос Silero (~140 МБ)...")
                     self._download()
                 torch.set_num_threads(max(2, min(6, (os.cpu_count() or 4) // 2)))
                 model = torch.package.PackageImporter(str(self.path)).load_pickle("tts_models", "model")
