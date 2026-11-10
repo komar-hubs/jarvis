@@ -97,31 +97,49 @@ function schHw(r) {
 }
 
 // ---------------------------------------------------------------- the timetable
+// the timetable: one or two weeks (subgroups), common bells plus own bells for any weekday, rows can be removed
 function schTable(r) {
   const d = SCH.d, box = $("#sch-tt");
+  const two = +d.weeks === 2;
+  SCH.wk = two ? (SCH.wk || r.week_no || 1) : 1;
+  const days = SCH.wk === 2 ? (d.days_b = d.days_b || {}) : d.days;
+  d.bells_by_day = d.bells_by_day || {};
   const cols = SCH.showSun ? 7 : 6;
-  const rows = Math.max(6, ...Object.values(d.days).map((x) => x.length), d.bells.length);
+  const rows = Math.max(1, d.bells.length, ...Object.values(d.days).map((x) => x.length), ...Object.values(d.days_b || {}).map((x) => x.length));
   const now = new Date(), today = (now.getDay() + 6) % 7, hm = pad2(now.getHours()) + ":" + pad2(now.getMinutes());
-  let html = `<table class="sch-grid"><thead><tr><th class="sch-bell-h">Звонки</th>${DOW.slice(0, cols).map((x, i) => `<th class="${i === today ? "today" : ""}">${x}</th>`).join("")}</tr></thead><tbody>`;
+  const isNowWeek = !two || SCH.wk === r.week_no;
+  const bellsOf = (c) => d.bells_by_day[String(c + 1)] || d.bells;
+  let html = `<table class="sch-grid"><thead><tr><th class="sch-bell-h">Звонки</th>${DOW.slice(0, cols).map((x, i) =>
+    `<th class="${i === today && isNowWeek ? "today" : ""}"><button class="sch-dayh ${d.bells_by_day[String(i + 1)] ? "own" : ""}" data-dayb="${i + 1}" title="Свои звонки для этого дня">${x}${d.bells_by_day[String(i + 1)] ? " " + I("time") : ""}</button></th>`).join("")}<th></th></tr></thead><tbody>`;
   for (let n = 0; n < rows; n++) {
     const b = d.bells[n] || ["", ""];
-    const cur = b[0] && b[0] <= hm && hm < b[1];
     html += `<tr><td class="sch-bell"><b>${n + 1}</b><input data-bell="${n}:0" value="${esc(b[0])}" placeholder="08:00">–<input data-bell="${n}:1" value="${esc(b[1])}" placeholder="08:45"></td>`;
     for (let c = 0; c < cols; c++) {
-      const s = (d.days[String(c + 1)] || [])[n] || "";
-      html += `<td class="${c === today ? "today" : ""} ${c === today && cur ? "now" : ""}"><input class="sch-cell" list="sch-subjects" data-cell="${c + 1}:${n}" value="${esc(s)}" style="${s ? `--h:${schHue(s)}` : ""}" ${s ? 'data-has="1"' : ""}></td>`;
+      const s = (days[String(c + 1)] || [])[n] || "";
+      const bb = bellsOf(c)[n] || ["", ""];
+      const cur = isNowWeek && c === today && bb[0] && bb[0] <= hm && hm < bb[1];
+      const own = d.bells_by_day[String(c + 1)] && bb[0] ? `${bb[0]}–${bb[1]}` : "";
+      html += `<td class="${c === today && isNowWeek ? "today" : ""} ${cur ? "now" : ""}"><input class="sch-cell" list="sch-subjects" data-cell="${c + 1}:${n}" value="${esc(s)}" style="${s ? `--h:${schHue(s)}` : ""}" ${s ? 'data-has="1"' : ""} title="${own ? "звонок этого дня: " + own : ""}">${own ? `<small class="sch-own">${own}</small>` : ""}</td>`;
     }
-    html += "</tr>";
+    html += `<td><button class="ghost small sch-rowx" data-rowx="${n}" title="Удалить ${n + 1}-й урок во всех днях">${I("x")}</button></td></tr>`;
   }
   html += "</tbody></table>";
   box.innerHTML = `<h3><span>${I("tasks", "lead")}Расписание уроков</span>
       <span><label class="sch-sun"><input type="checkbox" id="sch-sun" ${SCH.showSun ? "checked" : ""}> воскресенье</label>
       <button class="mini" id="sch-row" title="Добавить урок">${I("plus")}</button></span></h3>
+    <div class="sch-tools">
+      <span class="sch-seg"><button class="${two ? "" : "on"}" data-weeks="1">одна неделя</button><button class="${two ? "on" : ""}" data-weeks="2">две недели</button></span>
+      ${two ? `<span class="sch-seg"><button class="${SCH.wk === 1 ? "on" : ""}" data-wk="1">неделя 1</button><button class="${SCH.wk === 2 ? "on" : ""}" data-wk="2">неделя 2</button></span>
+        <span class="dim">сейчас идёт <b>${r.week_no === 1 ? "первая" : "вторая"}</b></span>
+        <button class="ghost small" id="sch-swap" title="Если Джарвис ошибся с номером недели">поменять: сейчас ${r.week_no === 1 ? "вторая" : "первая"}</button>
+        <button class="ghost small" id="sch-copy" title="Перенести уроки первой недели во вторую, чтобы поправить только отличия">скопировать неделю 1 → 2</button>` : ""}
+    </div>
     <div class="sch-grid-wrap">${html}</div>
-    <p class="hint">Впишите предметы — домашка сама встанет к следующему уроку, а утром и вечером Джарвис скажет, какие уроки. «Какой сейчас урок», «какие уроки завтра», «когда химия», «сколько до звонка».</p>`;
+    <div id="sch-bells-day"></div>
+    <p class="hint">Впишите предметы — домашка сама встанет к следующему уроку, а утром и вечером Джарвис скажет, какие уроки. ✕ справа удаляет урок под этим номером во всех днях. Нажмите на день недели, чтобы задать ему свои звонки (короткий день, другая смена). Две недели — для подгрупп: «какая сейчас неделя». «Какой сейчас урок», «какие уроки завтра», «когда химия», «сколько до звонка».</p>`;
   box.querySelectorAll("[data-cell]").forEach((inp) => inp.oninput = () => {
     const [day, n] = inp.dataset.cell.split(":").map(Number);
-    const arr = d.days[String(day)] = d.days[String(day)] || [];
+    const arr = days[String(day)] = days[String(day)] || [];
     while (arr.length <= n) arr.push("");
     arr[n] = inp.value.trim();
     while (arr.length && !arr[arr.length - 1]) arr.pop();
@@ -135,8 +153,59 @@ function schTable(r) {
     d.bells[n][k] = inp.value.trim();
     schSave();
   });
+  box.querySelectorAll("[data-rowx]").forEach((b) => b.onclick = () => {
+    const n = +b.dataset.rowx;
+    const used = [...Object.values(d.days), ...Object.values(d.days_b || {})].filter((x) => x[n]).length;
+    if (used && !confirm(`Удалить ${n + 1}-й урок во всех днях? Уроки ниже сдвинутся вверх.`)) return;
+    d.bells.splice(n, 1);
+    for (const w of [d.days, d.days_b || {}]) for (const k of Object.keys(w)) { w[k].splice(n, 1); while (w[k].length && !w[k][w[k].length - 1]) w[k].pop(); }
+    schTable(r); schSave();
+  });
+  box.querySelectorAll("[data-weeks]").forEach((b) => b.onclick = () => {
+    d.weeks = +b.dataset.weeks;
+    if (d.weeks === 2 && !d.week_anchor) d.week_anchor = schMonday(0);       // this week is the first one
+    schSave(true);
+  });
+  box.querySelectorAll("[data-wk]").forEach((b) => b.onclick = () => { SCH.wk = +b.dataset.wk; schTable(r); });
+  if ($("#sch-swap")) $("#sch-swap").onclick = () => { d.week_anchor = schMonday(r.week_no === 1 ? -7 : 0); schSave(true); };
+  if ($("#sch-copy")) $("#sch-copy").onclick = () => {
+    if (Object.values(d.days_b || {}).some((x) => x.length) && !confirm("Заменить вторую неделю копией первой?")) return;
+    d.days_b = JSON.parse(JSON.stringify(d.days)); SCH.wk = 2; schTable(r); schSave();
+  };
+  box.querySelectorAll("[data-dayb]").forEach((b) => b.onclick = () => schBellsDay(r, +b.dataset.dayb));
   $("#sch-sun").onchange = (e) => { SCH.showSun = e.target.checked; schTable(r); };
   $("#sch-row").onclick = () => { d.bells.push(["", ""]); schTable(r); };
+  if (SCH.bellDay) schBellsDay(r, SCH.bellDay, true);
+}
+
+// Monday of this week (+ offset in days) as YYYY-MM-DD
+function schMonday(offset) {
+  const t = new Date(); t.setHours(12, 0, 0, 0);
+  t.setDate(t.getDate() - ((t.getDay() + 6) % 7) + offset);
+  return `${t.getFullYear()}-${pad2(t.getMonth() + 1)}-${pad2(t.getDate())}`;
+}
+
+// own bells of one weekday (a short Saturday, another shift); without them the day uses the common ones
+function schBellsDay(r, dow, keep) {
+  const d = SCH.d, box = $("#sch-bells-day");
+  if (!keep && SCH.bellDay === dow) { SCH.bellDay = 0; box.innerHTML = ""; return; }
+  SCH.bellDay = dow;
+  const own = d.bells_by_day[String(dow)];
+  const name = ["понедельника", "вторника", "среды", "четверга", "пятницы", "субботы", "воскресенья"][dow - 1];
+  box.innerHTML = `<div class="sch-bd"><div class="sch-bd-h"><b>Звонки ${name}</b>
+      ${own ? `<button class="ghost small" id="bd-reset">как в остальные дни</button>` : `<button class="btn small" id="bd-own">${I("time", "lead")}Свои звонки для этого дня</button>`}
+      <button class="ghost small" id="bd-close" title="Закрыть">${I("x")}</button></div>
+    ${own ? `<div class="sch-bd-list">${own.map((b, i) => `<span class="sch-bd-row"><b>${i + 1}</b><input type="time" data-bd="${i}:0" value="${esc(b[0])}">–<input type="time" data-bd="${i}:1" value="${esc(b[1])}"><button class="ghost small" data-bdx="${i}" title="Убрать">${I("x")}</button></span>`).join("")}
+      <button class="ghost small" id="bd-add">${I("plus", "lead")}звонок</button></div>` : `<p class="hint">Сейчас в этот день общие звонки (слева в таблице).</p>`}</div>`;
+  const redraw = () => { schTable(r); schSave(); };
+  if ($("#bd-own")) $("#bd-own").onclick = () => { d.bells_by_day[String(dow)] = JSON.parse(JSON.stringify(d.bells)); redraw(); };
+  if ($("#bd-reset")) $("#bd-reset").onclick = () => { delete d.bells_by_day[String(dow)]; redraw(); };
+  $("#bd-close").onclick = () => { SCH.bellDay = 0; box.innerHTML = ""; };
+  box.querySelectorAll("[data-bd]").forEach((inp) => inp.onchange = () => {
+    const [i, k] = inp.dataset.bd.split(":").map(Number); own[i][k] = inp.value; redraw();
+  });
+  box.querySelectorAll("[data-bdx]").forEach((b) => b.onclick = () => { own.splice(+b.dataset.bdx, 1); redraw(); });
+  if ($("#bd-add")) $("#bd-add").onclick = () => { const last = own[own.length - 1] || ["08:00", "08:45"]; own.push([last[1], last[1]]); redraw(); };
 }
 
 function schSave(reload) {

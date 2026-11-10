@@ -527,7 +527,9 @@ async function loadSettings() {
     <div class="full hint">«Джарвис, сделай за меня: …» — ИИ сам выполняет задачу по шагам. Пароли, оплату и отправку сообщений не делает — скажет вам.</div>
   </div></div>
 
-  <div class="panel"><h3>Память ассистента</h3><p class="hint">«Запомни, что я люблю кофе без сахара». ИИ учитывает эти факты.</p><div id="s-notes"></div></div>
+  <div class="panel" id="memory-panel"><h3>Память о вас</h3><p class="hint">Факты, которые ИИ учитывает в ответах. Голосом: «запомни, что я люблю кофе без сахара», «забудь, что меня зовут Клин», «что ты помнишь». Новое «меня зовут…», «я учусь…» заменяет старое. Текст можно исправить прямо здесь.</p>
+    <div class="row"><input id="s-note-new" placeholder="новый факт: я учусь в 6 «Б»" style="flex:1"><button class="btn" id="s-note-add">${I("plus", "lead")}Запомнить</button></div>
+    <div id="s-notes"></div></div>
   </div></section>
 
   <section class="s-sec" id="ss-games">${head("games", "bolt", "Игры", "голос в играх, клипы, подсказки, перерывы")}<div class="s-grid s-wide" id="sec-games">
@@ -781,9 +783,30 @@ async function appSearch(q) {
   const apps = await rpc("apps", { q });
   $("#app-list").innerHTML = apps.slice(0, 120).map((a) => `<div style="cursor:pointer" title="${esc(a.path)}" onclick="$('#al-v').value='${esc(a.name).replace(/'/g, "\\'")}'">${esc(a.name)}</div>`).join("");
 }
+// «Память о вас»: every fact can be fixed in place (a misheard "меня зовут…" used to stay for good), removed, added
 async function renderNotes() {
+  const box = $("#s-notes");
+  if (!box) return;
   const notes = await rpc("notes");
-  $("#s-notes").innerHTML = notes.map((n, i) => `<div class="note-row"><span>${esc(n.text)}</span><button class="btn danger" onclick="noteDel(${i})" title="Удалить">${I("x")}</button></div>`).join("") || '<div class="empty">пусто</div>';
+  box.innerHTML = notes.map((n, i) => `<div class="note-row"><input class="note-edit" data-i="${i}" value="${esc(n.text)}" title="Исправьте и нажмите Enter">
+    <button class="btn danger" onclick="noteDel(${i})" title="Забыть">${I("x")}</button></div>`).reverse().join("") || '<div class="empty">Пока ничего не запомнено</div>';
+  box.querySelectorAll(".note-edit").forEach((inp) => {
+    const save = async () => {
+      const n = await rpc("notes"), i = +inp.dataset.i, v = inp.value.trim();
+      if (!n[i] || n[i].text === v) return;
+      if (v) n[i].text = v; else n.splice(i, 1);
+      await rpc("notes_set", { notes: n }); renderNotes();
+    };
+    inp.onkeydown = (e) => { if (e.key === "Enter") inp.blur(); };
+    inp.onchange = save;
+  });
+  const add = $("#s-note-add"), nw = $("#s-note-new");
+  if (add && !add.dataset.on) {
+    add.dataset.on = "1";
+    const go = async () => { const v = nw.value.trim(); if (!v) return; await rpc("memory_add", { text: v }); nw.value = ""; renderNotes(); };
+    add.onclick = go;
+    nw.onkeydown = (e) => { if (e.key === "Enter") go(); };
+  }
 }
 async function noteDel(i) { const n = await rpc("notes"); n.splice(i, 1); await rpc("notes_set", { notes: n }); renderNotes(); }
 tabLoaders.settings = loadSettings;

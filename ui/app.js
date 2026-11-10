@@ -82,10 +82,12 @@ function onEvent(ev) {
     case "hub": if (window.hubChanged) hubChanged(ev); break;
     case "game_voice": if (window.gamePanel && $("#game-panel")) gamePanel(); break;
     case "settings_section": if (window.settingsSection) settingsSection(ev.id); break;   // «открой настройки голоса»
+    case "voiceid_step": if (window.voiceidStep) voiceidStep(ev); break;
     case "voiceid": if (window.voiceidPanel && $("#voiceid-panel")) { voiceidPanel(); featuresPanel(); } break;   // a phrase taught by voice
     case "party": if (window.party) party(ev.seconds || 10, ev.birthday); break;
     case "recording": document.body.classList.toggle("recording", !!ev.on); toast(ev.on ? "Идёт запись экрана" : "Запись остановлена", "Запись"); break;
     case "school": if (S.tab === "school") schoolLoad(); else schBadge(); break;
+    case "memory": if (S.tab === "settings" && window.renderNotes) renderNotes(); break;
     case "screentrans": if (window.transPanel && $("#trans-panel")) transPanel(); break;
     case "files_found":
       if (ev.rich && window.hubFilesShow) { hubFiles(); hubFilesShow(ev.rich); }

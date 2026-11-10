@@ -91,6 +91,22 @@ async function mediaStart(act) { toast(await rpc("watch_media", { act }), "По�
 async function mediaCancel() { await rpc("watch_media_cancel"); toast("Отменено", "После видео"); mediaRow(); }
 
 // ---------------------------------------------------------------- phone through KDE Connect
+// iPhone: KDE Connect has no iOS notifications, Windows 11's «Связь с телефоном» has (jarvis/winnotify.py)
+async function phoneIphone() {
+  const box = $("#ph-iphone"); if (!box) return;
+  let r; try { r = await rpc("phonelink_state"); } catch (e) { return; }
+  const st = r.android ? "не нужен: Android подключён через KDE Connect"
+    : r.access === "denied" ? "Windows не разрешила читать уведомления"
+    : r.state === "on" ? (r.count ? `работает · уведомлений с телефона: ${r.count}` : "слушаю — уведомлений с телефона пока не было") : r.state === "off" ? "выключено" : "запускается…";
+  box.innerHTML = `<div class="ph-ios"><b>${I("chat", "lead")}iPhone</b> <span class="dim">${esc(st)}</span> ${featChip("phonelink")}
+    <ol class="ph-steps"><li>Откройте приложение Windows <b>«Связь с телефоном»</b> (Phone Link) и подключите iPhone по Bluetooth.</li>
+      <li>На iPhone в настройках Bluetooth для этого ПК включите «Показывать уведомления».</li>
+      <li>Готово: Джарвис будет называть уведомления и звонки iPhone, а домашка из чата класса запишется сама.</li></ol>
+    ${r.access === "denied" ? `<p class="hint">Разрешите: Параметры Windows → Конфиденциальность и защита → Уведомления → «Разрешить приложениям доступ к уведомлениям».</p>` : ""}
+    <p class="hint small">Отвечать на сообщения и звонить с iPhone через Джарвиса пока нельзя — это умеет только сама «Связь с телефоном».</p></div>`;
+  if (window.featChipsFill) featChipsFill();
+}
+
 async function phonePanel() {
   const box = $("#phone-panel"); if (!box) return;
   let r; try { r = await rpc("phone"); } catch (e) { return; }
@@ -102,7 +118,9 @@ async function phonePanel() {
       <ol class="ph-steps"><li>Установите KDE Connect на ПК кнопкой ниже (Windows может спросить разрешение).</li>
         <li>Поставьте приложение <b>KDE Connect</b> на телефон из Google Play.</li>
         <li>На телефоне выберите этот ПК → «Запросить сопряжение», на ПК подтвердите.</li></ol>
-      <div class="row"><button class="primary" onclick="rpc('phone_install')">${I("download", "lead")}Установить KDE Connect</button></div>`;
+      <div class="row"><button class="primary" onclick="rpc('phone_install')">${I("download", "lead")}Установить KDE Connect</button></div>
+      <div id="ph-iphone"></div>`;
+    phoneIphone();
     return;
   }
   box.innerHTML = `<h3><span>${I("chat", "lead")}Телефон</span><span class="h3-meta ${dev ? "ok-t" : ""}">${dev ? "на связи: " + esc(dev.name) : r.devices.length ? "телефон не в сети" : "нет сопряжённого телефона"}</span></h3>
@@ -130,6 +148,7 @@ async function phonePanel() {
     <p class="hint">Всплывающие окна KDE Connect на ПК отключены: говорит только Джарвис. «Спросить, прочитать ли» — скажу, откуда сообщение, и прочитаю текст, только если ответите «да». Голосом: «не говори про сообщения из Telegram», «читай сообщения из Max», «спрашивай про сообщения из WhatsApp».</p>
     <div class="field"><label>Контакты для звонков и SMS (по строке: имя = номер) <span class="dim">— «позвони маме», «смс маме что…»</span></label><textarea id="ph-contacts" rows="3" placeholder="мама = +79001234567">${esc(Object.entries(s.contacts || {}).map(([k, v]) => `${k} = ${v}`).join("\n"))}</textarea></div>
     ${r.error ? `<div class="dim ph-err">${esc(r.error)}</div>` : ""}
+    <div id="ph-iphone"></div>
     <div class="ph-recent">${r.recent.map((x) => `<div class="ph-n ${x.call ? "call" : ""} ${x.rule === "silent" ? "muted" : ""}"><span class="ah-t">${esc(x.at)}</span><b>${esc(x.app)}</b>
       <span class="ph-tag">${x.call ? "звонок" : x.rule === "silent" ? (x.why || "молча") : esc((r.rule_titles[x.rule] || "").toLowerCase())}</span>
       <span>${x.rule === "silent" ? "" : esc(x.text)}</span></div>`).join("") || '<div class="empty">Уведомлений с телефона пока не было</div>'}</div>`;
@@ -156,6 +175,7 @@ async function phonePanel() {
     e.target.value.split("\n").forEach((l) => { const [k, v] = l.split("="); if (k && v && /\d{5,}/.test(v.replace(/\D/g, ""))) book[k.trim()] = v.trim(); });
     rpc("phone_set", { contacts: book }).then(() => toast("Сохранено", "Контакты для SMS"));
   };
+  phoneIphone();
   if (window.featChipsFill) featChipsFill();
 }
 function ruleSel(id, titles, cur, app) {

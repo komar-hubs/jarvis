@@ -28,6 +28,11 @@ from .stt import Listener, cuda_available, list_mics, mic_access_problem
 from .tts import TTS, REF_DEFAULT, XttsEngine
 
 STOP_WORDS = {"стоп", "хватит", "замолчи", "тихо", "стой", "достаточно", "заткнись", "отмена", "отставить", "выключи"}
+# said over Jarvis's own speech without the name: his voice in the speakers drowns "Джарвис", so these stop him anyway
+STOP_OVER_SPEECH = re.compile(r"^(?:ладно\s+|все\s+|всё\s+)?(?:стоп|хватит|замолчи|тихо|стой|достаточно|заткнись|"
+                              r"подожди|погоди|помолчи|харэ|понял|ясно)(?:\s+(?:хватит|стоп|спасибо|уже))?$")
+# emoji: the UI never shows system emoji, and the voice cannot say them (issue #3: a reply full of them)
+EMOJI = re.compile("[\U0001F000-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF\uFE0F\u200D\u20E3]+")
 
 TOOLS_DOC = """Инструменты (поле "tool" и аргументы):
 - open_app {"name": "telegram"} — запустить программу по названию
@@ -247,6 +252,8 @@ class Core:
         self.audiomem = AudioMemory(self)  # "что он сказал?": the last minutes of the PC's sound, in RAM only
         from .filesearch import FileSearch
         self.filesearch = FileSearch(self)  # "найди файл про …": documents indexed by their words and meaning
+        from .winnotify import WinNotify
+        self.winnotify = WinNotify(self)   # iPhone: notifications of Windows' «Связь с телефоном»
         from .extras import Extras
         self.extras = Extras(self)   # before the router: it registers voice rules of its own
         self.router = Router(self)
@@ -394,6 +401,7 @@ class Core:
         self.screenmem.start()
         self.audiomem.start()
         self.filesearch.start()
+        self.winnotify.start()
         if self.cfg.get("ai.provider") == "ollama":      # the local AI must be awake when the first question comes
             threading.Thread(target=lambda: self.background.ollama_state(start=True, wait=0), daemon=True, name="ollama-wake").start()
         threading.Thread(target=lambda: nlu.morph(), daemon=True).start()  # word-form dictionary: load ahead
@@ -624,7 +632,8 @@ class Core:
             self.phone.stop_search()
             self.say("Отлично, сэр.")
             return
-        if norm in STOP_WORDS and (woke or self.alarm_active):
+        over_speech = not woke and self.tts_busy() and STOP_OVER_SPEECH.match(norm or "") and self._echo_score(norm) < 55
+        if (norm in STOP_WORDS and (woke or self.alarm_active)) or over_speech:
             self.stop_all()
             self.clear_notice()
             self.set_state("idle")
@@ -659,7 +668,8 @@ class Core:
                 answering = now - getattr(self, "last_turn", 0) < 90 and self.follow_chain < 6
                 if not echo and in_dialog:
                     nameless = True
-                elif echo and (in_dialog or answering) and len(norm.split()) >= 2 and self._echo_score(norm or text) < 55:
+                elif echo and (in_dialog or answering) and self._echo_score(norm or text) < (
+                        55 if len(norm.split()) >= 2 else 40 if not self.tts_busy() else -1):
                     nameless = True  # barge-in without the name: clearly not our own voice
                     self.log(f"Перебивание без имени: «{text}»")
         if not (meta.get("forced") or woke or confirm or window or nameless):
@@ -697,15 +707,17 @@ class Core:
         while True:
             kind, text, source = self.dialog_q.get()
             hint = None
+            overheard = False
             if source == "voice_free":
                 source = "voice"
                 # A question or request in the 2nd person right after Jarvis spoke is for him: no filter at all.
-                # The old hint let the model drop "Что делаешь?" and "Чем мы займёмся" as "not for me".
-                if not self._addressed_to_me(text):
-                    hint = ("[Фраза сказана без обращения по имени (" + ("режим разговора" if self.conversation else
-                            "сразу после твоего ответа") + "). Почти всегда это продолжение разговора с тобой — отвечай. "
-                            "Только если она ОЧЕВИДНО обращена к другому человеку (по имени, «мам», спор двух людей) "
-                            "или это звук из видео/игры, ответь ровно одним символом «—».]")
+                # Anything else said without the name is most likely talk in the room, a video or a game: outside
+                # the conversation mode it may still run a local command ("громче"), but it is never sent to the AI.
+                # It used to be, and the AI answered every overheard phrase at length (issue #3, "на любой пук").
+                if not self._addressed_to_me(text) and not self._asked_me(text):
+                    overheard = not self.conversation
+                    hint = ("[Фраза сказана без обращения по имени (режим разговора). Если не уверен, что она тебе, "
+                            "а не другому человеку, видео или игре, ответь ровно одним символом «—».]")
             try:
                 self.set_state("thinking")
                 if kind == "chat":
@@ -713,7 +725,9 @@ class Core:
                 else:
                     self._chat_add("user", text, source)
                     res = self.router.handle_chain(text)
-                    if res is False:
+                    if res is False and overheard:
+                        self.log(f"Без имени и не похоже на обращение — не отвечаю: «{text}»")
+                    elif res is False:
                         self.spawn_chat(text, source=source, add_user=False, extra=hint)
                     elif isinstance(res, str):
                         # "открой блокнот и напиши привет": the router opened Notepad, the AI writes the rest
@@ -728,6 +742,18 @@ class Core:
             finally:
                 if not self.tts_busy() and not self.ai_busy:
                     self.set_state("idle")
+
+    def _asked_me(self, text):
+        """A short reply ("да", "давай, расскажи") to a question Jarvis has just asked is for him."""
+        if len(re.findall(r"\w+", text or "")) > 5:
+            return False
+        last = next((m for m in reversed(self.chat_store.items) if m["role"] == "assistant"), None)
+        if not last or not str(last.get("content", "")).rstrip().endswith("?"):
+            return False
+        try:
+            return (dt.datetime.now() - dt.datetime.fromisoformat(last["ts"])).total_seconds() < 120
+        except Exception:
+            return False
 
     @staticmethod
     def _addressed_to_me(text):
@@ -852,8 +878,10 @@ class Core:
               f"Говоришь по-русски, безупречно вежливо, с лёгкой британской иронией, обращаешься «{addr}». ") +
              "Отвечай кратко — 1-3 предложения, если не просят подробно: ответы озвучиваются голосом. "
              "В обычных ответах без markdown, таблиц и эмодзи; код и списки — только если просят.\n"
+             "Без эмодзи. Не давай непрошеных советов: про воду, перерывы, фокус, здоровье, погоду и протоколы говори, "
+             "только если об этом спросили. Не шути про алкоголь.\n"
              "Каждое сообщение пользователя начинается с [Контекст: ...] — время, погода, память о пользователе, "
-             "его протоколы. Используй это, но не пересказывай без просьбы. Если пользователь просит открыть сайт, "
+             "его протоколы. Используй это, только когда вопрос об этом, и не пересказывай без просьбы. Если пользователь просит открыть сайт, "
              "который ты знаешь, открывай его адрес инструментом open (например rutracker.org, kinopoisk.ru).\n"
              + (self.context_line() + "\n" if with_context else ""))
         if c.get("ai.agent_tools", True):
@@ -981,6 +1009,9 @@ class Core:
                         said_wait = True
                         feeder.say_now(random.choice(["Секунду, сэр, проверяю.", "Сейчас уточню.", "Минуту, смотрю."])
                                        if tool != "Read" else "Смотрю.")
+                    continue
+                chunk = EMOJI.sub("", chunk)
+                if not chunk:
                     continue
                 full += chunk
                 self.emit("chat_stream", state="chunk", text=chunk)
@@ -1313,9 +1344,7 @@ class Core:
         if name == "clipboard":
             return S.clipboard_get()[:3000]
         if name == "remember":
-            notes = self.cfg.get("notes", [])
-            notes.append({"text": g("text"), "at": dt.datetime.now().isoformat(timespec="minutes")})
-            self.cfg.set("notes", notes[-200:])
+            self.remember(g("text"))
             return True
         if name == "screenshot":
             return str(S.screenshot())
@@ -1929,7 +1958,7 @@ class Core:
                                                           self.quick, self.marker, self.screenmem, self.macros, self.boot,
                                                           self.gamevoice, self.features, self.diag, self.gamefx,
                                                           self.voiceid, self.stress, self.school, self.screentrans,
-                                                          self.audiomem, self.filesearch)
+                                                          self.audiomem, self.filesearch, self.winnotify)
                    if hasattr(o, "rpc_" + method)), None)
         if not fn:
             raise ValueError(f"unknown method {method}")
@@ -2185,6 +2214,8 @@ class Core:
         return list_mics()
 
     def rpc_listen(self, target="voice"):
+        if self.tts_busy():
+            self.tts.stop()                    # Ctrl+Alt+J over a long answer: stop it and listen
         self.listener.listen_once(target)
         if self.cfg.get("stt.chime", True):
             self.player.sound("wake")
@@ -2263,12 +2294,50 @@ class Core:
         {"start": pl.sw_start, "stop": pl.sw_stop, "reset": pl.sw_reset, "lap": pl.sw_lap}.get(action, lambda: None)()
         return {"value": pl.sw_value(), "running": pl.stopwatch["start"] is not None, "laps": pl.stopwatch["laps"]}
 
+    # facts that have one value: a new one replaces the old one instead of piling up next to a misheard version
+    SINGLE_FACTS = re.compile(r"^(?:меня\s+зовут|мое\s+имя|моя\s+фамилия|мой\s+день\s+рождения|я\s+родил\w*|мне\s+\d+\s+(?:год|лет)|"
+                              r"я\s+живу|мой\s+город|моя\s+почта|мой\s+(?:номер|телефон)|я\s+учусь|моя\s+школа|мой\s+класс|"
+                              r"я\s+работаю|моя\s+работа)\b")
+
+    def remember(self, text):
+        """Adds a fact to the memory about the user. "Меня зовут …" replaces an older "меня зовут …". Returns the
+        replaced fact or None."""
+        text = (text or "").strip().rstrip(".")
+        if not text:
+            return None
+        notes = self.cfg.get("notes", [])
+        key = lambda s: self.SINGLE_FACTS.match((s or "").lower().replace("ё", "е"))
+        k = key(text)
+        old = next((n for n in notes if k and key(n["text"]) and key(n["text"]).group(0) == k.group(0)), None)
+        notes = [n for n in notes if n is not old and n["text"].lower() != text.lower()]
+        notes.append({"text": text, "at": dt.datetime.now().isoformat(timespec="minutes")})
+        self.cfg.set("notes", notes[-200:])
+        self.emit("memory")
+        return old["text"] if old else None
+
+    def forget_fact(self, query):
+        """Removes the fact most like the query (one). The removed text or None."""
+        from rapidfuzz import fuzz, process
+        notes = self.cfg.get("notes", [])
+        if not notes:
+            return None
+        r = process.extractOne(query.lower(), [n["text"].lower() for n in notes], scorer=fuzz.WRatio, score_cutoff=70)
+        if not r:
+            return None
+        gone = notes.pop(r[2])
+        self.cfg.set("notes", notes)
+        self.emit("memory")
+        return gone["text"]
+
     def rpc_notes(self):
         return self.cfg.get("notes", [])
 
     def rpc_notes_set(self, notes):
         self.cfg.set("notes", notes)
         return True
+
+    def rpc_memory_add(self, text):
+        return self.remember(text)
 
     # --- commands & sources
     def rpc_commands(self):

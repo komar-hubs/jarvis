@@ -145,19 +145,43 @@ class VoiceId:
         threading.Thread(target=start, daemon=True, name="voiceid").start()
         return True
 
-    PROMPTS = ["Скажите любую фразу секунды на три, например: «Сегодня отличный день, чтобы всё успеть».",
-               "Ещё одну, чуть громче или тише, как обычно говорите.",
-               "И последнюю, любую."]
+    # read from the screen (Settings → «Только мой голос») or repeated after Jarvis: about three seconds each.
+    # It was "скажите любую фразу" by voice only: nobody knew what to say, when, or whether it was taken (issue #3)
+    READ = ["Сегодня отличный день, чтобы спокойно всё успеть и немного отдохнуть.",
+            "Джарвис, покажи погоду на завтра и напомни про важные дела.",
+            "Мой голос — это мой ключ, и этим компьютером управляю я."]
 
-    def _ask(self, n):
+    def _ask(self, n, again=False):
         import time
-        self.core.say(self.PROMPTS[n - 1])
+        phrase = self.READ[n - 1]
+        self.core.emit("voiceid_step", n=n, text=phrase, state="wait")
+        self.core.say(("Ещё раз, чуть подлиннее. " if again else
+                       "Запоминаю ваш голос: три короткие фразы. Первая. " if n == 1 else
+                       "Отлично. Вторая. " if n == 2 else "И последняя. ") + f"Повторите за мной: {phrase}")
+        token = object()
+        self._token = token
+
+        def arm():
+            # only once Jarvis is silent: his own voice must not get into the sample
+            if self._token is not token:
+                return
+            self.core.capture = (got, time.time() + 25)
+            self.core.listen_next(25)
+            self.core.emit("voiceid_step", n=n, text=phrase, state="listen")
+            threading.Timer(26, lambda: timeout(token)).start()
+
+        def timeout(tok):
+            if self._token is tok:
+                self._token = None
+                self.core.capture = None
+                self.core.emit("voiceid_step", n=n, text="", state="cancel")
+                self.core.say("Не услышал фразу, запись голоса отменена. Начните заново, когда будете готовы.")
 
         def got(text):
+            self._token = None
             audio = getattr(self.core.listener, "last_audio", None)
             if audio is None or len(audio) < SR * 1.0:
-                self.core.say("Слишком коротко. Ещё раз, пожалуйста, подлиннее.")
-                self._ask(n)
+                self._ask(n, again=True)
                 return True
             try:
                 self.samples.append(embed(audio))
@@ -167,9 +191,10 @@ class VoiceId:
             if n < 3:
                 self._ask(n + 1)
                 return True
+            self.core.emit("voiceid_step", n=3, text="", state="done")
             self._finish()
             return True
-        self.core.capture = (got, time.time() + 25)
+        self.core.after_speech(arm, 0.15)
 
     def _finish(self):
         prints = np.array(self.samples)
@@ -198,6 +223,12 @@ class VoiceId:
 
     def rpc_voiceid_enroll(self):
         return self.enroll()
+
+    def rpc_voiceid_cancel(self):
+        self._token = None
+        self.core.capture = None
+        self.core.emit("voiceid_step", n=0, text="", state="cancel")
+        return True
 
     def rpc_voiceid_forget(self):
         self.forget()

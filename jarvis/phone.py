@@ -331,6 +331,20 @@ class Phone:
             except Exception as e:
                 self.last_error = str(e)[:200]
 
+    def feed_external(self, app, title, text):
+        """A notification from another source (Windows' «Связь с телефоном» for an iPhone, jarvis/winnotify.py):
+        the same rules, dedupe, homework and "Прочитать?" as KDE Connect's."""
+        if not self.cfg.get("phone.enabled", True) or not (self.cfg.get("phone.announce", True) or self.cfg.get("phone.calls", True)):
+            return
+        title, text = self._clean(title or ""), self._clean(text or "")
+        if not (title or text) or not self._mark_announced(app, (title, text)):
+            return
+        try:
+            self.core.school.feed_phone(app, title, text)
+        except Exception as e:
+            self.core.log(f"Учёба: {e}", "warn")
+        self._new(f"{app}: " + (f"{title}: {text}" if title and text else (text or title)))
+
     def _from_bus(self, d, updated):
         """A notification the phone posted (D-Bus signal from KDE Connect): appName, title (sender), text, silent."""
         if not self.cfg.get("phone.enabled", True) or not (self.cfg.get("phone.announce", True) or self.cfg.get("phone.calls", True)):

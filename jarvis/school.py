@@ -108,6 +108,11 @@ class School:
         d.setdefault("evening", "19:00")
         d.setdefault("auto_hw", True)
         d.setdefault("any_chat", False)
+        # issue #1: a two-week timetable (subgroups) and own bells for some days
+        d.setdefault("weeks", 1)                  # 1 or 2
+        d.setdefault("days_b", {str(i): [] for i in range(1, 8)})   # the second week
+        d.setdefault("week_anchor", "")           # a Monday of the first week
+        d.setdefault("bells_by_day", {})          # "1".."7" -> own bells of that weekday
         self.store.items = d
         self._lock = threading.RLock()
         self._evening_said = ""
@@ -123,9 +128,29 @@ class School:
         self.core.emit("school")
 
     # ================================================================== timetable
+    def week_no(self, day):
+        """1 or 2: which week of a two-week timetable this date is in."""
+        if int(self.d.get("weeks") or 1) != 2:
+            return 1
+        try:
+            anchor = dt.date.fromisoformat(self.d.get("week_anchor") or "")
+        except ValueError:
+            anchor = dt.date(2026, 9, 1)
+        a = anchor - dt.timedelta(days=anchor.weekday())
+        m = day - dt.timedelta(days=day.weekday())
+        return 1 + ((m - a).days // 7) % 2
+
+    def filled(self):
+        """Is any lesson written in (either week)?"""
+        return any(self.d["days"].values()) or (int(self.d.get("weeks") or 1) == 2 and any((self.d.get("days_b") or {}).values()))
+
+    def bells_of(self, dow):
+        own = (self.d.get("bells_by_day") or {}).get(str(dow))
+        return own if own else self.d["bells"]
+
     def subjects_known(self):
         out = []
-        for day in self.d["days"].values():
+        for day in list(self.d["days"].values()) + list((self.d.get("days_b") or {}).values() if int(self.d.get("weeks") or 1) == 2 else []):
             for s in day:
                 if s and s not in out:
                     out.append(s)
@@ -149,8 +174,9 @@ class School:
 
     def lessons(self, day):
         """[{"n", "subject", "start": datetime, "end": datetime}] of that date."""
-        subj = self.d["days"].get(str(day.isoweekday())) or []
-        bells = self.d["bells"]
+        src = self.d["days_b"] if self.week_no(day) == 2 else self.d["days"]
+        subj = src.get(str(day.isoweekday())) or []
+        bells = self.bells_of(day.isoweekday())
         out = []
         for i, s in enumerate(subj):
             if not s or i >= len(bells):
@@ -472,7 +498,7 @@ class School:
         ls = self.lessons(day)
         w = when_word(day)
         if not ls:
-            return f"{w.capitalize()} уроков нет." if any(self.d["days"].values()) else \
+            return f"{w.capitalize()} уроков нет." if self.filled() else \
                 "Расписание ещё не заполнено: вкладка «Учёба» → Расписание."
         first = ls[0]
         subj = ", ".join(l["subject"] for l in ls)
@@ -543,13 +569,14 @@ class School:
                          "events": [{"title": e["title"], "start": f"{e['start']:%H:%M}", "end": f"{e['end']:%H:%M}"}
                                     for e in self.events(d)]})
         p = self.plan()
-        return {"data": self.d, "hw": hw, "week": week, "plan": p, "plan_text": self.plan_text("now"),
+        return {"data": self.d, "hw": hw, "week": week, "plan": p, "plan_text": self.plan_text("now"), "week_no": self.week_no(today),
                 "chats_seen": sorted(self.recent_chats, key=lambda c: -self.recent_chats[c])[:15],
                 "subjects": list(dict.fromkeys(self.subjects_known() + [s for s, _ in SUBJECTS]))}
 
     def rpc_school_save(self, data):
         with self._lock:
-            for k in ("days", "bells", "events", "subjects", "chats", "bedtime", "evening", "auto_hw", "any_chat"):
+            for k in ("days", "bells", "events", "subjects", "chats", "bedtime", "evening", "auto_hw", "any_chat",
+                      "weeks", "days_b", "week_anchor", "bells_by_day"):
                 if k in data:
                     self.d[k] = data[k]
             self.save()
@@ -637,7 +664,7 @@ def register(R, core):
         now = dt.datetime.now()
         ls = s.lessons(now.date())
         if not ls:
-            return False if not any(s.d["days"].values()) else "Сегодня уроков нет."
+            return False if not s.filled() else "Сегодня уроков нет."
         cur = next((l for l in ls if l["start"] <= now < l["end"]), None)
         nxt = next((l for l in ls if l["start"] > now), None)
         if "следующ" in t:
@@ -648,19 +675,27 @@ def register(R, core):
                     + (f" Потом {nxt['subject']}." if nxt else " Это последний."))
         return f"Сейчас перемена. Следующий — {nxt['subject']} в {nxt['start']:%H:%M}." if nxt else "Уроки на сегодня закончились."
 
+    @R(r"^(?:какая|какая\s+сейчас|какая\s+у\s+нас)\s+(?:сейчас\s+)?неделя(?:\s+(?:по\s+)?расписани\w*)?$|^(?:эта\s+неделя|сейчас)\s+(?:первая|вторая)\s+(?:или\s+(?:первая|вторая)\s+)?неделя\??$")
+    def _weekno(m, t):
+        s = SC()
+        if int(s.d.get("weeks") or 1) != 2:
+            return False
+        n = s.week_no(dt.date.today())
+        return f"Сейчас {'первая' if n == 1 else 'вторая'} неделя расписания."
+
     @R(r"^сколько\s+(?:минут\s+)?(?:осталось\s+)?до\s+(?:конца\s+урока|звонка|перемены)$")
     def _bell(m, t):
         now = dt.datetime.now()
         cur = next((l for l in SC().lessons(now.date()) if l["start"] <= now < l["end"]), None)
         if not cur:
-            return False if not any(SC().d["days"].values()) else "Сейчас не урок."
+            return False if not SC().filled() else "Сейчас не урок."
         return f"До звонка {mins(int((cur['end'] - now).total_seconds() // 60) + 1)}."
 
     @R(r"^(?:какие|сколько)\s+(?:у\s+меня\s+)?уроков?\s+" + DAYW + r"$|^(?:какие\s+)?уроки\s+(?:на\s+)?" + DAYW + r"$|"
        r"^(?:мое\s+|какое\s+)?расписание\s+(?:уроков\s+)?(?:на\s+)?" + DAYW + r"$|^что\s+(?:у\s+меня\s+)?(?:в|во)\s+" + DAY_RX + r"$")
     def _day(m, t):
         s = SC()
-        if not any(s.d["days"].values()):
+        if not s.filled():
             return False                        # no timetable: "моё расписание на завтра" is the calendar's
         word = next((g for g in m.groups() if g), "сегодня")
         day = day_of(word)
@@ -678,7 +713,7 @@ def register(R, core):
         if len(m.group(1).split()) > 3:
             return False
         subj = s.canon(m.group(1))
-        if not subj or not any(s.d["days"].values()):
+        if not subj or not s.filled():
             return False
         now = dt.datetime.now()
         for k in range(0, 15):

@@ -1145,10 +1145,8 @@ class Router:
         # ---------------- notes / memory
         @R(r"^(?:запомни|запиши в память|запомни что)\s+(?:что\s+)?(.+)$")
         def _remember(m, t):
-            notes = cfg.get("notes", [])
-            notes.append({"text": m.group(1), "at": dt.datetime.now().isoformat(timespec="minutes")})
-            cfg.set("notes", notes[-200:])
-            return "Запомнил."
+            old = core.remember(m.group(1))
+            return f"Запомнил. Старое «{old}» убрал." if old else "Запомнил."
 
         @R(r"^(?:что ты (?:помнишь|запомнил)|что я (?:просил|говорил) запомнить|твоя память)")
         def _recall(m, t):
@@ -1160,7 +1158,16 @@ class Router:
         @R(r"^(?:забудь все|очисти память)$")
         def _forget(m, t):
             cfg.set("notes", [])
+            core.emit("memory")
             return "Память очищена. Кто я? Шучу, сэр."
+
+        # "забудь, что меня зовут Клин": one fact (a misheard one), not the whole memory
+        @R(r"^(?:забудь|удали\s+из\s+памяти|сотри\s+из\s+памяти|не\s+помни)\s+(?:что|про|о|об|факт)\s+(.+)$")
+        def _forget_one(m, t):
+            gone = core.forget_fact(m.group(1))
+            if not gone:
+                return False
+            return f"Забыл: «{gone}»."
 
         # ---------------- info
         @R(r"^(?:сколько времени|который час|сколько сейчас времени|время|какое время|скажи время)$")

@@ -6,7 +6,7 @@ const SET_SYN = {
   "ударен": ["ударения"], "произнош": ["ударения"], "имя": ["имена для вызова"], "микро": ["микрофон"],
   "клип": ["клипы"], "стим": ["steam"], "пароль": ["api ключ", "только мой голос"], "приват": ["что делает джарвис"],
   "обнов": ["обновления джарвиса"], "тем": ["тема"], "ночь": ["ночной режим"], "ии": ["искусственный интеллект"],
-  "перев": ["переводчик экрана"], "файл": ["поиск по файлам"], "документ": ["поиск по файлам"],
+  "памят": ["память о вас"], "запомн": ["память о вас"], "забыт": ["память о вас"], "перев": ["переводчик экрана"], "файл": ["поиск по файлам"], "документ": ["поиск по файлам"],
   "расслыш": ["что он сказал"], "пересказ": ["что он сказал"], "смс": ["телефон"], "звонок": ["телефон"], "уведомлен": ["телефон", "уведомления windows"], "громк": ["громкость"],
 };
 // lists of data inside panels are not settings: app names, notifications, search results
@@ -142,6 +142,24 @@ async function stressPanel() {
 }
 
 // ---------------------------------------------------------------- «Только мой голос» (jarvis/voiceid.py)
+// the recording on screen: which phrase, what to read, and whether Jarvis is listening right now
+function voiceidStep(ev) {
+  const box = $("#voiceid-panel");
+  if (!box) return;
+  let st = $("#vi-step");
+  if (!st) { st = document.createElement("div"); st.id = "vi-step"; st.className = "vi-step"; box.appendChild(st); }
+  if (ev.state === "done" || ev.state === "cancel") {
+    st.remove();
+    if (ev.state === "done") setTimeout(() => { voiceidPanel(); featuresPanel(); }, 1500);
+    return;
+  }
+  st.innerHTML = `<div class="vi-dots">${[1, 2, 3].map((k) => `<i class="${k < ev.n ? "ok" : k === ev.n ? "cur" : ""}"></i>`).join("")}<span>фраза ${ev.n} из 3</span></div>
+    <div class="vi-text">«${esc(ev.text)}»</div>
+    <div class="vi-state ${ev.state === "listen" ? "on" : ""}">${ev.state === "listen" ? I("mic", "lead") + "Говорите сейчас — прочитайте фразу вслух" : "Дождитесь, пока Джарвис договорит…"}</div>
+    <button class="ghost small" id="vi-cancel">Отменить</button>`;
+  $("#vi-cancel").onclick = () => rpc("voiceid_cancel");
+}
+
 async function voiceidPanel() {
   const box = $("#voiceid-panel");
   if (!box) return;
@@ -155,7 +173,7 @@ async function voiceidPanel() {
       : `<button class="primary" id="vi-again">${I("mic", "lead")}Запомнить мой голос</button>`}
       <span class="dim">${v.enrolled ? `порог сходства ${v.threshold}` : "попрошу сказать три фразы" + (v.model ? "" : " · модель 26 МБ скачается один раз")}</span></div>
     <div class="row"><span class="dim">проверка:</span>${featChip("voice")}</div>`;
-  $("#vi-again").onclick = async () => { await rpc("voiceid_enroll"); toast("Слушаю: скажите три фразы, как попросит Джарвис", "Только мой голос", false, 8000); };
+  $("#vi-again").onclick = () => rpc("voiceid_enroll");
   const f = $("#vi-forget");
   if (f) f.onclick = () => { if (confirm("Забыть ваш голос? Опасные команды снова будут работать для всех.")) rpc("voiceid_forget").then(() => { voiceidPanel(); featuresPanel(); }); };
   if (window.featChipsFill) featChipsFill();
