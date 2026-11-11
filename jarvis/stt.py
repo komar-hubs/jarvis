@@ -371,11 +371,13 @@ class Listener:
     def _callback(self, indata, frames, t, status):
         try:
             conv = self.conv
+            now = time.time()          # when the frame was heard: the echo canceller lines it up with the speakers
             if conv is None:
-                self.frames.put_nowait(bytes(indata))
+                self.frames.put_nowait((bytes(indata), now))
             else:
-                for f in conv.push(bytes(indata)):
-                    self.frames.put_nowait(f)
+                fs = conv.push(bytes(indata))
+                for j, f in enumerate(fs):
+                    self.frames.put_nowait((f, now - (len(fs) - 1 - j) * FRAME / SR))
         except queue.Full:
             pass
         except Exception:
@@ -551,7 +553,7 @@ class Listener:
         last_dev_check, default_id = 0.0, None
         while self.running:
             try:
-                buf = self.frames.get(timeout=1)
+                buf, t_cap = self.frames.get(timeout=1)
                 starved = 0
             except queue.Empty:
                 # no audio for 3 s: the device was unplugged or switched (headset) -> reopen it
@@ -580,6 +582,13 @@ class Listener:
                     except Exception as e:
                         self.mic_error = str(e)
                 continue
+            aec = getattr(self, "aec", None)
+            if aec is not None:
+                try:
+                    buf = aec.process(buf, t_cap)        # the PC's own sound out of the microphone (jarvis/aec.py)
+                except Exception as e:
+                    self.log(f"Вычитание звука ПК: {e}", "warn")
+                    self.aec = None
             pcm = np.frombuffer(buf, np.int16)
             raw = float(np.sqrt(np.mean(pcm.astype(np.float32) ** 2)) + 1e-6)
             if not self.heard_any:

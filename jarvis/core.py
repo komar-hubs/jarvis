@@ -198,6 +198,8 @@ class Core:
         self.tts = TTS(self.cfg, self.player, log=self.log, on_state=self._tts_state)
         self.listener = Listener(self.cfg, self.on_utterance, on_level=lambda v: self.emit("mic_level", v=round(v, 3)),
                                  on_state=self._stt_state, log=self.log, is_speaking=self.echo_window)
+        from .aec import EchoCanceller
+        self.listener.aec = EchoCanceller(self.cfg, self.log)   # the PC's own sound out of the mic (stt.aec)
         self.tts.aligner = self.listener.align_end
         self.tts.aligner_ready = lambda: self.listener.model is not None and self.listener.model_name != "gigaam-v3-ctc"
         self.apps = S.AppIndex(log=self.log)

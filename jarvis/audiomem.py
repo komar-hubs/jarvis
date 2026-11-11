@@ -65,12 +65,15 @@ class AudioMemory:
         def cb(data, frames, info, status):
             self._last_cb = time.time()
             try:
-                if self.core.listener.is_speaking():
-                    return (None, pa.paContinue)          # Jarvis's own voice is not "что он сказал"
                 x = np.frombuffer(data, np.int16).reshape(-1, ch).mean(axis=1)
                 y = resample_poly(x, up, down) if (up, down) != (1, 1) else x
                 y = np.clip(y, -32768, 32767).astype(np.int16)
                 now = time.time()
+                aec = getattr(self.core.listener, "aec", None)
+                if aec is not None:
+                    aec.feed(y, now)                      # everything the speakers play, Jarvis's voice included
+                if self.core.listener.is_speaking() or not self.enabled():
+                    return (None, pa.paContinue)          # Jarvis's own voice is not "что он сказал"
                 with self.lock:
                     self.chunks.append((now, y))
                     keep = now - self.seconds()
@@ -115,10 +118,12 @@ class AudioMemory:
         while True:
             try:
                 if not self.enabled():
+                    with self.lock:
+                        self.chunks.clear()
+                if not self.enabled() and not self.cfg.get("stt.aec", False):
+                    # neither "что он сказал" nor the echo canceller needs the speakers' sound
                     if self._stream:
                         self._close()
-                        with self.lock:
-                            self.chunks.clear()
                     time.sleep(5)
                     continue
                 name = self._default_name().replace(" [Loopback]", "")
@@ -226,8 +231,10 @@ class AudioMemory:
     def rpc_audiomem_state(self):
         with self.lock:
             kept = sum(len(c) for _, c in self.chunks) / SR
+        aec = getattr(self.core.listener, "aec", None)
         return {"enabled": self.enabled(), "minutes": self.seconds() // 60, "device": self.dev_name,
-                "kept": int(kept), "error": self.error, "active": bool(self._stream and self._stream.is_active())}
+                "kept": int(kept), "error": self.error, "active": bool(self._stream and self._stream.is_active()),
+                "aec": aec.state() if aec else None}
 
     def rpc_audiomem_set(self, enabled=None, minutes=None):
         if enabled is not None:
