@@ -378,6 +378,56 @@ def invoke_named(hwnd, name_rx, prefer_bottom=True):
         return ""
 
 
+def browser_tabs(hwnd):
+    """The tabs of a browser window by their titles, without touching it (UI Automation): [{"name", "rect"}].
+    Only tab items are asked for, on screen or not, so a minimized window gives its tabs too."""
+    def work():
+        u = UIA.get()
+        cond = u.CreatePropertyCondition(30003, 50019)          # ControlType == TabItem
+        arr = u.ElementFromHandle(hwnd).FindAllBuildCache(4, cond, UIA.cache)
+        out = []
+        for i in range(min(arr.Length, 500)):
+            e = arr.GetElement(i)
+            name = (e.CachedName or "").strip()
+            if name:
+                r = e.CachedBoundingRectangle
+                out.append({"name": name, "rect": (r.left, r.top, r.right, r.bottom)})
+        return out
+    try:
+        return UIA.run(work, timeout=6.0)
+    except Exception:
+        return []
+
+
+def select_tab(hwnd, name):
+    """Selects the browser tab with this exact title (SelectionItem, else Invoke, else its default action).
+    Returns True when one of them worked."""
+    def work():
+        u = UIA.get()
+        cond = u.CreatePropertyCondition(30003, 50019)
+        arr = u.ElementFromHandle(hwnd).FindAllBuildCache(4, cond, UIA.cache)
+        for i in range(min(arr.Length, 500)):
+            e = arr.GetElement(i)
+            if (e.CachedName or "").strip() != name:
+                continue
+            for pid, iface, call in ((10010, UIA.mod.IUIAutomationSelectionItemPattern, "Select"),
+                                     (10000, UIA.mod.IUIAutomationInvokePattern, "Invoke"),
+                                     (10018, UIA.mod.IUIAutomationLegacyIAccessiblePattern, "DoDefaultAction")):
+                try:
+                    p = e.GetCurrentPattern(pid)
+                    if p:
+                        getattr(p.QueryInterface(iface), call)()
+                        return True
+                except Exception:
+                    continue
+            return False
+        return False
+    try:
+        return bool(UIA.run(work, timeout=6.0))
+    except Exception:
+        return False
+
+
 def uia_elements(hwnd=None, taskbar=False):
     import win32gui
     from . import system as S

@@ -203,7 +203,7 @@ const MODES = {
 };
 const IF_PH = { contains: "{answer}  или  {result}", equals: "{answer}", answer_yes: "{answer}", empty: "{query}", not_empty: "{query}",
   time: "23:00-07:00", days: "будни  /  выходные  /  пн, ср, пт", running: "steam", not_running: "steam", battery_below: "20", online: "" };
-const LOGIC = ["if", "else", "end", "repeat", "ask", "set", "stop"];
+const LOGIC = ["if", "else", "end", "repeat", "ask", "set", "stop", "confirm"];
 const BODY_PH = { message: "Текст сообщения, можно {result}", plugin: "фраза для плагина (необязательно)", http: 'тело запроса, например {"text":"{query}"}',
   if: "с чем сравнить (для «содержит» и «равен»): музыка", ask: "переменная для ответа: answer → потом {answer}", set: "значение, можно {result} или {answer}" };
 const PH = {
@@ -213,6 +213,7 @@ const PH = {
   window: "часть заголовка окна", volume: "40  /  +10  /  -10  /  mute", media: "play / next / prev", shell: "ipconfig",
   http: "https://api.example.com/x", source: "название интеграции", ai: "Придумай тост на день рождения", bridge: "Задача агенту, {query}",
   notify: "Текст уведомления", timer: "25 минут", click: "960, 540", clipboard: "текст", run: "название другой команды",
+  confirm: "Отправить {кому}: «{текст}»?",
   voice: "Любая фраза, как Джарвису: открой телеграм и напиши Ване привет", message: "Кому: Ваня / шеф / мама",
   plugin: "название плагина", click_text: "Отправить  /  вторая ссылка  /  кнопка Войти",
   repeat: "3", ask: "Какую музыку включить?", set: "имя переменной: count", stop: "что сказать напоследок (необязательно)",
@@ -236,15 +237,35 @@ function cmdEdit(id) {
     <div class="row"><div class="field" style="flex:1"><label>Название</label><input id="ce-name" value="${esc(c.name)}"></div>
       <label class="switch" style="margin-top:14px"><input type="checkbox" id="ce-en" ${c.enabled ? "checked" : ""}><span></span>Включена</label>
       <label class="switch" style="margin-top:14px" title="Кнопка на быстрой панели (Ctrl+Alt+Q) поверх любых окон и игр"><input type="checkbox" id="ce-quick" ${c.quick ? "checked" : ""}><span></span>В быстрой панели</label></div>
-    <div class="field"><label>Фразы-триггеры (Enter — добавить). Название тоже срабатывает.</label><div id="ce-trig"></div></div>
+    <div class="field"><label>Фразы-триггеры (Enter — добавить). Название тоже срабатывает.</label><div id="ce-trig"></div>
+      <div class="ce-params" id="ce-params"></div></div>
     <div class="field"><label>Ответ Джарвиса (необязательно)</label><input id="ce-reply" value="${esc(c.reply || "")}" placeholder="Как пожелаете, сэр. Запускаю протокол."></div>
+    <div class="row ce-confirm"><label class="switch"><input type="checkbox" id="ce-conf" ${c.confirm ? "checked" : ""}><span></span>Спрашивать подтверждение</label>
+      <input id="ce-conf-text" class="grow" value="${esc(c.confirm_text || "")}" placeholder="вопрос, можно с параметрами: Отправить {кому}: «{текст}»?  (пусто — перечислю параметры сам)"></div>
     <div class="field"><label>Цепочка действий</label><div class="steps" id="ce-steps"></div></div>
     <div class="add-step"><select id="ce-add">${Object.entries(S.actionTypes).map(([k, v]) => `<option value="${k}">${esc(v.title)}</option>`).join("")}</select>
       <button class="btn" onclick="stepAdd()">+ Добавить шаг</button></div>
     <div class="ed-btns"><button class="primary" onclick="cmdSave()">Сохранить</button><button class="btn" onclick="cmdSave(true)">Сохранить и запустить</button>
       <button class="btn" onclick="cmdDup()">Дублировать</button><button class="btn danger" onclick="cmdDel()">Удалить</button></div>`;
-  chipsInput($("#ce-trig"), c.triggers, "например: рабочий режим  /  включи {query}");
+  chipsInput($("#ce-trig"), c.triggers, "например: рабочий режим  /  напиши {кому} что {текст}", () => cmdParams(c));
   renderSteps(c);
+  cmdParams(c);
+}
+// a template's parameters: every {слово} in the triggers; they can be used in the steps, the reply and the question
+function cmdParams(c) {
+  const box = $("#ce-params");
+  if (!box) return;
+  const names = [...new Set(c.triggers.flatMap((t) => [...t.matchAll(/\{(\w+)\}/g)].map((m) => m[1])))];
+  box.innerHTML = `${names.length ? `<span class="dim small">Параметры из фразы:</span> ${names.map((n) => `<code>{${esc(n)}}</code>`).join(" ")}
+      <span class="dim small">— вставляйте их в шаги и в вопрос.</span>` : `<span class="dim small">Шаблон: слова в фигурных скобках — параметры. «напиши {кому} что {текст}» поймёт «напиши ване что буду в 8».</span>`}
+    <div class="row ce-try"><input id="ce-try" placeholder="проверить фразу: как её скажут после «Джарвис»" spellcheck="false"><button class="btn small" id="ce-try-b">Проверить</button><span id="ce-try-r" class="dim small"></span></div>`;
+  const go = async () => {
+    const r = await rpc("command_try", { phrase: $("#ce-try").value });
+    $("#ce-try-r").innerHTML = !r ? "ни одна команда не сработает (сначала сохраните изменения)"
+      : `→ «${esc(r.name)}»${Object.keys(r.vars).length ? ": " + Object.entries(r.vars).map(([k, v]) => `<code>{${esc(k)}}</code> = «${esc(v)}»`).join(", ") : ""}`;
+  };
+  $("#ce-try-b").onclick = go;
+  $("#ce-try").onkeydown = (e) => { if (e.key === "Enter") go(); };
 }
 async function appsDatalist() {
   // exact Start-menu names as suggestions for "app" steps: a typed name that matches nothing never launches
@@ -309,6 +330,8 @@ async function cmdSave(run) {
   c.reply = $("#ce-reply").value;
   c.enabled = $("#ce-en").checked;
   c.quick = $("#ce-quick").checked;
+  c.confirm = $("#ce-conf").checked;
+  c.confirm_text = $("#ce-conf-text").value.trim();
   const isNew = c._new; delete c._new;
   if (isNew) delete c.id;
   const saved = await rpc("command_save", { cmd: c });

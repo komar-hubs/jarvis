@@ -62,8 +62,32 @@ ACTION_TYPES = {
     "ask":       {"title": "Спросить и запомнить ответ", "fields": ["value", "body"]},
     "set":       {"title": "Запомнить в переменную", "fields": ["value", "body"]},
     "stop":      {"title": "Остановить команду", "fields": ["value"]},
+    "confirm":   {"title": "Спросить подтверждение (на «нет» — остановить)", "fields": ["value"]},
 }
 BLOCK_OPEN = ("if", "repeat")
+BUILTIN_VARS = {"time", "date", "result", "name", "value", "i"}
+
+
+def template_vars(trigger):
+    """The parameters of a trigger in order: "напиши {кому} что {текст}" -> ["кому", "текст"]."""
+    return re.findall(r"\{(\w+)\}", trigger or "")
+
+
+def trigger_regex(trigger):
+    """A trigger with {parameters} as a regex. Every parameter but the last takes as FEW words as it can, the last one
+    takes the rest: "напиши {кому} {текст}" on "напиши ване привет как дела" gives кому="ване", текст="привет как
+    дела" (a greedy first one gave кому="ване привет как"). Words between parameters ("что", "в телеграм") split
+    them exactly."""
+    names = template_vars(trigger)
+    out, k = "", 0
+    for part in re.split(r"(\{\w+\})", trigger):
+        m = re.fullmatch(r"\{(\w+)\}", part)
+        if m:
+            k += 1
+            out += f"(?P<{m.group(1)}>.+)" if k == len(names) else f"(?P<{m.group(1)}>.+?)"
+        else:
+            out += re.escape(part)
+    return "^" + out + "$"
 YES = re.compile(r"(?i)^\W*(?:да|ага|угу|конечно|давай|хочу|верно|ок|окей|yes|разумеется|естественно|можно|го)\b")
 
 SOURCE_TYPES = {
@@ -287,7 +311,7 @@ class Commands:
         variants = list(dict.fromkeys([t0, t1]))
         items = self.store.items if kind == "command" else self.sources.items
         best, best_score, best_vars = None, 0, None
-        builtin = {"time", "date", "result", "name", "value"}
+        builtin = BUILTIN_VARS
         for c in items:
             if not c.get("enabled", True):
                 continue
@@ -303,8 +327,10 @@ class Commands:
                     continue
                 for t in variants:
                     if "{" in tr:
-                        pat = "^" + re.sub(r"\\\{(\w+)\\\}", r"(?P<\1>.+)", re.escape(tr)) + "$"
-                        m = re.match(pat, t)
+                        try:
+                            m = re.match(trigger_regex(tr), t)
+                        except re.error:              # a parameter used twice in one trigger
+                            continue
                         if m:
                             return c, {k: v.strip() for k, v in m.groupdict().items()}
                         continue
@@ -382,6 +408,14 @@ class ChainRunner:
         v = {"time": dt.datetime.now().strftime("%H:%M"), "date": dt.date.today().strftime("%d.%m.%Y"),
              "result": "", "name": core.cfg.get("user.name", "")}
         v.update(vars_ or {})
+        if cmd.get("confirm"):
+            params = {k: x for k, x in (vars_ or {}).items() if k not in BUILTIN_VARS and x}
+            q = cmd.get("confirm_text") or (f"{cmd['name']}: " + ", ".join(f"{k} — {x}" for k, x in params.items()) + ". Выполнить?"
+                                            if params else f"Выполнить «{cmd['name']}»?")
+            ans = self.ask(render(q, v))
+            if not ans or not YES.match(_norm(ans)):
+                core.say("Отменил." if ans is not None else "Не услышал ответа. Отменяю.")
+                return
         if cmd.get("reply"):
             core.say(render(cmd["reply"], v))
         self._exec(cmd.get("actions", []), v, depth, cmd["name"])
@@ -435,6 +469,13 @@ class ChainRunner:
                     if a.get("value"):
                         self.core.say(render(a["value"], v))
                     return "stop"
+                if typ == "confirm":
+                    ans = self.ask(render(a.get("value") or "Продолжить?", v))
+                    if not ans or not YES.match(_norm(ans)):
+                        self.core.say("Отменил." if ans is not None else "Не услышал ответа. Отменяю.")
+                        return "stop"
+                    i += 1
+                    continue
                 if typ == "set":
                     var = re.sub(r"\W", "", a.get("value", "")) or "x"
                     v[var] = render(a.get("body", ""), v)

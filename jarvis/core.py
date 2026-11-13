@@ -2439,6 +2439,11 @@ class Core:
         self.commands.delete_command(id)
         return True
 
+    def rpc_command_try(self, phrase):
+        """The command editor's "Проверить фразу": which command a phrase starts and with what parameters."""
+        c, v = self.commands.match(phrase)
+        return {"name": c["name"], "id": c["id"], "vars": v or {}} if c else None
+
     def rpc_command_run(self, id, vars=None):
         c = self.commands.get(id)
         if not c:

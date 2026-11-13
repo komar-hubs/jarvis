@@ -632,6 +632,16 @@ class Router:
                     pass
             if q in ("музыку", "видео", "фото", "фотографии", "игру", "кино", "фильм", "мультик"):
                 return False  # common nouns: "видео" opened the codec tool "LAV Video"
+            if q.startswith("вкладк"):
+                return False  # "открой вкладку ютуба": the tab rule below
+            try:   # already running: bring its window (from the tray too) instead of a second copy / a new window
+                br = S.bring_app(q, core.apps, cfg.get("aliases"))
+            except Exception:
+                br = None
+            if br == "focus":
+                return random.choice([f"{q.capitalize()} уже открыт, вывожу на экран.", f"Переключаюсь на {q}.", info.done()])
+            if br == "restore":
+                return f"Возвращаю {q} из трея."
             ok, name = S.launch_app(q, core.apps, cfg.get("aliases"))
             if ok:
                 return random.choice([f"Запускаю {name}.", f"Открываю {name}, {addr()}.", f"{name} запускается."])
@@ -713,6 +723,23 @@ class Router:
             return info.done()
 
         BROWSER_WORDS = r"(?:браузер\w*|гугл\w*|google|хром\w*|chrome|яндекс\w*|edge|эдж\w*|опер\w*|файрфокс\w*|firefox|интернет\w*|ютуб\w*|youtube)"
+
+        PURE_BROWSER = r"^(?:в\s+|во\s+|на\s+|из\s+)?(?:браузер\w*|хром\w*|chrome|edge|эдж\w*|опер\w*|файрфокс\w*|firefox|яндекс\s*браузер\w*)$"
+
+        @R(r"^(?:закрой|закрыть|убери)\s+вкладк\w*\s+(?:с\s+|со\s+)?(.+)$")
+        def _close_tab_named(m, t):
+            """"Закрой вкладку ютуба": that tab wherever it is, not the one in front."""
+            q = m.group(1).strip()
+            if re.match(PURE_BROWSER, q) or q in ("эту", "текущую", "все", "всё"):
+                return False
+            name = S.close_tab(q)
+            return f"Закрыл вкладку «{name[:50]}»." if name else f"Не нашёл вкладку «{q}», {addr()}."
+
+        @R(r"^(?:переключись|перейди|переключи)\s+(?:на|в)\s+вкладк\w*\s+(?:с\s+|со\s+)?(.+)$|^(?:открой|покажи)\s+вкладк\w*\s+(?:с\s+|со\s+)?(.+)$")
+        def _tab_named(m, t):
+            q = (m.group(1) or m.group(2)).strip()
+            name = S.switch_tab(q)
+            return f"Вкладка «{name[:50]}»." if name else f"Не нашёл вкладку «{q}», {addr()}."
 
         @R(r"^(?:закрой|закрыть|убери)\s+(все\s+|всё\s+)?(вкладк\w*)(?:\s+(?:в|во|на|из)\s+" + BROWSER_WORDS + r"|\s+" + BROWSER_WORDS + r")?$"
            r"|^закрой\s+" + BROWSER_WORDS + r"\s+вкладк\w*$")
@@ -844,7 +871,10 @@ class Router:
 
         @R(r"^(?:разверни|максимизируй|на весь экран)\s*(.*)$", generic=True)
         def _max(m, t):
-            n = S.window_action(m.group(1).strip(), "maximize")
+            q = m.group(1).strip()
+            n = S.window_action(q, "maximize")
+            if not n and q and S.bring_app(q, core.apps, cfg.get("aliases")):
+                n = S.window_action(q, "maximize")
             return info.done() if n else False
 
         @R(r"^(?:скрой|спрячь)\s+(.+)$", generic=True)
@@ -862,8 +892,12 @@ class Router:
             q = m.group(1).strip()
             if q.startswith(("задачи", "мои задачи", "погоду", "время", "напоминания", "таймеры", "систему", "скрытые")):
                 return False
-            n = S.window_action(q, "focus")
-            return info.done() if n else False
+            if S.bring_app(q, core.apps, cfg.get("aliases")):
+                return info.done()
+            if S.window_action(q, "focus"):
+                return info.done()
+            name = S.switch_tab(q)                       # "переключись на ютуб": a tab of some browser window
+            return f"Вкладка «{name[:50]}»." if name else False
 
         @R(r"^(?:какие|что)\s+(?:окна|программы)\s+(?:открыты|запущены)")
         def _wins(m, t):

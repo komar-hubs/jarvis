@@ -251,22 +251,43 @@ def list_windows():
 
 
 def find_windows(query):
+    """Windows that fit the query, best first: the app's own process name before a title that mentions it ("телеграм"
+    is Telegram, not a Chrome tab "Telegram Web"), and inside each kind the most recently used first (z-order)."""
     from rapidfuzz import fuzz
     q = resolve_alias(query)
     q2 = translit(q)
     if len(q) < 3:
         return []
     out = []
-    for w in list_windows():
-        hay = (w["title"] + " " + w["proc"].replace(".exe", "")).lower()
+    for idx, w in enumerate(list_windows()):
+        proc = w["proc"].lower().replace(".exe", "")
+        hay = (w["title"] + " " + proc).lower()
         # whole-word hits only: "вкладки" must not match a random window title
         words = re.findall(r"\w+", hay)
         hit = any(x in words or (len(x) >= 4 and any(wd.startswith(x) for wd in words)) for x in (q, q2))
         s = max(fuzz.partial_ratio(q, hay), fuzz.partial_ratio(q2, hay))
         if hit or s >= 95:
-            out.append((s, w))
-    out.sort(key=lambda x: -x[0])
-    return [w for _, w in out]
+            by_proc = any(x and (x.replace(" ", "") == proc or (len(x) >= 4 and proc.startswith(x.replace(" ", "")))) for x in (q, q2))
+            out.append((0 if by_proc else 1 if hit else 2, idx, w))
+    out.sort(key=lambda x: (x[0], x[1]))
+    return [w for _, _, w in out]
+
+
+def main_window(wins):
+    """Of several windows of one app, the one a person means: the most recently used real window, not a dialog
+    or a small popup (Steam's friends list, a download box)."""
+    import win32gui
+    ranked = []
+    for w in wins:
+        try:
+            h = w["hwnd"]
+            l, t, r, b = win32gui.GetWindowRect(h)
+            small = not win32gui.IsIconic(h) and ((r - l) < 320 or (b - t) < 220)
+            ranked.append((bool(win32gui.GetWindow(h, 4)) or small, w))      # GW_OWNER: a dialog
+        except Exception:
+            continue
+    ranked.sort(key=lambda x: x[0])                                         # stable: z-order kept
+    return ranked[0][1] if ranked else (wins[0] if wins else None)
 
 
 # never closed by "закрой всё": the system shell, Jarvis itself and the Claude app it may be developed in
@@ -335,6 +356,8 @@ def window_action(query, action):
         wins = find_windows(query)
     if not wins:
         return 0
+    if action in ("maximize", "focus", "restore"):
+        wins = [main_window(wins)]
     n = 0
     for w in wins:
         h = w["hwnd"]
@@ -343,6 +366,7 @@ def window_action(query, action):
         elif action == "maximize":
             win32gui.ShowWindow(h, win32con.SW_MAXIMIZE)
             focus_window(h)
+            return 1                                        # one window: Steam's friends list stays as it is
         elif action == "restore":
             win32gui.ShowWindow(h, win32con.SW_RESTORE)
         elif action == "close":
@@ -485,18 +509,132 @@ def launch_app(app, index, aliases=None, loose=False):
     return False, app
 
 
-def close_app(app, index, aliases=None, force=False):
+def app_exe_names(app, index, aliases=None):
+    """The process names an app runs as ({"steam.exe"}), and its Start-menu entry when there is one."""
     q = resolve_alias(app, aliases)
-    exe_names = set()
+    names = set()
     found = index.find(q, aliases) if index else None
     if found and found.get("target", "").lower().endswith(".exe"):
-        exe_names.add(Path(found["target"]).name.lower())
+        names.add(Path(found["target"]).name.lower())
     if q in BUILTIN and BUILTIN[q].endswith(".exe"):
-        exe_names.add(BUILTIN[q])
+        names.add(BUILTIN[q].lower())
     for cand in (q, translit(q)):
-        exe_names.add(cand.replace(" ", "") + ".exe")
-    # process names come lowercase ("steam.exe"): "Steam.exe" never matched, and closing Steam's window only hides it
-    exe_names = {n.lower() for n in exe_names}
+        if cand:
+            names.add(cand.replace(" ", "").lower() + ".exe")
+    names.discard("update.exe")          # Discord's and Telegram's shortcuts start an updater, not the app
+    return names, found
+
+
+# the windows of some apps belong to a helper process: Steam's are drawn by its web helper
+WINDOW_PROCS = {"steam.exe": ("steamwebhelper.exe",)}
+# a tray app comes back by a second start of its exe; Steam has its own link for the main window
+RESTORE_URI = {"steam.exe": "steam://open/main"}
+NO_BRING = {"explorer.exe"}              # "открой проводник" opens a new folder window, as before
+
+
+def app_windows(app, index, aliases=None):
+    """(windows of the app, is it running, its process names, its Start-menu entry) — by the PROCESS, not by window
+    titles, so "открой блокнот" never jumps to a browser tab called "Блокнот онлайн"."""
+    names, found = app_exe_names(app, index, aliases)
+    procs = set(names)
+    for n in names:
+        procs |= set(WINDOW_PROCS.get(n, ()))
+    wins = [w for w in list_windows() if w["proc"].lower() in procs]
+    running = bool(wins) or any((p.info["name"] or "").lower() in names for p in psutil.process_iter(["name"]))
+    return wins, running, names, found
+
+
+def bring_app(app, index, aliases=None, wait=2.5):
+    """"Открой стим" / "переключись на дискорд" when the app already runs: its main window comes to the front
+    (restored if minimized) instead of a second copy; an app hidden in the tray is brought back.
+    Returns "focus" | "restore" | None (not running: start it the usual way)."""
+    wins, running, names, found = app_windows(app, index, aliases)
+    if names & NO_BRING or not running:
+        return None
+    if wins:
+        focus_window(main_window(wins)["hwnd"])
+        return "focus"
+    uri = next((RESTORE_URI[n] for n in names if n in RESTORE_URI), None)
+    try:
+        if uri:
+            open_target(uri)
+        elif found:
+            open_target(found["path"])
+        else:
+            exe = next((p.info["exe"] for p in psutil.process_iter(["name", "exe"])
+                        if (p.info["name"] or "").lower() in names and p.info["exe"]), None)
+            if not exe:
+                return None
+            subprocess.Popen([exe])
+    except Exception:
+        return None
+    t0 = time.time()
+    while time.time() - t0 < wait:
+        time.sleep(0.25)
+        wins = app_windows(app, index, aliases)[0]
+        if wins:
+            focus_window(main_window(wins)["hwnd"])
+            break
+    return "restore"
+
+
+# spoken site names -> words of their tab titles
+TAB_WORDS = {"ютуб": "youtube", "ютюб": "youtube", "ютубе": "youtube", "вк": "вконтакте", "вконтакт": "вконтакте",
+             "гугл": "google", "твич": "twitch", "гитхаб": "github", "почт": "почта", "джимейл": "gmail",
+             "кинопоиск": "кинопоиск", "дискорд": "discord", "телеграм": "telegram", "чат gpt": "chatgpt",
+             "чатгпт": "chatgpt", "википеди": "википедия", "яндекс": "яндекс", "озон": "ozon", "вайлдберриз": "wildberries"}
+
+
+def find_tab(query):
+    """The browser tab that fits the query, in every browser window: (window, tab) or (None, None)."""
+    from rapidfuzz import fuzz
+
+    from . import mouse
+    q = re.sub(r"^(?:вкладк\w*|сайт)\s+(?:с\s+|со\s+)?", "", resolve_alias(query).lower()).strip()
+    if len(q) < 2:
+        return None, None
+    cands = {q, translit(q)} | {v for k, v in TAB_WORDS.items() if q.startswith(k)}
+    best = (0, None, None)
+    with mouse.physical():
+        for w in list_windows():
+            if w["proc"].lower() not in BROWSERS:
+                continue
+            for tab in mouse.browser_tabs(w["hwnd"]):
+                name = tab["name"].lower()
+                words = re.findall(r"\w+", name)
+                hit = any(x in words or (len(x) >= 4 and any(wd.startswith(x) for wd in words)) for x in cands)
+                s = 100 if hit else max(fuzz.partial_ratio(x, name) for x in cands)
+                if s > best[0]:
+                    best = (s, w, tab)
+    return (best[1], best[2]) if best[0] >= 90 else (None, None)
+
+
+def switch_tab(query):
+    """"Переключись на ютуб": the browser window with that tab comes to the front and the tab opens.
+    Returns the tab's title or None."""
+    from . import mouse
+    w, tab = find_tab(query)
+    if not w:
+        return None
+    focus_window(w["hwnd"])
+    if not mouse.select_tab(w["hwnd"], tab["name"]):
+        return None
+    return tab["name"]
+
+
+def close_tab(query):
+    """"Закрой вкладку ютуба": that tab, wherever it is, not the one in front. Returns its title or None."""
+    name = switch_tab(query)
+    if not name:
+        return None
+    time.sleep(0.35)
+    hotkey("ctrl+w")
+    return name
+
+
+def close_app(app, index, aliases=None, force=False):
+    q = resolve_alias(app, aliases)
+    exe_names, found = app_exe_names(app, index, aliases)
     # launchers that live in the tray quit cleanly by their own command, like "Выход" in their menu
     for p in psutil.process_iter(["name", "exe"]):
         if (p.info["name"] or "").lower() == "steam.exe" and "steam.exe" in exe_names and not force:

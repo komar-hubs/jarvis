@@ -1148,3 +1148,11 @@ label.focus-deep { display: flex; gap: 8px; align-items: center; justify-content
 label.focus-deep input[type="checkbox"] { width: 16px; height: 16px; flex: none; margin: 0; padding: 0; accent-color: var(--acc); }
 #vk-groups { width: 100%; box-sizing: border-box; font-family: var(--mono); font-size: 12px; }
 .vk-convs { display: flex; flex-wrap: wrap; gap: 4px 14px; } .vk-conv { font-size: 14px; display: inline-flex; gap: 5px; align-items: center; }
+
+/* command templates: parameters, "проверить фразу", confirmation */
+.ce-params { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.ce-params code { font-family: var(--mono); font-size: 12.5px; color: var(--acc2); background: rgba(var(--acc-rgb), .1); padding: 1px 6px; border-radius: 4px; }
+.ce-try { gap: 8px; align-items: center; flex-wrap: wrap; }
+.ce-try input { flex: 1; min-width: 220px; }
+.ce-confirm { gap: 14px; align-items: center; margin: 2px 0 12px; }
+.ce-confirm input { flex: 1; min-width: 240px; }
