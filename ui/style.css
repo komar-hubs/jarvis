@@ -1156,3 +1156,4 @@ label.focus-deep input[type="checkbox"] { width: 16px; height: 16px; flex: none;
 .ce-try input { flex: 1; min-width: 220px; }
 .ce-confirm { gap: 14px; align-items: center; margin: 2px 0 12px; }
 .ce-confirm input { flex: 1; min-width: 240px; }
+.ce-plist { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }

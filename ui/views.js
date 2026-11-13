@@ -255,9 +255,10 @@ function cmdEdit(id) {
 function cmdParams(c) {
   const box = $("#ce-params");
   if (!box) return;
-  const names = [...new Set(c.triggers.flatMap((t) => [...t.matchAll(/\{(\w+)\}/g)].map((m) => m[1])))];
-  box.innerHTML = `${names.length ? `<span class="dim small">Параметры из фразы:</span> ${names.map((n) => `<code>{${esc(n)}}</code>`).join(" ")}
-      <span class="dim small">— вставляйте их в шаги и в вопрос.</span>` : `<span class="dim small">Шаблон: слова в фигурных скобках — параметры. «напиши {кому} что {текст}» поймёт «напиши ване что буду в 8».</span>`}
+  // \w in JS is Latin only: {кому} needs the Unicode letter classes
+  const names = [...new Set(c.triggers.flatMap((t) => [...t.matchAll(/\{([\p{L}\p{N}_]+)\}/gu)].map((m) => m[1])))];
+  box.innerHTML = `<div class="ce-plist">${names.length ? `<span class="dim small">Параметры из фразы:</span> ${names.map((n) => `<code>{${esc(n)}}</code>`).join(" ")}
+      <span class="dim small">— вставляйте их в шаги и в вопрос.</span>` : `<span class="dim small">Шаблон: слова в фигурных скобках — параметры. «напиши {кому} что {текст}» поймёт «напиши ване что буду в 8».</span>`}</div>
     <div class="row ce-try"><input id="ce-try" placeholder="проверить фразу: как её скажут после «Джарвис»" spellcheck="false"><button class="btn small" id="ce-try-b">Проверить</button><span id="ce-try-r" class="dim small"></span></div>`;
   const go = async () => {
     const r = await rpc("command_try", { phrase: $("#ce-try").value });
