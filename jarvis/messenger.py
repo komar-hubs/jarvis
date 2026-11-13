@@ -215,6 +215,17 @@ def open_chat(core, app, who):
 
 
 def send(core, app, who, text, composed=False):
+    # ВКонтакте with a key that may send messages: through the API, no browser (jarvis/vk.py), still only after "да"
+    vk = getattr(core, "vk", None)
+    if app == "vk" and vk is not None and vk.can_send():
+        to = vk.find_friend(who)
+        if not to:
+            raise RuntimeError(f"не нашёл «{who}» среди друзей и бесед ВКонтакте")
+        shown = text if len(text) <= 230 else text[:220].rsplit(" ", 1)[0] + "…"
+        core.journal.record(f"подготовил сообщение для {to['title']} во ВКонтакте", None, "message")
+        core.ask_confirm(lambda: (vk.send(to["peer"], text), core.say("Отправлено.")),
+                         f"Для {to['title']} во ВКонтакте: «{shown}». Отправить?")
+        return
     open_chat(core, app, who)
     S.type_text(text)
     title = APPS[app]["title"]

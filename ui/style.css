@@ -1133,3 +1133,18 @@ svg.ic.pin { color: var(--hot); }
 .ph-ios > b { margin-right: 6px; } .ph-ios .fchip { margin-left: 8px; }
 .msg.old { animation: none; }
 #chat-list { overflow-anchor: none; scroll-behavior: auto; }
+.t-prog { display: flex; align-items: center; gap: 8px; margin: -2px 8px 4px 36px; }
+.t-prog i { display: block; height: 4px; background: var(--acc); box-shadow: var(--glow); border-radius: 2px; }
+.t-prog { position: relative; } .t-prog::before { content: ""; position: absolute; left: 0; right: 42px; height: 4px; background: rgba(var(--acc-rgb), .12); border-radius: 2px; }
+.t-prog i { position: relative; max-width: calc(100% - 42px); } .t-prog span { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--dim); }
+.t-kids { margin-left: 26px; border-left: 1px solid var(--line); }
+.t-kids .task { padding: 6px 8px; } .t-kids .task .tt { font-size: 15px; }
+.tag.kind-quick { border-color: rgba(93,255,176,.5); color: var(--green); }
+.tag.kind-project { border-color: rgba(var(--hot-rgb),.6); color: var(--hot); }
+.tag.kind-study { border-color: var(--line2); color: var(--acc2); }
+.task .x.sub { color: var(--acc); }
+.ins-panel { margin-bottom: 12px; } .ins-row { display: flex; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(var(--acc-rgb), .08); } .ins-row span { flex: 1; }
+label.focus-deep { display: flex; gap: 8px; align-items: center; justify-content: flex-start; width: 100%; text-align: left; font-size: 13.5px; color: var(--dim); margin: 8px 0; cursor: pointer; }
+label.focus-deep input[type="checkbox"] { width: 16px; height: 16px; flex: none; margin: 0; padding: 0; accent-color: var(--acc); }
+#vk-groups { width: 100%; box-sizing: border-box; font-family: var(--mono); font-size: 12px; }
+.vk-convs { display: flex; flex-wrap: wrap; gap: 4px 14px; } .vk-conv { font-size: 14px; display: inline-flex; gap: 5px; align-items: center; }

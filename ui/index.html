@@ -240,6 +240,7 @@
           </div>
           <div class="focus-ctl" id="focus-ctl">
             <input id="focus-task-in" placeholder="над чем работаем? (необязательно)">
+            <label class="focus-deep" title="Свернуть YouTube, ВК и другие отвлекающие окна, включить тихий фоновый шум, в конце — отчёт о сделанных задачах"><input type="checkbox" id="focus-deep"> глубокая работа: шум, без отвлечений, отчёт</label>
             <div class="quick"><button onclick="hubFocus(25)">25 мин</button><button onclick="hubFocus(45)">45 мин</button><button onclick="hubFocus(60)">1 час</button><button onclick="hubFocus(90)">90 мин</button></div>
           </div>
           <div class="focus-stop hidden" id="focus-stop"><span id="focus-dist"></span><button class="btn danger" onclick="rpc('focus_stop')">Завершить</button></div>
@@ -328,9 +329,11 @@
         <input id="t-text" placeholder="Новая задача… можно фразой: «позвонить маме завтра в 15:00»">
         <input id="t-due" type="datetime-local" title="Срок (необязательно)">
         <select id="t-prio" title="Приоритет"><option value="1">Низкий</option><option value="2" selected>Обычный</option><option value="3">Высокий</option></select>
+        <select id="t-kind" title="Тип задачи"><option value="">Обычная</option><option value="quick">Быстрая</option><option value="project">Проект</option><option value="study">Учёба</option></select>
         <button class="primary" onclick="taskAdd()">Добавить</button>
+        <button class="btn" onclick="goalBreak()" title="ИИ разобьёт цель на шаги со сроками и добавит деревом задач">Разбить цель (ИИ)</button>
       </div>
-      <p class="hint">Голосом: «Джарвис, добавь задачу купить продукты завтра вечером», «какие задачи на сегодня», «отметь задачу 2 выполненной».</p>
+      <p class="hint">Голосом: «Джарвис, добавь задачу купить продукты завтра вечером», «разбей цель подготовиться к экзамену по математике на задачи к 20 декабря», «какой прогресс по экзамену», «отметь задачу 2 выполненной». У задачи можно добавить шаги (+ шаг): цель закроется сама, когда сделаны все.</p>
       <div class="task-cols" id="task-cols"></div>
     </section>
 
@@ -385,6 +388,7 @@
         <button class="primary small seg-cmd" onclick="cmdNew()">+ Новая команда</button>
         <button class="primary small seg-auto hidden" onclick="autoNew()">+ Новая автоматизация</button></h2>
       <div class="seg-cmd">
+        <div class="panel ins-panel hidden" id="ins-panel"></div>
         <p class="hint">Команда = фразы-триггеры + цепочка действий. В триггере можно использовать <code>{query}</code>: «включи музыку {query}» поймает любое название. Переменные в шагах: <code>{query}</code>, <code>{result}</code> (результат предыдущего шага), <code>{time}</code>, <code>{date}</code>.
           Логика: шаги «Если… / Иначе / Конец», «Повторить N раз», «Спросить и запомнить ответ» (потом <code>{answer}</code>), «Запомнить в переменную». Можно научить голосом: «когда я говорю доброе утро, открой почту».</p>
         <div class="split">

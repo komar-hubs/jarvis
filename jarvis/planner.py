@@ -267,8 +267,12 @@ class Planner:
                         t.pop("done_at", None)
                     self.tasks.save()
                     self.on_change("tasks")
-                    return t
-        return None
+                    break
+            else:
+                return None
+        if "done" in kw and getattr(self, "on_done", None):
+            self.on_done(tid)               # jarvis/goals.py: a goal is done with its last step
+        return t
 
     def delete_task(self, tid):
         """Returns the removed task, so the UI can offer "Отменить"."""

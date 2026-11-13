@@ -98,6 +98,7 @@ function onEvent(ev) {
     case "recording": document.body.classList.toggle("recording", !!ev.on); toast(ev.on ? "Идёт запись экрана" : "Запись остановлена", "Запись"); break;
     case "school": if (S.tab === "school") schoolLoad(); else schBadge(); break;
     case "memory": if (S.tab === "settings" && window.renderNotes) renderNotes(); break;
+    case "standin": if (window.standinPanel && $("#standin-panel")) standinPanel(); break;
     case "screentrans": if (window.transPanel && $("#trans-panel")) transPanel(); break;
     case "files_found":
       if (ev.rich && window.hubFilesShow) { hubFiles(); hubFilesShow(ev.rich); }

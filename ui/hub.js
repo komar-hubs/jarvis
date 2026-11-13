@@ -66,7 +66,7 @@ function hubMsgs() {
 
 // ---------------------------------------------------------------- focus
 function hubFocus(minutes) {
-  if (typeof minutes === "number") { rpc("focus_start", { minutes, task: ($("#focus-task-in") || {}).value || "" }); return; }
+  if (typeof minutes === "number") { rpc("focus_start", { minutes, task: ($("#focus-task-in") || {}).value || "", deep: !!($("#focus-deep") || {}).checked }); return; }
   const f = S.focus;
   const panel = $("#focus-panel");
   const badge = $("#badge-focus");

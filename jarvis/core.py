@@ -112,6 +112,8 @@ TOOLS_DOC = """Инструменты (поле "tool" и аргументы):
 - contacts {} — люди, их почта и роли (шеф, мама, коллега…) (данные). «Шефу», «маме» — ищи здесь по роли
 - remember_person {"name": "Антон", "role": "шеф", "email": "..."} — запомнить, кто есть кто (навсегда)
 Отслеживание (сообщу сам, когда случится):
+- goal {"text": "подготовиться к экзамену по математике", "due": "2026-12-20"} — разбить цель на шаги со сроками и
+  сразу добавить в планер деревом задач (используй, когда просят «разбей цель / составь план и добавь в задачи»)
 - watch {"kind": "youtube|twitch|page|process|download", "target": "канал / логин / url / программа (логин по буквам —
   как услышан, словами: «т два икс два»; не переводи сам в латиницу)",
   "text": "что должно появиться на странице (для page)"}
@@ -142,7 +144,9 @@ TOOLS_DOC = """Инструменты (поле "tool" и аргументы):
 - create_command {"name": "Рабочий режим", "triggers": ["рабочий режим"], "reply": "фраза", "actions": [{"type": "app", "value": "telegram"}, {"type": "open", "value": "https://github.com"}]}
   — создать протокол пользователя. Типы шагов: app, open, close, say, wait, search, hotkey, type, volume, media, timer, notify, screenshot
 - delete_command {"name": "..."} — удалить протокол
-- focus {"minutes": 45, "task": "необязательно"} или {"off": true} — режим фокуса: таймер, тишина, напоминания не отвлекаться
+- create_plugin {"request": "что должен делать плагин, по какой фразе"} — написать и сохранить плагин на Python, когда
+  простых шагов create_command не хватает (сеть, файлы, расчёты, своя логика)
+- focus {"minutes": 45, "task": "необязательно", "deep": false} или {"off": true} (deep — глубокая работа: свернуть отвлекающее, фоновый шум, отчёт) — режим фокуса: таймер, тишина, напоминания не отвлекаться
 - habit {"name": "вода", "add": 1} — отметить привычку (вода, зарядка, чтение…)
 - usage {} — сколько пользователь сегодня провёл в программах и за ПК (данные)
 - conversation {"on": true|false} — режим разговора без обращения по имени (для игр и долгих бесед)
@@ -157,7 +161,7 @@ SHELL_DOC = "- shell {\"cmd\": \"команда cmd\"} — выполнить к
 WARM_PHRASES = ["Ищу.", "Секунду, ищу.", "Вот что я нашёл.", "Ищу на YouTube.", "Открываю.", "Открываю Википедию.",
                 "Звук включён.", "Отменено, сэр.", "Таймеры отменены.", "Активных таймеров нет.", "Запомнил.",
                 "Скопировано.", "Блокирую.", "Снимок экрана сохранён.", "Простите, сэр, что-то пошло не так."]
-RISKY_TOOLS = {"shell", "type", "hotkey", "close_app", "run_command", "bridge", "window", "create_command",
+RISKY_TOOLS = {"shell", "type", "hotkey", "close_app", "run_command", "bridge", "window", "create_command", "create_plugin",
                "remember", "delete_command", "click", "click_text", "mouse_move", "drag", "scroll", "click_element",
                "vision_click", "type_into", "drag_text", "mail_send", "mail_delete", "delayed", "undo", "download",
                "cleanup", "remember_person"}
@@ -266,6 +270,15 @@ class Core:
         self.audiomem = AudioMemory(self)  # "что он сказал?": the last minutes of the PC's sound, in RAM only
         from .filesearch import FileSearch
         self.filesearch = FileSearch(self)  # "найди файл про …": documents indexed by their words and meaning
+        from .standin import StandIn
+        self.standin = StandIn(self)       # «подмени меня»: the user's phrases spoken into a Discord call
+        from .vk import VK
+        self.vk = VK(self)                 # ВКонтакте API: groups' posts, conversations, sending (key in vk.token)
+        from .insights import Insights
+        self.insights = Insights(self)     # "что можно автоматизировать": repeated requests and pairs -> commands
+        from .goals import Goals
+        self.goals = Goals(self)           # subtasks, task kinds, "разбей цель на задачи"
+        self.planner.on_done = self.goals.after_update
         from .winnotify import WinNotify
         self.winnotify = WinNotify(self)   # iPhone: notifications of Windows' «Связь с телефоном»
         from .extras import Extras
@@ -416,6 +429,7 @@ class Core:
         self.audiomem.start()
         self.filesearch.start()
         self.winnotify.start()
+        self.vk.start()
         if self.cfg.get("ai.provider") == "ollama":      # the local AI must be awake when the first question comes
             threading.Thread(target=lambda: self.background.ollama_state(start=True, wait=0), daemon=True, name="ollama-wake").start()
         threading.Thread(target=lambda: nlu.morph(), daemon=True).start()  # word-form dictionary: load ahead
@@ -636,6 +650,11 @@ class Core:
                 self.dictation(False)
                 return
             self._dictate(re.sub(r"^\W*(?:джарвис|jarvis)\W*", "", text, flags=re.I) if woke else text, norm)
+            return
+        # «подмени меня»: phrases without the name go into the Discord call (jarvis/standin.py)
+        st = getattr(self, "standin", None)
+        if st is not None and st.on and st.heard(text, norm, woke):
+            self.emit("transcript", text=text, stt_ms=meta.get("stt_ms"))
             return
         # a game in front: "люмос" presses its key at once, without the name and without the router (after the echo
         # check above, so Jarvis's own voice never presses anything)
@@ -896,6 +915,9 @@ class Core:
               f"Говоришь по-русски, безупречно вежливо, с лёгкой британской иронией, обращаешься «{addr}». ") +
              "Отвечай кратко — 1-3 предложения, если не просят подробно: ответы озвучиваются голосом. "
              "В обычных ответах без markdown, таблиц и эмодзи; код и списки — только если просят.\n"
+             "Если просят автоматизировать что-то, сделать команду, протокол или «чтобы по фразе он делал …» — не печатай "
+             "код в чат: создай это инструментом create_command (если хватает готовых шагов) или create_plugin (если нужна "
+             "своя логика), а в ответе коротко скажи, что создано и какой фразой запускать.\n"
              "Без эмодзи. Не давай непрошеных советов: про воду, перерывы, фокус, здоровье, погоду и протоколы говори, "
              "только если об этом спросили. Не шути про алкоголь.\n"
              "Каждое сообщение пользователя начинается с [Контекст: ...] — время, погода, память о пользователе, "
@@ -1186,6 +1208,18 @@ class Core:
             return [{"время": e["at"], "что": e["text"], "важность": e["priority"]} for e in self.initiative.summary(24)][:10]
         if name == "watch":
             return self.watchers.tool_watch(a)
+        if name == "goal":
+            return self.goals.tool_goal(a)
+        if name == "create_plugin":
+            # the AI writes the plugin and it is saved, instead of the code printed into the chat; it gets no
+            # dangerous permissions until the user grants them in the tab (jarvis/plugins.py needs())
+            r = self.plugins.rpc_plugin_ai(g("request") or g("task") or "")
+            if r.get("error"):
+                raise ValueError("плагин не получился: " + r["error"])
+            self.plugins.rpc_plugin_save(r["file"], r["code"])
+            self.emit("plugin_open", file=r["file"])
+            self.show_tab("plugins")
+            return f"Плагин сохранён: {r['file']}. {r.get('note') or ''} Он открыт во вкладке «Плагины» — проверьте и при необходимости дайте разрешения."
         if name == "download":
             return self.background.tool_download(a)
         if name == "cleanup":
@@ -1976,7 +2010,8 @@ class Core:
                                                           self.quick, self.marker, self.screenmem, self.macros, self.boot,
                                                           self.gamevoice, self.features, self.diag, self.gamefx,
                                                           self.voiceid, self.stress, self.school, self.screentrans,
-                                                          self.audiomem, self.filesearch, self.winnotify)
+                                                          self.audiomem, self.filesearch, self.winnotify, self.goals,
+                                                          self.insights, self.vk, self.standin)
                    if hasattr(o, "rpc_" + method)), None)
         if not fn:
             raise ValueError(f"unknown method {method}")

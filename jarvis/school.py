@@ -205,7 +205,8 @@ class School:
             if day.isoweekday() in (e.get("days") or []):
                 try:
                     out.append({"title": e["title"], "start": dt.datetime.combine(day, _hm(e["start"])),
-                                "end": dt.datetime.combine(day, _hm(e["end"]))})
+                                "end": dt.datetime.combine(day, _hm(e["end"])), "type": e.get("type") or "busy",
+                                "id": e.get("id") or e["title"]})
                 except Exception:
                     pass
         return out
@@ -214,7 +215,8 @@ class School:
         """Busy blocks of the day: the lessons as one block (breaks are too short to do anything) + own blocks."""
         ls = self.lessons(day)
         out = [{"title": "уроки", "start": ls[0]["start"], "end": ls[-1]["end"]}] if ls else []
-        return sorted(out + self.events(day), key=lambda b: b["start"])
+        # periods (учёба / работа / отдых) are time to plan into, not time taken away: only "занят" blocks are busy
+        return sorted(out + [e for e in self.events(day) if e["type"] == "busy"], key=lambda b: b["start"])
 
     def next_lesson_day(self, subject, after):
         for k in range(1, 15):
@@ -229,9 +231,14 @@ class School:
             if l["start"] <= now < l["end"]:
                 return {"kind": "lesson", **l}
         for e in self.events(now.date()):
-            if e["start"] <= now < e["end"]:
+            if e["start"] <= now < e["end"] and e["type"] == "busy":
                 return {"kind": "event", **e}
         return None
+
+    def now_period(self, now=None):
+        """The own study / work / free period going on now (tab «Учёба» → «Свои дела по расписанию»)."""
+        now = now or dt.datetime.now()
+        return next((e for e in self.events(now.date()) if e["start"] <= now < e["end"] and e["type"] != "busy"), None)
 
     # ================================================================== homework
     def hw(self, open_only=True):
@@ -332,15 +339,16 @@ class School:
         t = (title or "").lower()
         return any(c.strip() and c.strip().lower() in t for c in self.d.get("chats") or [])
 
-    def feed_phone(self, app, title, text):
-        """A notification from the phone: a class chat's message may be homework."""
+    def feed_phone(self, app, title, text, force=False):
+        """A notification from the phone: a class chat's message may be homework. force: a source the user picked
+        explicitly (a VK group or conversation, jarvis/vk.py) counts as a class chat."""
         if title:
             self.recent_chats[title] = time.time()
             if len(self.recent_chats) > 40:
                 self.recent_chats = dict(sorted(self.recent_chats.items(), key=lambda kv: kv[1])[-30:])
         if not self.cfg.get("school.auto_hw", True) or not text:
             return
-        if not (self.is_class_chat(title) or self.d.get("any_chat")):
+        if not (force or self.is_class_chat(title) or self.d.get("any_chat")):
             return
         # a group chat's notification: "Андрей: … Галина Павловна: Д/з §12 …" (phone._clean puts the names in)
         parts = re.split(r"(?:^|(?<=[.!?\n])\s*)([А-ЯЁA-Z][\w-]+(?:\s[А-ЯЁA-Z][\w-]+){0,2}):\s", text)
@@ -419,7 +427,7 @@ class School:
         now = now or dt.datetime.now()
         today = now.date()
         free = self.free_minutes(now)
-        items = []
+        items, later_bound = [], []
         for t in self.core.planner.tasks.items:
             if t.get("done") or "заметка" in (t.get("tags") or []):
                 continue
@@ -429,11 +437,25 @@ class School:
             days = (dl - today).days if dl else 7
             if days > 14:
                 continue
+            if any(k.get("parent") == t["id"] for k in self.core.planner.tasks.items):
+                continue                          # a goal with steps: its steps are planned, not the goal itself
             hw = "дз" in (t.get("tags") or [])
-            est = int(t.get("est") or (int((self.d["subjects"].get(self.hw_subject(t)) or {}).get("est") or 30) if hw else 20))
-            items.append({"id": t["id"], "text": t["text"], "est": est, "days": days, "hw": hw,
+            kind = "study" if hw else (t.get("kind") or "")
+            est = int(t.get("est") or (int((self.d["subjects"].get(self.hw_subject(t)) or {}).get("est") or 30) if hw
+                                       else 45 if kind == "project" else 10 if kind == "quick" else 20))
+            # a task bound to a period is done only inside it: today only if that period still comes today
+            per = t.get("period")
+            if per:
+                blocks = [e for e in self.events(today) if e["id"] == per and e["end"] > now]
+                if not blocks and not (dl and dl <= today):
+                    title = next((e.get("title") for e in self.d["events"] if (e.get("id") or e.get("title")) == per), per)
+                    later_bound.append({"id": t["id"], "text": t["text"], "est": est, "days": days, "hw": hw, "kind": kind,
+                                        "subject": "", "due": (t.get("due") or "")[:10], "priority": int(t.get("priority") or 2),
+                                        "why": f"в период «{title}»"})
+                    continue
+            items.append({"id": t["id"], "text": t["text"], "est": est, "days": days, "hw": hw, "kind": kind,
                           "subject": self.hw_subject(t) if hw else "", "due": (t.get("due") or "")[:10],
-                          "priority": int(t.get("priority") or 2)})
+                          "priority": int(t.get("priority") or 2), "period": per or ""})
         must = sorted([x for x in items if x["days"] <= 0], key=lambda x: (x["days"], -x["priority"], x["est"]))
         rest = sorted([x for x in items if x["days"] > 0], key=lambda x: (x["days"], -x["priority"], x["est"]))
         today_list, later, left = [], [], free
@@ -453,6 +475,21 @@ class School:
                 x["why"] = (f"{verb} {when_word(due, today)}, сегодня не хватит времени" if due and x["days"] <= 1
                             else f"{verb} {when_word(due, today)}" if due else "срок не горит")
                 later.append(x)
+        # the period going on now steers the order: study first in a study period, projects in a work one, and in
+        # free time only what cannot wait
+        per = self.now_period(now)
+        if per:
+            want = {"study": "study", "work": "project"}.get(per["type"])
+            if want:
+                today_list.sort(key=lambda x: (x["days"] > 0, x["kind"] != want and x.get("period") != per["id"]))
+            elif per["type"] == "free":
+                keep = [x for x in today_list if x["days"] <= 0]
+                for x in today_list:
+                    if x["days"] > 0:
+                        x["why"] = "после отдыха"
+                        later.insert(0, x)
+                today_list = keep
+        later += later_bound
         blk = self.now_block(now)
         nxt = None
         if blk:
@@ -460,6 +497,7 @@ class School:
                    "kind": blk["kind"], "left": int((blk["end"] - now).total_seconds() // 60) + 1}
         late = now >= self.bedtime(today)
         return {"free": free, "short": short, "today": today_list, "later": later, "busy": nxt, "late": late,
+                "period": {"title": per["title"], "type": per["type"], "end": per["end"].strftime("%H:%M")} if per else None,
                 "bedtime": self.d.get("bedtime"), "total": sum(x["est"] for x in today_list)}
 
     def plan_text(self, mode="now"):
@@ -476,6 +514,9 @@ class School:
         head = ""
         if p["busy"]:
             head = f"Сейчас {'урок — ' if p['busy']['kind'] == 'lesson' else ''}{p['busy']['title']}, до {p['busy']['end']}. "
+        elif p.get("period"):
+            head = (f"Сейчас период «{p['period']['title']}», до {p['period']['end']}. " if p["period"]["type"] != "free"
+                    else f"Сейчас свободное время до {p['period']['end']}. ")
         if not p["today"]:
             return head + (f"Срочного ничего нет. Свободно {mins(p['free'])} — можно отдохнуть." if p["free"] else "Срочного ничего нет.")
         first = p["today"][0]
@@ -586,6 +627,9 @@ class School:
 
     def rpc_school_save(self, data):
         with self._lock:
+            import uuid
+            for e in data.get("events") or []:
+                e.setdefault("id", uuid.uuid4().hex[:6])       # tasks bind to a period by its id
             for k in ("days", "bells", "events", "subjects", "chats", "bedtime", "evening", "auto_hw", "any_chat",
                       "weeks", "days_b", "week_anchor", "bells_by_day"):
                 if k in data:

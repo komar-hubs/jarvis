@@ -503,7 +503,7 @@ class Router:
         cfg = core.cfg
         from . import (automation, background, backup, extras, mail, messenger, mouse, notes, people, persona, phone, plugins,
                        agent, boot, diag, features, gamefx, gamevoice, macros, marker, quick, screenmem, sentinel, skills, steam, stress, teach, voiceid, watchers,
-                       audiomem, filesearch, school, screentrans)
+                       audiomem, filesearch, goals, insights, playerui, school, screentrans, standin, vk)
 
         def addr():
             return cfg.get("user.address", "сэр") or "сэр"
@@ -511,6 +511,11 @@ class Router:
         people.register(R, core)  # "мой шеф — Антон", "под шефом я имею в виду…": before the generic corrections
         self._build_journal(R)    # undo, corrections, "что ты сделал": before everything, "отмени" must reach them
         school.register(R, core)       # "что мне сейчас делать", "задали по биологии §12", "какие уроки завтра"
+        goals.register(R, core)        # "разбей цель … на задачи", "какой прогресс по …"
+        insights.register(R, core)     # "что можно автоматизировать"
+        vk.register(R, core)           # "что пишут в беседе 6Б" (with a VK key that reads messages)
+        playerui.register(R, core)     # "включи следующую серию", "пропусти заставку", "разверни окно фильма"
+        standin.register(R, core)      # "подмени меня в дискорде", "я вернулся"
         filesearch.register(R, core)   # "найди файл про …": before the web search's "найди …"
         screentrans.register(R, core)  # "переведи экран", "переводи субтитры": before "переведи что на экране" (vision)
         audiomem.register(R, core)     # "что он сказал?", "перескажи последние 5 минут"

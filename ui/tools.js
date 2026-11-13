@@ -89,7 +89,7 @@ async function fsearchPanel() {
   if (dl || p.state === "index" || p.state === "smart") { clearTimeout(TL.fsT); TL.fsT = setTimeout(() => { if (S.tab === "settings") fsearchPanel(); }, 2500); }
 }
 
-function toolsPanels() { transPanel(); audiomemPanel(); fsearchPanel(); }
+function toolsPanels() { transPanel(); audiomemPanel(); fsearchPanel(); vkPanel(); standinPanel(); }
 
 // ---------------------------------------------------------------- «Сегодня»: the search box
 function hubFiles() {
@@ -118,4 +118,69 @@ function hubFilesShow(res) {
       <button class="ghost small" data-hf-dir="${i}" title="Показать в папке">${I("folder")}</button></div>`).join("") || '<div class="empty">Ничего не нашёл</div>';
   box.querySelectorAll("[data-hf-open]").forEach((b) => b.onclick = () => rpc("filesearch_open", { path: TL.res[+b.dataset.hfOpen].path }));
   box.querySelectorAll("[data-hf-dir]").forEach((b) => b.onclick = () => rpc("filesearch_open", { path: TL.res[+b.dataset.hfDir].path, folder: true }));
+}
+
+// ---------------------------------------------------------------- «Команды»: what could be automated (jarvis/insights.py)
+async function insightsPanel() {
+  const box = $("#ins-panel");
+  if (!box) return;
+  let r = [];
+  try { r = await rpc("insights"); } catch (e) { return; }
+  box.classList.toggle("hidden", !r.length);
+  if (!r.length) return;
+  box.innerHTML = `<h3><span>${I("bolt", "lead")}Можно автоматизировать</span><span class="h3-meta">по вашим просьбам за 2 недели</span></h3>
+    ${r.map((x, i) => `<div class="ins-row"><span>${esc(x.text)}</span><button class="btn small" data-ins="${i}">${I("plus", "lead")}Создать команду</button></div>`).join("")}
+    <p class="hint small">Голосом: «Джарвис, что можно автоматизировать?»</p>`;
+  box.querySelectorAll("[data-ins]").forEach((b) => b.onclick = async () => {
+    const name = prompt("Какой фразой запускать команду?", "");
+    if (!name || !name.trim()) return;
+    await rpc("insights_make", { idx: +b.dataset.ins, name: name.trim() });
+    if (window.loadCmds) loadCmds();
+    insightsPanel();
+  });
+}
+{ const prev = tabLoaders.commands; tabLoaders.commands = () => { if (prev) prev(); insightsPanel(); }; }
+
+// ---------------------------------------------------------------- Settings → «Телефон» → ВКонтакте (jarvis/vk.py)
+async function vkPanel() {
+  const box = $("#vk-panel");
+  if (!box) return;
+  let r;
+  try { r = await rpc("vk_state"); } catch (e) { return; }
+  const c = r.caps || {};
+  const st = !r.has_token ? "ключ не задан" : r.error ? "ошибка: " + r.error
+    : c.messages ? `вход: ${c.name} · группы и беседы` : c.user ? `вход: ${c.name} · только группы (ключ без права на сообщения)` : "ключ приложения · только группы";
+  const chosen = new Set((r.chats || []).map((x) => String(x.peer)));
+  box.innerHTML = `<h3><span>${I("chat", "lead")}ВКонтакте</span><span class="h3-meta ${r.has_token && !r.error ? "ok-t" : ""}">${esc(st)}</span></h3>
+    <p class="hint">Домашка и новости из групп школы и класса — сами, без телефона. Посты групп читает любой ключ: сервисный ключ своего приложения (dev.vk.com → «Создать приложение» → Standalone → «Сервисный ключ доступа»). Беседы и отправка «напиши Пете в вк …» работают, только если ключ пользователя даёт право на сообщения — Джарвис сам проверит. Ключ хранится только на этом ПК.</p>
+    <div class="sgrid">
+      <label>Ключ доступа</label><div class="inline"><input id="vk-token" type="password" placeholder="${r.has_token ? "задан — вставьте новый, чтобы заменить" : "вставьте ключ"}" autocomplete="off"><button class="btn small" id="vk-save">Сохранить</button></div>
+      <label>Группы</label><div><textarea id="vk-groups" rows="3" placeholder="school14_eysk&#10;https://vk.com/club123" spellcheck="false">${esc((r.groups || []).join("\n"))}</textarea><span class="dim small">адрес или короткое имя, по строке; домашка из постов — в «Учёбу», остальное — тихой карточкой</span></div>
+      ${r.conversations && r.conversations.length ? `<label>Беседы</label><div class="vk-convs">${r.conversations.filter((x) => x.type === "chat").slice(0, 30).map((x) =>
+        `<label class="vk-conv"><input type="checkbox" data-peer="${x.peer}" data-title="${esc(x.title)}" ${chosen.has(String(x.peer)) ? "checked" : ""}> ${esc(x.title)}</label>`).join("") || '<span class="dim">бесед нет</span>'}</div>` : ""}
+    </div>
+    <div class="row">${featChip("vk")}</div>`;
+  $("#vk-save").onclick = async () => { const v = $("#vk-token").value.trim(); if (!v) return; await rpc("vk_set", { token: v }); vkPanel(); };
+  $("#vk-groups").onchange = (e) => rpc("vk_set", { groups: e.target.value.split("\n") });
+  box.querySelectorAll("[data-peer]").forEach((cb) => cb.onchange = () => {
+    const chats = [...box.querySelectorAll("[data-peer]:checked")].map((x) => ({ peer: +x.dataset.peer, title: x.dataset.title }));
+    rpc("vk_set", { chats });
+  });
+  if (window.featChipsFill) featChipsFill();
+}
+
+// ---------------------------------------------------------------- «Подмени меня» в Discord (jarvis/standin.py)
+async function standinPanel() {
+  const box = $("#standin-panel");
+  if (!box) return;
+  let r;
+  try { r = await rpc("standin_state"); } catch (e) { return; }
+  box.innerHTML = `<h3><span>${I("talk", "lead")}Подмени меня в Discord</span><span class="h3-meta ${r.on ? "ok-t" : ""}">${r.on ? "● подменяю" : r.cable ? "кабель найден" : "нужен VB-CABLE"}</span></h3>
+    <p class="hint">Отошли от микрофона, но не выходите из звонка: всё, что скажете без «Джарвис», он произнесёт в звонок. «Джарвис, подмени меня» — включить, «я вернулся» — выключить.</p>
+    ${r.cable ? "" : `<ol class="ph-steps"><li>Установите бесплатный виртуальный кабель <b>VB-CABLE</b> с сайта vb-audio.com (раздел Cable) и перезагрузите ПК.</li>
+      <li>В Discord: Настройки → Голос и видео → Устройство ввода = <b>CABLE Output</b>.</li><li>Скажите «Джарвис, подмени меня».</li></ol>`}
+    <div class="sgrid"><label>Голос в звонке</label><select id="si-voice">${r.voices.map((v) => `<option value="${v}" ${v === r.voice ? "selected" : ""}>${v}</option>`).join("")}</select></div>
+    <div class="row">${r.cable ? `<button class="btn" id="si-toggle">${r.on ? "Выключить подмену" : "Включить подмену"}</button><span class="dim">${esc(r.cable)}</span>` : ""}</div>`;
+  $("#si-voice").onchange = (e) => rpc("standin_set", { voice: e.target.value });
+  if ($("#si-toggle")) $("#si-toggle").onclick = () => rpc("standin_set", { on: !r.on }).then(standinPanel);
 }

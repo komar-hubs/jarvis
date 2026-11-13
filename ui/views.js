@@ -15,9 +15,27 @@ async function taskAdd() {
   const text = $("#t-text").value.trim();
   if (!text) return;
   const due = $("#t-due").value || null;
-  await rpc("task_add", { text, due, priority: +$("#t-prio").value, parse: !due });
+  const t = await rpc("task_add", { text, due, priority: +$("#t-prio").value, parse: !due });
+  if ($("#t-kind").value && t) await rpc("task_update", { id: t.id, kind: $("#t-kind").value });
   $("#t-text").value = ""; $("#t-due").value = "";
 }
+// "разбей цель на задачи": one AI request -> a goal with dated steps (jarvis/goals.py)
+async function goalBreak() {
+  const text = $("#t-text").value.trim();
+  if (!text) { toast("Напишите цель в поле задачи, например «подготовиться к экзамену по математике»", "Цель"); return; }
+  const due = $("#t-due").value || null;
+  toast("ИИ разбивает цель на шаги…", "Цель", false, 4000);
+  try {
+    const r = await rpc("goal_breakdown", { text, due, kind: $("#t-kind").value || null });
+    toast(`${r.parent.text}: ${r.subs.length} шагов`, "Цель добавлена", false, 6000);
+    $("#t-text").value = ""; $("#t-due").value = "";
+  } catch (e) { toast(e.message, "Не получилось разбить цель", true); }
+}
+async function taskSub(id) {
+  const v = prompt("Новый шаг (подзадача)");
+  if (v && v.trim()) rpc("task_sub", { parent: id, text: v.trim() });
+}
+const KIND_NAME = { quick: "быстрая", project: "проект", study: "учёба" };
 $("#t-text").addEventListener("keydown", (e) => { if (e.key === "Enter") taskAdd(); });
 async function taskToggle(id, done) { await rpc("task_update", { id, done }); }
 async function taskDone(id, btn) {
@@ -29,6 +47,11 @@ async function taskDone(id, btn) {
 async function taskDel(id) {
   const el = document.querySelector(`[data-id="${id}"]`);
   if (el) el.classList.add("vanish");
+  const kids = S.tasks.filter((t) => t.parent === id).length;
+  if (kids) {   // a goal goes with its steps
+    if (!confirm(`Удалить цель вместе с шагами (${kids})?`)) { if (el) el.classList.remove("vanish"); return; }
+    await rpc("task_tree_delete", { id }); return;
+  }
   S.tasks = S.tasks.filter((t) => t.id !== id);
   setTimeout(() => { renderHomePlanner(); if (S.tab === "tasks") renderTasks(); }, 240);
   const gone = await rpc("task_delete", { id });
@@ -45,12 +68,23 @@ async function taskEdit(id) {
 }
 async function taskDue(id, val) { await rpc("task_update", { id, due: val || null }); }
 function taskHtml(t) {
-  const tags = (t.tags || []).map((g) => `<span class="tag">${esc(g)}</span>`).join("");
+  const tags = (t.tags || []).map((g) => `<span class="tag">${esc(g)}</span>`).join("")
+    + (t.kind ? `<span class="tag kind-${t.kind}">${KIND_NAME[t.kind] || esc(t.kind)}</span>` : "");
+  const kids = S.tasks.filter((k) => k.parent === t.id).sort((a, b) => (a.due || "9").localeCompare(b.due || "9"));
+  const leaf = (k) => [...S.tasks.filter((x) => x.parent === k.id)].length ? S.tasks.filter((x) => x.parent === k.id).map(leaf).flat() : [k];
+  const leaves = kids.length ? kids.map(leaf).flat() : [];
+  const pr = leaves.length ? Math.round(100 * leaves.filter((k) => k.done).length / leaves.length) : 0;
+  const sub = kids.length ? `<div class="t-prog" title="Сделано ${leaves.filter((k) => k.done).length} из ${leaves.length}"><i style="width:${pr}%"></i><span>${pr}%</span></div>
+    <div class="t-kids">${kids.map(taskHtml).join("")}</div>` : "";
+  return `<div class="task-wrap">${taskRow(t, tags, kids.length)}${sub}</div>`;
+}
+function taskRow(t, tags, nkids) {
   return `<div class="task ${t.done ? "done" : ""}" data-id="${t.id}">
     <div class="prio p${t.priority}" title="Приоритет — клик, чтобы сменить" onclick="taskPrio('${t.id}')"></div>
     <input type="checkbox" ${t.done ? "checked" : ""} onchange="taskToggle('${t.id}', this.checked)">
     <div class="tt" ondblclick="taskEdit('${t.id}')">${esc(t.text)}${tags}<small>${t.due ? I("time", "lead") + dueLabel(t.due) : ""}${t.notes && t.notes !== t.text ? " · " + esc(t.notes) : ""}</small></div>
     <input type="datetime-local" value="${t.due ? t.due.slice(0, 16) : ""}" onchange="taskDue('${t.id}', this.value)" class="due-pick" title="Срок">
+    <button class="x sub" onclick="taskSub('${t.id}')" title="Добавить шаг">${I("plus")}</button>
     <button class="x" onclick="taskDel('${t.id}')" title="Удалить">${I("x")}</button></div>`;
 }
 async function taskPrio(id) {
@@ -60,9 +94,9 @@ async function taskPrio(id) {
 function renderTasks() {
   const now = new Date(), today = localDay(now);
   const tm = localDay(new Date(now.getTime() + 864e5));
-  const open = S.tasks.filter((t) => !t.done);
+  const open = S.tasks.filter((t) => !t.done && !t.parent);     // steps are drawn inside their goal
   const isOver = (t) => t.due && parseLocal(t.due) < now && (t.due.length >= 16 || t.due.slice(0, 10) < today);
-  const done = S.tasks.filter((t) => t.done).sort((a, b) => (b.done_at || "").localeCompare(a.done_at || ""));
+  const done = S.tasks.filter((t) => t.done && !t.parent).sort((a, b) => (b.done_at || "").localeCompare(a.done_at || ""));
   const groups = [
     ["Просрочено", "over", open.filter(isOver)],
     ["Сегодня", "", open.filter((t) => t.due && t.due.slice(0, 10) === today && !isOver(t))],
@@ -549,6 +583,8 @@ async function loadSettings() {
 
   <section class="s-sec" id="ss-phone">${head("phone", "chat", "Телефон", "уведомления, звонки, SMS и «ушёл — вернулся» через KDE Connect")}<div class="s-grid s-wide" id="sec-phone">
   <div class="panel" id="phone-panel"></div>
+  <div class="panel" id="vk-panel"></div>
+  <div class="panel" id="standin-panel"></div>
   </div></section>
 
   <section class="s-sec" id="ss-help">${head("help", "tasks", "Дела", "забота, напоминания, сообщения, память и макросы")}<div class="s-grid" id="sec-help">

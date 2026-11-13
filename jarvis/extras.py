@@ -334,6 +334,13 @@ class Extras:
         md = (f"**Итоги недели** ({w['days'][0].day:02d}.{w['days'][0].month:02d}–{w['days'][-1].day:02d}.{w['days'][-1].month:02d})\n\n"
               f"За компьютером: **{_hm(w['total'])}**" + (f", неделей раньше {_hm(w['prev_total'])}" if w["prev_total"] >= 1800 else "")
               + (f"\nВ играх: **{_hm(w['games'])}**" if w["games"] >= 60 else "") + f"\n\nПо дням: {days}\n\n{apps}")
+        try:   # what could be automated, from the week's requests (jarvis/insights.py)
+            tip = self.core.insights.week_line()
+            if tip:
+                speech += " " + tip
+                md += "\n\n**Можно автоматизировать:** " + tip
+        except Exception:
+            pass
         return speech, md
 
     def usage_brief(self, evening):
@@ -403,28 +410,51 @@ class Extras:
         return {"minutes": f["minutes"], "task": f["task"], "left": max(0, f["end"] - time.time()),
                 "end": f["end"], "start": f["start"], "distractions": f["distractions"]}
 
-    def start_focus(self, minutes=45, task=""):
+    def start_focus(self, minutes=45, task="", deep=False, sound=None):
+        """deep: «глубокая работа» — also the windows with distractions (YouTube, VK…) are minimized, a quiet noise plays
+        (config extras.deep_sound: pink | brown | rain | off) and the end brings a report with the tasks done."""
         minutes = max(5, min(240, int(minutes or 45)))
         hidden = 0
-        for app in self.cfg.get("extras.focus_apps", []) or []:
+        for app in (self.cfg.get("extras.focus_apps", []) or []) + ((self.cfg.get("extras.distractions", []) or []) if deep else []):
             try:
                 hidden += S.window_action(app, "minimize")
             except Exception:
                 pass
+        sound = sound or (self.cfg.get("extras.deep_sound", "pink") if deep else None)
+        noise = ""
+        if sound and sound != "off":
+            try:
+                noise = self.noise().start(sound, float(self.cfg.get("extras.deep_volume", 0.08)))
+            except Exception as e:
+                self.core.log(f"Фоновый шум: {e}", "warn")
+        # the task worked on: a planner task of that name, to offer ticking it at the end
+        ptask = self.core.planner.find_task(re.sub(r"^(?:над|для|на)\s+", "", task)) if task else None
         self.focus = {"minutes": minutes, "task": task, "start": time.time(), "end": time.time() + minutes * 60,
-                      "distractions": 0, "away": 0.0, "last_nag": 0.0, "off_since": 0.0}
+                      "distractions": 0, "away": 0.0, "last_nag": 0.0, "off_since": 0.0, "deep": bool(deep),
+                      "ptask": ptask["id"] if ptask else None}
         self.core.emit("focus", **self.focus_state())
         self.core.log(f"Фокус: {minutes} мин {task}")
         about = (" " + task if re.match(r"^(?:над|для|на)\s", task) else f": {task}") if task else ""
-        return (f"Режим фокуса на {say_duration(minutes * 60)}{about}. " +
-                ("Мессенджеры свернул. " if hidden else "") + random.choice(
+        return (f"{'Глубокая работа' if deep else 'Режим фокуса'} на {say_duration(minutes * 60)}{about}. " +
+                ("Отвлекающие окна свернул. " if hidden and deep else "Мессенджеры свернул. " if hidden else "") +
+                (f"Включил {noise}. " if noise else "") + random.choice(
                     ["Я прикрою, сэр.", "Никаких отвлечений.", "Удачи, сэр. Я посторожу."]))
+
+    def noise(self):
+        if not getattr(self, "_noise", None):
+            from .noise import Noise
+            self._noise = Noise(self.core.log)
+        return self._noise
 
     def stop_focus(self, finished=False):
         f = self.focus
         if not f:
             return "Фокус и так выключен, сэр."
         self.focus = None
+        try:
+            self.noise().stop()
+        except Exception:
+            pass
         spent = min(time.time(), f["end"]) - f["start"]
         today = dt.date.today().isoformat()
         with self._lock:
@@ -433,6 +463,15 @@ class Extras:
                              "at": dt.datetime.now().strftime("%H:%M"), "done": finished})
             self.usage.save()
         self.core.emit("focus", minutes=0)
+        # the tasks ticked during the session: the report says what got done, not only how long it took
+        since = dt.datetime.fromtimestamp(f["start"]).isoformat(timespec="seconds")
+        done_now = [t["text"] for t in self.core.planner.tasks.items if t.get("done") and (t.get("done_at") or "") >= since]
+        report = (" Закрыто задач: " + ", ".join(done_now[:4]) + ".") if done_now else ""
+        pt = next((t for t in self.core.planner.tasks.items if t["id"] == f.get("ptask") and not t.get("done")), None)
+        if pt:
+            self.core.after_speech(lambda: self.core.ask_confirm(
+                lambda: (self.core.planner.update_task(pt["id"], done=True), self.core.say("Отметил.")),
+                f"Отметить «{pt['text']}» выполненной?"), 1.0)
         n = f["distractions"]
         verdict = ("Ни одного отвлечения — блестяще." if n == 0 else
                    f"Отвлекались {n} {plural(n, 'раз', 'раза', 'раз')}." if n < 4 else
@@ -440,9 +479,9 @@ class Extras:
         if finished:
             if f["minutes"] >= 20:
                 self.core.planner.add_timer(5 * 60, "Перерыв после фокуса")
-            return f"Фокус завершён: {_hm(spent)}. {verdict} " + (
+            return f"Фокус завершён: {_hm(spent)}. {verdict}{report} " + (
                 "Перерыв пять минут, таймер уже идёт." if f["minutes"] >= 20 else "")
-        return f"Фокус остановлен через {_hm(spent)}. {verdict}"
+        return f"Фокус остановлен через {_hm(spent)}. {verdict}{report}"
 
     def _focus_tick(self, now):
         f = self.focus
@@ -807,8 +846,8 @@ class Extras:
                 "messengers": self.msg_counts, "dnd_until": self.core.dnd_until, "recording": bool(self.rec),
                 "active_min": round((time.time() - self.active_start) / 60)}
 
-    def rpc_focus_start(self, minutes=45, task=""):
-        msg = self.start_focus(minutes, task)
+    def rpc_focus_start(self, minutes=45, task="", deep=False):
+        msg = self.start_focus(minutes, task, deep=bool(deep))
         self.core.say(msg)
         return self.focus_state()
 
@@ -858,7 +897,7 @@ class Extras:
     def tool_focus(self, a):
         if a.get("off") in (True, "true", 1, "1"):
             return self.stop_focus()
-        return self.start_focus(int(float(a.get("minutes") or 45)), str(a.get("task") or ""))
+        return self.start_focus(int(float(a.get("minutes") or 45)), str(a.get("task") or ""), deep=bool(a.get("deep")))
 
     def tool_habit(self, a):
         return self.habit_add(a.get("name") or "вода", int(float(a.get("add") or 1)))
@@ -963,7 +1002,9 @@ def register(R, core):
         spec = m.group(1) or m.group(3) or ""
         secs = parse_duration(spec) if spec else None
         task = ("над " + m.group(2) if m.group(2) else (spec if spec and not secs else "")).strip()
-        return X.start_focus((secs or 45 * 60) // 60, task)
+        deep = bool(re.search(r"глубок|тяжел|серьезн", t))
+        return X.start_focus((secs or (90 if deep else 45) * 60) // 60, task, deep=deep)
+
 
     @R(r"^(?:выключи|останови|стоп|отключи|заверши|хватит)\s+(?:режим\w*\s+)?(?:фокус\w*|концентраци\w*)$")
     def _focus_off(m, t):

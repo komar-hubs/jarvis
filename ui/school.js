@@ -227,9 +227,10 @@ function schSave(reload) {
 function schEvents(r) {
   const d = SCH.d, box = $("#sch-ev");
   box.innerHTML = `<h3><span>${I("time", "lead")}Свои дела по расписанию</span><button class="mini" id="sch-ev-add" title="Добавить">${I("plus")}</button></h3>
-    <p class="hint">Секции, кружки, репетитор: в это время Джарвис не планирует домашку.</p>
+    <p class="hint">«Занят» — секция, кружок, репетитор: в это время Джарвис ничего не планирует. «Учёба», «работа», «отдых» — периоды дня: в учёбу он предложит учебное, в работу — проекты, в отдых — только то, что не ждёт. Задачу можно привязать к периоду — тогда она планируется только в нём.</p>
     ${d.events.map((e, i) => `<div class="sch-ev">
       <input data-ev="${i}:title" value="${esc(e.title)}" placeholder="Секция по футболу">
+      <select data-ev="${i}:type" title="Что это за время: занятое (секция) или период для дел">${[["busy", "занят"], ["study", "учёба"], ["work", "работа"], ["free", "отдых"]].map(([v, n]) => `<option value="${v}" ${(e.type || "busy") === v ? "selected" : ""}>${n}</option>`).join("")}</select>
       <span class="sch-days">${DOW.map((x, k) => `<button class="${(e.days || []).includes(k + 1) ? "on" : ""}" data-evd="${i}:${k + 1}">${x}</button>`).join("")}</span>
       <input type="time" data-ev="${i}:start" value="${esc(e.start)}"> – <input type="time" data-ev="${i}:end" value="${esc(e.end)}">
       <button class="ghost small" data-evx="${i}" title="Удалить">${I("x")}</button></div>`).join("") || '<div class="empty">Пока ничего</div>'}`;
