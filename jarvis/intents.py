@@ -503,11 +503,12 @@ class Router:
         cfg = core.cfg
         from . import (automation, background, backup, extras, mail, messenger, mouse, notes, people, persona, phone, plugins,
                        agent, boot, diag, features, gamefx, gamevoice, macros, marker, quick, screenmem, sentinel, skills, steam, stress, teach, voiceid, watchers,
-                       audiomem, filesearch, goals, insights, playerui, school, screentrans, standin, vk)
+                       agenthud, audiomem, filesearch, goals, insights, playerui, school, screentrans, standin, vk)
 
         def addr():
             return cfg.get("user.address", "сэр") or "сэр"
 
+        agenthud.register(R, core)  # "пауза" / "продолжай" / "что делаешь?" while the autopilot works (else falls through)
         people.register(R, core)  # "мой шеф — Антон", "под шефом я имею в виду…": before the generic corrections
         self._build_journal(R)    # undo, corrections, "что ты сделал": before everything, "отмени" must reach them
         school.register(R, core)       # "что мне сейчас делать", "задали по биологии §12", "какие уроки завтра"

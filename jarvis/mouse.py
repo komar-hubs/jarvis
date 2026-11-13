@@ -43,7 +43,7 @@ user32.WindowFromPoint.restype = wintypes.HWND
 user32.GetAncestor.restype = wintypes.HWND
 user32.GetAncestor.argtypes = [wintypes.HWND, ctypes.c_uint]
 
-OWN_TITLES = ("J.A.R.V.I.S.", "JARVIS HUD", "JARVIS MENU")
+OWN_TITLES = ("J.A.R.V.I.S.", "JARVIS HUD", "JARVIS MENU", "JARVIS HOLO")
 
 
 @contextlib.contextmanager
@@ -706,14 +706,17 @@ def snapshot_elements(limit=90):
     els = [e for e in els if not e.get("taskbar")][:limit - 20] + [e for e in els if e.get("taskbar")][:20]
     items = [{"id": i + 1, "role": ROLE_RU.get(e["role"], e["role"]), "name": e["name"][:80], "x": e["x"], "y": e["y"]}
              for i, e in enumerate(els)]
-    _last_marks.update(t=time.time(), items=items)
+    # the rectangles stay here (not sent to the AI): the marker ring and the hologram's lock need them
+    _last_marks.update(t=time.time(), items=items, rects={i + 1: e.get("rect") for i, e in enumerate(els)})
     return items
 
 
 def element_by_id(i):
     if time.time() - _last_marks["t"] > 600:
         return None
-    return next((e for e in _last_marks["items"] if e["id"] == int(i)), None)
+    e = next((e for e in _last_marks["items"] if e["id"] == int(i)), None)
+    r = _last_marks.get("rects", {}).get(int(i)) if e else None
+    return dict(e, rect=tuple(r)) if r else e
 
 
 def _screenshot_png(max_w=1400, marks=None):

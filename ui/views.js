@@ -568,6 +568,7 @@ async function loadSettings() {
     <div class="full s-sub">«Сделай за меня»</div>
     <label>Шагов не больше</label><select id="ag-steps">${[6, 8, 12, 16, 20].map((d) => `<option ${d === (ag.max_steps || 12) ? "selected" : ""}>${d}</option>`).join("")}</select>
     <label>Показывать шаги</label>${sw_("ag-show", ag.show_steps !== false, "маркером на экране, куда нажимает")}
+    <label>Голограмма автопилота</label>${sw_("ag-hud", ag.hud !== false, "панель с шагами, целью и «Джарвис за работой» на экране, пока он работает; на скриншоты и запись не попадает")}
     <div class="full hint">«Джарвис, сделай за меня: …» — ИИ сам выполняет задачу по шагам. Пароли, оплату и отправку сообщений не делает — скажет вам.</div>
   </div></div>
 
@@ -746,6 +747,7 @@ async function loadSettings() {
   bind("#boot-mode", (t) => saveConfig({ boot: { mode: t.value } }));
   bind("#ag-steps", (t) => saveConfig({ agent: { max_steps: +t.value } }));
   bind("#ag-show", (t) => saveConfig({ agent: { show_steps: t.checked } }));
+  bind("#ag-hud", (t) => saveConfig({ agent: { hud: t.checked } }));
   bind("#app-q", (t) => appSearch(t.value), "input");
   renderAliases(); renderNotes(); appSearch("");
 }

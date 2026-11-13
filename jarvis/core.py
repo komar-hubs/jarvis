@@ -241,6 +241,8 @@ class Core:
         self.quick = Quick(self)           # the quick panel over any window (Ctrl+Alt+Q)
         from .marker import Marker
         self.marker = Marker(self)         # circles / underlines / arrows drawn over the screen
+        from .agenthud import AgentHud
+        self.agenthud = AgentHud(self)     # the hologram while "сделай за меня" works the computer
         from .screenmem import ScreenMemory
         self.screenmem = ScreenMemory(self)  # "где я видел …": the active window's text once a minute, local OCR
         from .boot import Boot
@@ -815,6 +817,14 @@ class Core:
 
     def _show_step(self, hit):
         """Before the AI clicks: a quick ring around the target, so the user sees what is about to be pressed."""
+        if self.agenthud.working:                       # the autopilot hologram locks on the target instead
+            r = hit.get("rect")
+            if not r and hit.get("x") is not None:
+                r = (hit["x"] - 40, hit["y"] - 18, hit["x"] + 40, hit["y"] + 18)
+            if r:
+                self.agenthud.target(r, hit.get("name") or "")
+                time.sleep(0.45)
+            return
         if not self.cfg.get("agent.show_steps", True) or not hit.get("rect"):
             return
         try:
@@ -1012,22 +1022,36 @@ class Core:
         if extra and messages[-1]["role"] == "user":
             messages[-1] = {"role": "user", "content": messages[-1]["content"] + "\n" + extra}
         # agent ("сделай за меня …"): more steps, and it always goes on until the task is done or the steps run out
-        for _ in range(int(self.cfg.get("agent.max_steps", 12)) if agent else 5):
-            answer, tools, web_used = self._stream_answer(prov, messages, speak, gen)
-            if answer is None or gen != self.cancel_gen:
-                return
-            results = self._run_tools(tools, untrusted=web_used, gen=gen)
-            data = {k: v for k, v in results if v is not None}
-            if not data or gen != self.cancel_gen:
-                break
-            # screen reading and failed actions are steps of a longer task: the model may continue with tags
-            acting = agent or any(k in ("screen_text", "ui_elements", "mouse_position") or str(v).startswith("ошибка")
-                                  for k, v in data.items())
-            messages = messages + [
-                {"role": "assistant", "content": answer},
-                {"role": "user", "content": "Результаты инструментов: " + json.dumps(data, ensure_ascii=False)[:7000]
-                 + ("\nПродолжи выполнять задачу пользователя тегами, если нужно, или кратко ответь." if acting
-                    else "\nОтветь пользователю по этим данным кратко, без тегов.")}]
+        hud = self.agenthud if agent else None
+        if hud:
+            hud.begin(text)
+        final = ""
+        try:
+            for _ in range(int(self.cfg.get("agent.max_steps", 12)) if agent else 5):
+                if hud:
+                    hud.wait_if_paused(lambda: gen != self.cancel_gen)
+                    hud.thinking()
+                answer, tools, web_used = self._stream_answer(prov, messages, speak, gen)
+                if answer is None or gen != self.cancel_gen:
+                    return
+                if hud:
+                    hud.request(sum(len(str(x.get("content", ""))) for x in messages), len(answer))
+                final = answer
+                results = self._run_tools(tools, untrusted=web_used, gen=gen)
+                data = {k: v for k, v in results if v is not None}
+                if not data or gen != self.cancel_gen:
+                    break
+                # screen reading and failed actions are steps of a longer task: the model may continue with tags
+                acting = agent or any(k in ("screen_text", "ui_elements", "mouse_position") or str(v).startswith("ошибка")
+                                      for k, v in data.items())
+                messages = messages + [
+                    {"role": "assistant", "content": answer},
+                    {"role": "user", "content": "Результаты инструментов: " + json.dumps(data, ensure_ascii=False)[:7000]
+                     + ("\nПродолжи выполнять задачу пользователя тегами, если нужно, или кратко ответь." if acting
+                        else "\nОтветь пользователю по этим данным кратко, без тегов.")}]
+        finally:
+            if hud:
+                hud.finish(final, stopped=gen != self.cancel_gen)
         if not step:
             self.follow_up()
 
@@ -1122,13 +1146,21 @@ class Core:
             if untrusted and name in RISKY_TOOLS:
                 self.log(f"ИИ хотел выполнить «{name}» после чтения веб-страниц — заблокировано", "warn")
                 continue
+            hud = self.agenthud if self.agenthud.working else None
+            if hud:
+                hud.wait_if_paused(lambda: gen is not None and gen != self.cancel_gen)
+                hud.tool(name, args)
             try:
                 res = self._tool(name, args)
                 self.log(f"ИИ → {name} {json.dumps({k: v for k, v in args.items() if k != 'tool'}, ensure_ascii=False)[:120]}")
                 out.append((name, res if name in DATA_TOOLS else None))
+                if hud:
+                    hud.tool_done(name, res)
             except Exception as e:
                 self.log(f"Инструмент {name}: {e}", "error")
                 out.append((name, f"ошибка: {e}"))
+                if hud:
+                    hud.tool_done(name, None, err=str(e))
         return out
 
     def _tool(self, name, a):
@@ -1166,6 +1198,7 @@ class Core:
             hit = MS.vision_find(self, g("what", "text", "query"))
             if not hit:
                 raise ValueError("не нашёл это на экране")
+            self._show_step(dict(hit, name=hit.get("name") or g("what", "text", "query")))
             MS.click(hit["x"], hit["y"], button=g("button") or "left", double=bool(a.get("double")))
             return True
         if name == "type_into":
@@ -2267,6 +2300,9 @@ class Core:
         return list_mics()
 
     def rpc_listen(self, target="voice"):
+        if self.agenthud.working:                  # Ctrl+Alt+J during "сделай за меня": take the computer back
+            self.stop_all()
+            return True
         if self.tts_busy():
             self.tts.stop()                    # Ctrl+Alt+J over a long answer: stop it and listen
         self.listener.listen_once(target)
