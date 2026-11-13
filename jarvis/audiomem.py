@@ -120,7 +120,7 @@ class AudioMemory:
                 if not self.enabled():
                     with self.lock:
                         self.chunks.clear()
-                if not self.enabled() and not self.cfg.get("stt.aec", False):
+                if not self.enabled() and not self.cfg.get("stt.aec", True):
                     # neither "что он сказал" nor the echo canceller needs the speakers' sound
                     if self._stream:
                         self._close()

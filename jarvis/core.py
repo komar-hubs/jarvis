@@ -199,7 +199,8 @@ class Core:
         self.listener = Listener(self.cfg, self.on_utterance, on_level=lambda v: self.emit("mic_level", v=round(v, 3)),
                                  on_state=self._stt_state, log=self.log, is_speaking=self.echo_window)
         from .aec import EchoCanceller
-        self.listener.aec = EchoCanceller(self.cfg, self.log)   # the PC's own sound out of the mic (stt.aec)
+        # Jarvis's own voice out of the mic while he speaks, so "Джарвис, стоп" is heard over him (stt.aec)
+        self.listener.aec = EchoCanceller(self.cfg, self.log, gate=self.echo_window)
         self.tts.aligner = self.listener.align_end
         self.tts.aligner_ready = lambda: self.listener.model is not None and self.listener.model_name != "gigaam-v3-ctc"
         self.apps = S.AppIndex(log=self.log)

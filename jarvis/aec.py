@@ -5,15 +5,18 @@ an adaptive filter learns how that sound reaches the microphone through the spea
 before the speech recogniser hears it. The idea of Discord's and Zoom's echo cancellers (Speex/WebRTC "MDF":
 partitioned-block frequency-domain adaptive filter).
 
-On the benchmark of synthetic phrases (Silero voices) mixed with sound played "through the speakers and a room",
-GigaAM's word errors: Jarvis's reply over the user 81% -> 21%, a video in the background 27% -> 16%, music 7.7% -> 6.7%;
-the wake word was heard 10% -> 55%, 60% -> 71%, 81% -> 84% (nothing got worse, no false wakes).
+Benchmark (synthetic phrases in Silero voices, the PC's sound played "through speakers and a room", 414 clips,
+streamed in real time): with Jarvis's reply over the user GigaAM's word errors 81% -> 30%, the wake word heard 10% -> 38%.
+Over music and a video the streamed filter was slightly worse than nothing (the wake word 81% -> 74%, 60% -> 56%), so
+its output is used only while Jarvis himself speaks and a second after: that is where it helps; the rest of the time
+the microphone passes as it is (the filter keeps adapting, so it is ready when he talks). No false wakes.
 
 - The two devices have different clocks and buffers: the speakers->microphone delay (20-150 ms) is measured by
   cross-correlation (GCC-PHAT) every few seconds while something plays, and the filter covers 270 ms after it.
 - Silence in the speakers (and headphones, where nothing leaks into the microphone): the frame passes untouched.
 - A safety: a frame that came out louder than it went in (the filter went wrong) is replaced by the original.
-Switch: config stt.aec (Settings → «Приватность»). Nothing is stored."""
+Switch: config stt.aec (Settings → «Приватность»). Nothing is stored. Bench: scratch tools, see CLAUDE.md."""
+import collections
 import threading
 import time
 
@@ -26,9 +29,10 @@ class EchoCanceller:
     B = 240                 # block: two per 30 ms microphone frame
     P = 18                  # partitions: 18 x 240 = 270 ms of echo path after the measured delay
 
-    def __init__(self, cfg, log=print):
+    def __init__(self, cfg, log=print, gate=lambda: True):
         self.cfg = cfg
         self.log = log
+        self.gate = gate                               # when the cleaned sound is used (Jarvis is speaking)
         self.lock = threading.Lock()
         self.ref = np.zeros(SR * 8, np.float32)      # the speakers' sound, the newest sample last
         self.ref_t = 0.0                               # wall time of the newest reference sample
@@ -54,7 +58,7 @@ class EchoCanceller:
 
     def enabled(self):
         if time.time() - self._on_t > 2:
-            self._on_t, self._on = time.time(), bool(self.cfg.get("stt.aec", False))
+            self._on_t, self._on = time.time(), bool(self.cfg.get("stt.aec", True))
         return self._on
 
     # ---------------------------------------------------------------- the speakers' side
@@ -87,14 +91,38 @@ class EchoCanceller:
         return np.concatenate([np.zeros(n - len(seg), np.float32), seg]) if len(seg) < n else seg
 
     # ---------------------------------------------------------------- the microphone's side
+    LAG = 5                 # frames (150 ms) the microphone waits for the loopback to bring the matching sound
+
     def process(self, frame, t_cap):
-        """A 30 ms microphone frame (int16 bytes or array) captured at t_cap -> the frame without the PC's sound."""
+        """A 30 ms microphone frame (int16 bytes or array) captured at t_cap -> a frame without the PC's sound.
+        The output lags LAG frames behind: the loopback delivers the speakers' sound in 100 ms pieces and later than
+        the microphone, and a frame processed before its reference arrived was matched with older sound (the
+        alignment jumped by up to 100 ms from frame to frame and the filter never settled: 58% word errors under
+        Jarvis's voice instead of ~21%)."""
         pcm = np.frombuffer(frame, np.int16) if isinstance(frame, (bytes, bytearray)) else frame
         x = pcm.astype(np.float32) / 32768.0
         self.stats["frames"] += 1
         self.mic = np.concatenate([self.mic[len(x):], x])
         self.mic_t = t_cap
-        if not self.enabled() or not self.ref_t or t_cap - self.ref_t > 1.0:
+        if not self.enabled():
+            self.q = None
+            return frame
+        if getattr(self, "q", None) is None:
+            self.q = collections.deque(((np.zeros_like(x), t_cap - (self.LAG - i) * len(x) / SR, None)
+                                        for i in range(self.LAG)))
+        as_bytes = isinstance(frame, (bytes, bytearray))
+        self.q.append((x, t_cap, frame))
+        x, t_cap, frame = self.q.popleft()
+        if frame is None:                                  # the first frames after switching on: silence
+            frame = np.zeros(len(x), np.int16)
+            frame = frame.tobytes() if as_bytes else frame
+        # the delay is measured against the newest microphone audio (the ring above ends there)
+        if self.ref_t and self.mic_t - self.delay_t > 3 and self.mic_t - self.ref_t < 1.0:
+            self._measure_delay(self.mic_t)
+        return self._cancel(x, t_cap, frame)
+
+    def _cancel(self, x, t_cap, frame):
+        if not self.ref_t or t_cap - self.ref_t > 1.0:
             self.active = False                            # nothing played for a second: nothing to subtract
             return frame
         r = self._ref_ending(t_cap, len(x))
@@ -103,20 +131,29 @@ class EchoCanceller:
             return frame
         self.active = True
         self.stats["active"] += 1
-        if t_cap - self.delay_t > 3:
-            self._measure_delay(t_cap)
         t0 = time.perf_counter()
         y = np.empty_like(x)
         for k in range(0, len(x), self.B):
             y[k:k + self.B] = self._block(x[k:k + self.B], r[k:k + self.B])
         self.stats["ms"] += (time.perf_counter() - t0) * 1000
-        if float(np.mean(y ** 2)) > float(np.mean(x ** 2)) * 1.05:
-            self.stats["fallback"] += 1                     # the filter went wrong on this frame: keep the original
+        # the safety looks at ~0.3 s, not at one frame: per-frame it kept switching to the original in the middle of
+        # the user's words (the echo came back) — 34% word errors under Jarvis's voice instead of 24%
+        a = self.SAFE
+        self.e_in = (1 - a) * getattr(self, "e_in", 0.0) + a * float(np.mean(x ** 2))
+        self.e_out = (1 - a) * getattr(self, "e_out", 0.0) + a * float(np.mean(y ** 2))
+        if self.e_out > self.e_in * 1.05:
+            self.stats["fallback"] += 1                     # the filter has gone wrong lately: keep the original
             return frame
+        if not self.gate():
+            return frame                                    # not Jarvis talking: the original (see the docstring)
         out = np.clip(y * 32768.0, -32768, 32767).astype(np.int16)
         return out.tobytes() if isinstance(frame, (bytes, bytearray)) else out
 
-    def _block(self, mic, ref, mu=0.4):
+    SAFE = 0.05             # smoothing of the safety's energies per frame (~0.6 s)
+    MU = 0.25               # adaptation step (0.4 followed music too eagerly and damaged the voice)
+
+    def _block(self, mic, ref, mu=None):
+        mu = self.MU if mu is None else mu
         B, P = self.B, self.P
         if len(mic) < B:                                   # a frame that is not a multiple of the block: pass through
             return mic
