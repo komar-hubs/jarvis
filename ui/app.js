@@ -393,17 +393,36 @@ function msgEl(m) {
     `<span class="meta">${esc(time)} ${esc(m.agent || src)}</span>`;
   return d;
 }
-function chatScroll() { const l = $("#chat-list"); l.scrollTop = l.scrollHeight; }
+// the chat "jumped" while an answer was typed (issue of FreemoV): every chunk pulled the list to the bottom even when
+// the user had scrolled up to read, the whole answer was re-rendered per chunk, and the finished bubble was replaced
+// by a new one that played its appear animation again. Now: the list follows only when it is already at the bottom,
+// chunks are drawn once per frame, and the finished answer is filled into the same bubble
+function chatAtBottom() { const l = $("#chat-list"); return l.scrollHeight - l.scrollTop - l.clientHeight < 80; }
+function chatScroll(force) { const l = $("#chat-list"); if (force || chatFollow) l.scrollTop = l.scrollHeight; }
+let chatFollow = true, chatFrame = 0;
+$("#chat-list").addEventListener("scroll", () => { chatFollow = chatAtBottom(); }, { passive: true });
+function chatDraw(html) {
+  if (chatFrame) cancelAnimationFrame(chatFrame);
+  chatFrame = requestAnimationFrame(() => { chatFrame = 0; if (streamEl) { streamEl.innerHTML = html(); chatScroll(); } });
+}
 async function chatLoad() {
   const items = await rpc("chat_history");
   const l = $("#chat-list");
   l.innerHTML = "";
   if (!items.length) l.innerHTML = '<div class="empty" style="text-align:center;margin-top:20%">Чат пуст. Спросите что-нибудь — или скажите «Джарвис, …»</div>';
-  items.forEach((m) => l.appendChild(msgEl(m)));
-  chatScroll();
+  items.forEach((m) => { const d = msgEl(m); d.classList.add("old"); l.appendChild(d); });
+  chatFollow = true;
+  chatScroll(true);
 }
 function chatOnMsg(m) {
-  if (m.role === "assistant" && m.source === "ai" && streamEl) { streamEl.replaceWith(msgEl(m)); streamEl = null; chatScroll(); return; }
+  if (m.role === "assistant" && m.source === "ai" && streamEl) {
+    if (chatFrame) { cancelAnimationFrame(chatFrame); chatFrame = 0; }
+    const d = msgEl(m);
+    streamEl.className = d.className + " old";      // the same bubble: no second appear animation
+    streamEl.innerHTML = d.innerHTML;
+    streamEl = null; chatScroll(); return;
+  }
+  if (m.role === "user") chatFollow = true;         // your own message always brings the list down
   const l = $("#chat-list");
   const e = l.querySelector(".empty"); if (e) e.remove();
   l.appendChild(msgEl(m));
@@ -427,8 +446,7 @@ function chatOnStream(ev) {
     chatScroll();
   } else if (ev.state === "chunk" && streamEl) {
     streamText += ev.text;
-    streamEl.innerHTML = mdLite(hideTags(streamText)) || '<span style="color:var(--dim)">выполняю…</span>';
-    chatScroll();
+    chatDraw(() => mdLite(hideTags(streamText)) || '<span style="color:var(--dim)">выполняю…</span>');
   } else if (ev.state === "end" || ev.state === "error") {
     if (streamEl) {
       streamEl.classList.remove("streaming");

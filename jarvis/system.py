@@ -495,6 +495,16 @@ def close_app(app, index, aliases=None, force=False):
         exe_names.add(BUILTIN[q])
     for cand in (q, translit(q)):
         exe_names.add(cand.replace(" ", "") + ".exe")
+    # process names come lowercase ("steam.exe"): "Steam.exe" never matched, and closing Steam's window only hides it
+    exe_names = {n.lower() for n in exe_names}
+    # launchers that live in the tray quit cleanly by their own command, like "Выход" in their menu
+    for p in psutil.process_iter(["name", "exe"]):
+        if (p.info["name"] or "").lower() == "steam.exe" and "steam.exe" in exe_names and not force:
+            try:
+                subprocess.Popen([p.info["exe"], "-shutdown"], creationflags=0x08000000)
+                return 1
+            except Exception:
+                break
     killed = 0
     for p in psutil.process_iter(["name", "pid"]):
         n = (p.info["name"] or "").lower()

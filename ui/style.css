@@ -1131,3 +1131,5 @@ svg.ic.pin { color: var(--hot); }
 .sch-bd-row b { color: var(--acc2); width: 14px; } .sch-bd-row input { width: 88px; padding: 3px; }
 .ph-ios { margin-top: 14px; padding: 10px 12px; border: 1px solid var(--line); background: rgba(var(--acc-rgb), .04); }
 .ph-ios > b { margin-right: 6px; } .ph-ios .fchip { margin-left: 8px; }
+.msg.old { animation: none; }
+#chat-list { overflow-anchor: none; scroll-behavior: auto; }

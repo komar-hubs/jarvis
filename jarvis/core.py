@@ -670,8 +670,10 @@ class Core:
                 self.dialog_q.put(("voice", text, "voice"))
             return
         now = time.time()
-        confirm = self.pending and now - self.pending[1] < 20 and re.match(
-            r"^(да|нет|подтверждаю|отмена|выполняй|не надо|точно|давай)\b", norm)
+        from .intents import NO_ACT, YES_ACT
+        confirm = self.pending and now - self.pending[1] < 20 and (re.match(
+            r"^(да|нет|подтверждаю|отмена|выполняй|не надо|точно|давай)\b", norm) or re.fullmatch(YES_ACT, norm or "")
+            or re.match(rf"^{NO_ACT}\b", norm or ""))
         window = now < getattr(self, "accept_until", 0)
         # nameless phrases: right after an answer (follow window), in conversation mode — and now also while
         # Jarvis is still answering the user (barge-in). Speech during the reply used to be dropped whatever it was,

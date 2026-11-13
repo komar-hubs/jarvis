@@ -42,6 +42,12 @@ def normalize(text, wake_words=()):
     return re.sub(r"\s+", " ", t).strip()
 
 
+# "Отправить?" -> "отправь": the action word itself answers yes (it went to the AI, which asked "кому?" again).
+# Only on its own: "отправь ссылку на телефон" is a new command
+YES_ACT = (r"(?:да\s+)?(?:отправь|отправляй|отправить|отправь\s+уже|шли|посылай|жми|публикуй|сохраняй|удаляй|выключай|закрывай)"
+           r"(?:\s+(?:его|ее|это|сообщение|письмо|ему|ей|им|уже|давай|скорее))?")
+NO_ACT = r"не\s+(?:отправляй|надо\s+отправлять|шли|посылай|удаляй|выключай|закрывай)"
+
 LEAD = {"эй", "ну", "слушай", "окей", "ок", "о", "а", "хей", "привет", "hey", "ok", "э", "эм", "ээ", "м", "мм",
         "так", "и", "да", "вот", "ой", "алло", "слышь", "короче"}
 CMD_START = re.compile(r"(?:открой|закрой|включи|выключи|поставь|найди|загугли|погугли|сделай|покажи|нажми|кликни|"
@@ -241,7 +247,11 @@ class Router:
         # pending confirmation for dangerous actions ("нет, под шефом я имею в виду Антона" is a correction, not "нет")
         correction = re.search(r"под\s+\w+\s+(?:я\s+)?(?:имею|имел|имела|подразумева)|имел\w*\s+в\s+виду|^(?:нет\s+)?не\s+\S+(?:\s+\S+)?\s+а\s+", t)
         if core.pending and not correction:
-            if re.match(r"^(да|подтверждаю|подтверждено|выполняй|точно|конечно|давай|ага|верно)\b", t):
+            if re.match(rf"^{NO_ACT}\b", t):
+                core.pending = None
+                core.say("Не отправляю, сэр." if "отправ" in t or "шли" in t or "посыл" in t else "Отменено, сэр.")
+                return True
+            if re.match(r"^(да|подтверждаю|подтверждено|выполняй|точно|конечно|давай|ага|верно)\b", t) or re.fullmatch(YES_ACT, t):
                 fn, _ = core.pending
                 core.pending = None
                 fn()
