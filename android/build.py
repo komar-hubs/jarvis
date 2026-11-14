@@ -126,6 +126,8 @@ def main():
     sha = hashlib.sha256(OUT.read_bytes()).hexdigest()
     with open(HERE / "jarvis-remote.sha256", "w", encoding="utf-8", newline="\n") as f:
         f.write(f"{sha}  jarvis-remote.apk\n")
+    with open(HERE / "jarvis-remote.json", "w", encoding="utf-8", newline="\n") as f:   # the PC tells the app a newer one exists
+        f.write('{"version": %d, "sha256": "%s"}\n' % (ver, sha))
     print(run(bt / "apksigner.bat", "verify", "--verbose", OUT, env=env).splitlines()[:4])
     print(f"OK: {OUT} ({OUT.stat().st_size // 1024} КБ), версия {ver}, SHA-256 {sha}")
 

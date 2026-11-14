@@ -86,6 +86,14 @@ def private_ip(ip):
         return False
 
 
+def apk_version():
+    """versionCode of android/jarvis-remote.apk (android/build.py writes it next to the APK): the app offers to update."""
+    try:
+        return int(json.loads((ROOT / "android" / "jarvis-remote.json").read_text(encoding="utf-8"))["version"])
+    except (OSError, ValueError, KeyError):
+        return 0
+
+
 def apk_sha256():
     import hashlib
     try:
@@ -350,7 +358,7 @@ class Remote:
         self.core.emit("remote_clients", n=len(self.clients))
         loop = asyncio.get_running_loop()
         mons = await loop.run_in_executor(self.cap, self._mon_count)
-        await ws.send_json({"t": "hello", "name": self.pc_name(), "vol": S.get_volume(), "mons": mons})
+        await ws.send_json({"t": "hello", "name": self.pc_name(), "vol": S.get_volume(), "mons": mons, "apk": apk_version()})
         try:
             async for msg in ws:
                 if msg.type != WSMsgType.TEXT:
@@ -620,8 +628,9 @@ class Remote:
 <body style="margin:0;background:#03101a;color:#cfefff;font:15px/1.5 system-ui,sans-serif;padding:28px 18px;max-width:560px">
 <h2 style="color:#fff;letter-spacing:3px;margin:0 0 4px">J.A.R.V.I.S. · ПУЛЬТ</h2>
 <p style="margin:0 0 18px;color:#8fc3d6">Приложение для управления вашим ПК с телефона. <b>Только для Android.</b></p>
-<a href="{GITHUB_APK}" style="display:block;text-align:center;padding:14px;border-radius:12px;background:#4fd8ff;color:#02121c;font-weight:700;text-decoration:none">Скачать с GitHub (рекомендуется)</a>
-<a href="/apk" style="display:block;text-align:center;margin-top:10px;padding:12px;border-radius:12px;border:1px solid #4fd8ff;color:#bff4ff;text-decoration:none">Скачать с этого ПК ({size} КБ)</a>
+<a href="/apk" style="display:block;text-align:center;padding:14px;border-radius:12px;background:#4fd8ff;color:#02121c;font-weight:700;text-decoration:none">Скачать с этого ПК ({size} КБ)</a>
+<p style="margin:6px 0 0;font-size:13px;color:#8fc3d6;text-align:center">Напрямую с компьютера по Wi-Fi, интернет не нужен.</p>
+<a href="{GITHUB_APK}" style="display:block;text-align:center;margin-top:12px;padding:12px;border-radius:12px;border:1px solid #4fd8ff;color:#bff4ff;text-decoration:none">То же с GitHub (если открывается)</a>
 <h3 style="color:#fff;margin:22px 0 6px">Почему телефон предупреждает</h3>
 <p>Приложение ставится не из Google Play, поэтому Android спросит разрешение «устанавливать неизвестные приложения» для браузера. Это обычное предупреждение для любого APK не из магазина.</p>
 <p>Что приложение может: связываться с вашим ПК <b>только внутри домашней Wi-Fi</b> и, пока вы держите круг JARVIS, записывать голос для команды. Контакты, файлы, SMS, геолокацию оно не читает: таких разрешений у него нет.</p>

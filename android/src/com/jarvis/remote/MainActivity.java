@@ -9,6 +9,7 @@ package com.jarvis.remote;
 import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.media.AudioFormat;
@@ -115,6 +116,26 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void put(String key, String value) {
             prefs.edit().putString(key, value).apply();
+        }
+
+        @JavascriptInterface
+        public int appVersion() {
+            try {
+                return getPackageManager().getPackageInfo(getPackageName(), 0).versionCode;
+            } catch (Exception e) {
+                return 0;
+            }
+        }
+
+        /** Opens a link outside the app: the new APK from the PC downloads in the phone's browser / downloader. */
+        @JavascriptInterface
+        public void openUrl(final String url) {
+            runOnUiThread(() -> {
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)));
+                } catch (Exception ignored) {
+                }
+            });
         }
 
         @JavascriptInterface

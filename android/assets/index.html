@@ -65,6 +65,8 @@ svg{position:absolute;left:0;top:0;overflow:visible}
 /* header buttons, the panels that replace the keyboard */
 .hbtn{position:absolute;top:4px;height:22px;display:flex;align-items:center;gap:6px;padding:0 11px;border-radius:12px;font:700 9.5px "Orbitron","Exo 2";letter-spacing:1.5px;color:#cfefff;border:1px solid rgba(var(--rgb),.4);background:rgba(4,24,38,.8);white-space:nowrap}
 .hbtn svg{position:static}
+.hbtn.upd{left:478px;color:#ffe2b8;border-color:rgba(var(--hot-rgb),.6);background:rgba(60,34,6,.85);box-shadow:0 0 14px rgba(var(--hot-rgb),.35);display:none}
+.hbtn.upd.show{display:flex}
 .hbtn.on{background:rgba(var(--rgb),.32);border-color:var(--acc2);color:#fff;box-shadow:0 0 14px rgba(var(--rgb),.45)}
 #L-kb,#L-pop{transition:opacity .25s,transform .3s}
 .kb-away #L-kb,.kb-away #L-pop{opacity:0;transform:translateY(-36px);pointer-events:none}
@@ -207,6 +209,7 @@ input.addr{width:100%;height:44px;margin:10px 0 4px;border-radius:12px;border:1.
   <div class="chip bad" id="chip"><i></i><span id="pcname">—</span><b id="ping"></b></div>
   <div class="gear" id="gear"><svg width="16" height="16" viewBox="0 0 24 24" style="position:static"><circle cx="12" cy="12" r="3.2" class="ico"/><path class="ico" d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg></div>
   <div id="ov"></div>
+  <div class="hbtn upd" id="b-upd"><svg width="13" height="13" viewBox="0 0 24 24"><path class="ico" style="stroke:#ffd27a" d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>ОБНОВИТЬ ПУЛЬТ</div>
   <div class="panel2 scrp" id="scr">
     <div class="scr-stage" id="scr-view"><div class="scr-frame wait" id="scr-frame">
       <canvas id="scr-img" width="16" height="9"></canvas><div class="scr-scan"></div>
@@ -505,7 +508,12 @@ function openWs() {
   ws.onmessage = (e) => {
     let m; try { m = JSON.parse(e.data); } catch (x) { return; }
     if (m.t === "pong") { ping = Math.max(1, Date.now() - m.ts); chipState(); }
-    else if (m.t === "hello") { if (m.name && m.name !== cur.name) { cur.name = m.name; savePc(cur); } scrMons = m.mons || 1; chipState(); }
+    else if (m.t === "hello") {
+      if (m.name && m.name !== cur.name) { cur.name = m.name; savePc(cur); }
+      scrMons = m.mons || 1; chipState();
+      let mine = 0; try { mine = HAS ? Native.appVersion() : 0; } catch (x) {}
+      document.getElementById("b-upd").classList.toggle("show", !!(HAS && m.apk && mine && m.apk > mine));
+    }
     else if (m.t === "shot") showShot(m);
     else if (m.t === "vol" && m.vol != null) toast(`Громкость ${m.vol}%`);
   };
@@ -1115,6 +1123,11 @@ document.getElementById("o-buzz").onclick = (e) => { OPT.buzz = !OPT.buzz; e.cur
 document.getElementById("o-done").onclick = () => shade.classList.remove("show");
 document.getElementById("o-pc").onclick = () => { shade.classList.remove("show"); showConnect(null); };
 shade.addEventListener("pointerdown", (e) => { if (e.target === shade) shade.classList.remove("show"); });
+document.getElementById("b-upd").onclick = () => {
+  buzz();
+  toast("Скачиваю новую версию с ПК — откройте файл, когда скачается");
+  if (HAS) Native.openUrl(base() + "/apk"); else location.href = base() + "/apk";
+};
 window.onBack = () => {           // the Android back button
   if (shade.classList.contains("show")) { shade.classList.remove("show"); return true; }
   if (document.getElementById("shotv").classList.contains("show")) { document.getElementById("shotv").classList.remove("show"); return true; }
