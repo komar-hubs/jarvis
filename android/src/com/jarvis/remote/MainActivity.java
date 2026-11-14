@@ -211,6 +211,47 @@ public class MainActivity extends Activity {
             }, "discover").start();
         }
 
+        /** A screenshot from the PC into the gallery (Pictures/JARVIS). Android 10+: MediaStore, no permission;
+         *  older phones: the app's own Pictures folder. Calls window.onSaved(true|false). */
+        @JavascriptInterface
+        public void saveImage(final String url) {
+            new Thread(() -> {
+                boolean ok = false;
+                try {
+                    HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+                    c.setConnectTimeout(3000);
+                    c.setReadTimeout(15000);
+                    InputStream in = c.getInputStream();
+                    ByteArrayOutputStream buf = new ByteArrayOutputStream();
+                    byte[] b = new byte[16384];
+                    int n;
+                    while ((n = in.read(b)) > 0) buf.write(b, 0, n);
+                    in.close();
+                    c.disconnect();
+                    String name = "jarvis_" + new java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(new java.util.Date()) + ".jpg";
+                    OutputStream out;
+                    if (Build.VERSION.SDK_INT >= 29) {
+                        android.content.ContentValues v = new android.content.ContentValues();
+                        v.put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, name);
+                        v.put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
+                        v.put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/JARVIS");
+                        android.net.Uri uri = getContentResolver().insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, v);
+                        out = uri == null ? null : getContentResolver().openOutputStream(uri);
+                    } else {
+                        java.io.File dir = getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES);
+                        out = dir == null ? null : new java.io.FileOutputStream(new java.io.File(dir, name));
+                    }
+                    if (out != null) {
+                        out.write(buf.toByteArray());
+                        out.close();
+                        ok = true;
+                    }
+                } catch (Exception ignored) {
+                }
+                js("window.onSaved && window.onSaved(" + ok + ")");
+            }, "save").start();
+        }
+
         /** "ok", "perm" (asked for the microphone, hold again) or "busy". */
         @JavascriptInterface
         public String startVoice() {

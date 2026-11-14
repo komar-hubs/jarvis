@@ -18,7 +18,10 @@ Only for Android. Works only inside the home Wi-Fi and only while Settings → �
   the PC keeps only its sha256 (config remote.devices) and can forget a phone at any time;
 - a WebSocket carries the input (relative mouse moves through SendInput, clicks, wheel, keys, text, the dial's
   actions, media keys); POST /voice carries a push-to-talk recording (PCM 16 kHz mono) that runs as a voice command;
-- GET /apk hands out the app itself (android/jarvis-remote.apk), so a phone can install it from the browser."""
+- GET /apk hands out the app itself (android/jarvis-remote.apk), so a phone can install it from the browser;
+- GET /screen is a live MJPEG picture of one monitor (only while the phone shows it; a toast on the PC says so),
+  a tap on it ("tap") clicks that very point; screenshots (the dial's «Скриншот» = the snipping tool, watched in the
+  clipboard, or "snap" = the whole monitor at once) are pushed to the phone and served at /shot/<id>."""
 import asyncio
 import ctypes
 import hashlib
@@ -29,6 +32,7 @@ import secrets
 import socket
 import threading
 import time
+from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
@@ -53,6 +57,18 @@ MEDIA = {"play": "play", "pause": "play", "next": "next", "prev": "prev", "vup":
 KEYS = {"enter", "backspace", "tab", "esc", "delete", "capslock", "up", "down", "left", "right", "home", "end",
         "page up", "page down", "space", "win", "printscreen", "insert", "apps"} | {f"f{i}" for i in range(1, 13)}
 MODS = {"ctrl", "alt", "shift", "win"}
+
+
+def valid_combo(k):
+    """'ctrl+shift+t', 'win+.', 'ctrl+plus', 'f11': modifiers first, then one key the input layer knows."""
+    parts = [x for x in k.split("+") if x] if k not in ("+", "ctrl++") else []
+    if not 1 <= len(parts) <= 4 or not all(x in MODS for x in parts[:-1]):
+        return False
+    try:
+        S._vk(parts[-1])
+        return True
+    except ValueError:
+        return False
 
 
 def private_ip(ip):
@@ -136,6 +152,11 @@ class Remote:
         self.pool = ThreadPoolExecutor(1, thread_name_prefix="remote-input")   # one thread: input keeps its order
         self.error = ""
         self.fails = []               # times of wrong codes: 6 in 10 minutes lock pairing for 10 minutes
+        self.cap = ThreadPoolExecutor(2, thread_name_prefix="remote-screen")   # screen grabs never wait for input
+        self.shots = OrderedDict()    # id -> jpeg bytes (the last 6 screenshots for the phone)
+        self.mon = None               # (left, top, width, height) of the monitor the phone watches
+        self.streams = 0
+        self.clip_watch = 0.0
         self.locked_until = 0.0
 
     @property
@@ -184,6 +205,8 @@ class Remote:
         app.router.add_get("/ws", self._ws)
         app.router.add_post("/voice", self._voice)
         app.router.add_get("/apk", self._apk)
+        app.router.add_get("/screen", self._screen)
+        app.router.add_get("/shot/{id}", self._shot)
         app.router.add_get("/", self._apk_page)
         try:
             self.runner = web.AppRunner(app, access_log=None)
@@ -323,8 +346,9 @@ class Remote:
         self.core.log(f"Пульт: подключился «{self.clients[ws]}» ({request.remote})")
         self.core.emit("toast", title="Пульт с телефона", text=f"Подключён: {self.clients[ws]}")
         self.core.emit("remote_clients", n=len(self.clients))
-        await ws.send_json({"t": "hello", "name": self.pc_name(), "vol": S.get_volume()})
         loop = asyncio.get_running_loop()
+        mons = await loop.run_in_executor(self.cap, self._mon_count)
+        await ws.send_json({"t": "hello", "name": self.pc_name(), "vol": S.get_volume(), "mons": mons})
         try:
             async for msg in ws:
                 if msg.type != WSMsgType.TEXT:
@@ -373,23 +397,30 @@ class Remote:
                 if s:
                     S.type_text(s)
             elif t == "key":
-                k = str(m.get("k") or "").lower()
-                parts = k.split("+")
-                if parts and all(p in MODS for p in parts[:-1]) and (parts[-1] in KEYS or parts[-1] in MODS
-                                                                      or len(parts[-1]) == 1):
+                k = str(m.get("k") or "").lower().strip()
+                if k == "win":
+                    S.hotkey("win")
+                elif valid_combo(k):
                     S.hotkey(k)
             elif t == "act":
                 a = m.get("a")
                 if a == "lock":
                     S.lock()
+                elif a == "snap":                      # the whole monitor, straight to the phone
+                    self.cap.submit(self._snap)
                 elif a in ACTIONS:
                     S.hotkey(ACTIONS[a])
+                    if a == "shot":                    # the snipping tool: its picture lands in the clipboard
+                        self._watch_clipboard()
             elif t == "media":
                 a = m.get("a")
                 if a in MEDIA:
                     S.press_vk(S.VK[MEDIA[a]], 2 if a in ("vup", "vdown") else 1)
                     if a in ("vup", "vdown", "mute"):
                         return {"t": "vol", "vol": S.get_volume()}
+            elif t == "tap":                           # a tap on the live screen = a click at that point
+                self._tap(float(m.get("x", -1)), float(m.get("y", -1)), m.get("b") if m.get("b") in BTN else "left",
+                          2 if m.get("n") == 2 else 1)
             elif t == "say":                           # a typed phrase from the app = a command, like the UI line
                 s = str(m.get("s") or "").strip()[:300]
                 if s:
@@ -403,6 +434,167 @@ class Remote:
         for b in list(self.held):
             _mouse(BTN[b][1])
         self.held.clear()
+
+    # ================================================================ the screen: live picture, taps, screenshots
+    def _monitor(self, sct, index=None):
+        """The monitor to show: by number (1..n) or the one under the cursor."""
+        mons = sct.monitors[1:] or sct.monitors
+        if index:
+            return mons[(int(index) - 1) % len(mons)], len(mons)
+        from . import mouse
+        x, y = mouse.position()
+        for mo in mons:
+            if mo["left"] <= x < mo["left"] + mo["width"] and mo["top"] <= y < mo["top"] + mo["height"]:
+                return mo, len(mons)
+        return mons[0], len(mons)
+
+    def _grab(self, index=None, width=None, quality=60, cursor=True):
+        """(jpeg bytes, monitor, monitors count). Physical pixels; the cursor is drawn as a ring (mss omits it)."""
+        import io
+        import mss
+        from PIL import Image, ImageDraw
+        from . import mouse
+        with mouse.physical():
+            with mss.MSS() as sct:
+                mo, n = self._monitor(sct, index)
+                shot = sct.grab(mo)
+            cx, cy = mouse.position()
+        img = Image.frombytes("RGB", shot.size, shot.rgb)
+        if cursor:
+            x, y = cx - mo["left"], cy - mo["top"]
+            if 0 <= x < img.width and 0 <= y < img.height:
+                r = max(9, img.width // 140)
+                d = ImageDraw.Draw(img)
+                d.ellipse((x - r, y - r, x + r, y + r), outline=(255, 179, 71), width=max(2, r // 3))
+                d.ellipse((x - 2, y - 2, x + 2, y + 2), fill=(255, 255, 255))
+        if width and img.width > width:
+            img = img.resize((int(width), max(1, int(img.height * width / img.width))), Image.BILINEAR)
+        buf = io.BytesIO()
+        img.save(buf, "JPEG", quality=quality, optimize=False)
+        return buf.getvalue(), (mo["left"], mo["top"], mo["width"], mo["height"]), n
+
+    async def _screen(self, request):
+        """multipart/x-mixed-replace JPEG frames: an <img> on the phone shows it as video."""
+        from aiohttp import web
+        dev = self._device(self._token(request))
+        if not dev:
+            return web.Response(status=401)
+        if self.streams >= 2:
+            return web.Response(status=429, text="busy")
+        q = request.query
+        width = max(320, min(1920, int(q.get("w", 1280) or 1280)))
+        fps = max(1, min(15, int(q.get("fps", 8) or 8)))
+        index = int(q.get("m", 0) or 0) or None
+        resp = web.StreamResponse(headers={"Content-Type": "multipart/x-mixed-replace; boundary=jarvisframe",
+                                           "Cache-Control": "no-store", "Pragma": "no-cache"})
+        await resp.prepare(request)
+        self.streams += 1
+        self.core.log(f"Пульт: «{dev.get('name')}» смотрит экран")
+        self.core.emit("toast", title="Пульт с телефона", text=f"{dev.get('name')} смотрит экран этого ПК")
+        loop = asyncio.get_running_loop()
+        last, last_t = None, 0.0
+        try:
+            while self.loop:
+                t0 = time.time()
+                jpg, mon, n = await loop.run_in_executor(self.cap, self._grab, index, width, 55)
+                self.mon = mon
+                if jpg != last or t0 - last_t > 2:      # an unchanged screen is not sent again
+                    await resp.write(b"--jarvisframe\r\nContent-Type: image/jpeg\r\nContent-Length: "
+                                     + str(len(jpg)).encode() + b"\r\n\r\n" + jpg + b"\r\n")
+                    last, last_t = jpg, t0
+                await asyncio.sleep(max(0.01, 1 / fps - (time.time() - t0)))
+        except (ConnectionResetError, asyncio.CancelledError, RuntimeError):
+            pass
+        finally:
+            self.streams -= 1
+        return resp
+
+    @staticmethod
+    def _mon_count():
+        try:
+            import mss
+            with mss.MSS() as sct:
+                return max(1, len(sct.monitors) - 1)
+        except Exception:
+            return 1
+
+    def _tap(self, x, y, button, n):
+        if not (0 <= x <= 1 and 0 <= y <= 1) or not self.mon:
+            return
+        from . import mouse
+        left, top, w, h = self.mon
+        mouse.move(left + x * (w - 1), top + y * (h - 1), 0)
+        time.sleep(0.03)
+        for i in range(n):
+            _mouse(BTN[button][0])
+            _mouse(BTN[button][1])
+            if i + 1 < n:
+                time.sleep(0.05)
+
+    def _push_shot(self, jpg, w, h, kind):
+        sid = secrets.token_hex(6)
+        self.shots[sid] = jpg
+        while len(self.shots) > 6:
+            self.shots.popitem(last=False)
+        self._broadcast({"t": "shot", "id": sid, "w": w, "h": h, "kind": kind})
+
+    def _broadcast(self, msg):
+        loop = self.loop
+        if not loop:
+            return
+        for ws in list(self.clients):
+            try:
+                asyncio.run_coroutine_threadsafe(ws.send_json(msg), loop)
+            except Exception:
+                pass
+
+    def _snap(self):
+        try:
+            jpg, mon, _ = self._grab(None, 2560, 85, cursor=False)
+            self._push_shot(jpg, mon[2], mon[3], "screen")
+        except Exception as e:
+            self.core.log(f"Пульт: снимок экрана: {e}")
+
+    def _watch_clipboard(self):
+        """After «Скриншот» (Win+Shift+S) the cut-out area appears in the clipboard: send it to the phone."""
+        self.clip_watch = time.time() + 45
+        if getattr(self, "_clip_thread", None) and self._clip_thread.is_alive():
+            return
+
+        def run():
+            import io
+            from PIL import Image, ImageGrab
+            u = ctypes.windll.user32
+            seq = u.GetClipboardSequenceNumber()
+            while time.time() < self.clip_watch:
+                time.sleep(0.3)
+                now = u.GetClipboardSequenceNumber()
+                if now == seq:
+                    continue
+                seq = now
+                try:
+                    img = ImageGrab.grabclipboard()
+                except Exception:
+                    img = None
+                if isinstance(img, Image.Image):
+                    img = img.convert("RGB")
+                    if img.width > 2560:
+                        img = img.resize((2560, int(img.height * 2560 / img.width)), Image.BILINEAR)
+                    buf = io.BytesIO()
+                    img.save(buf, "JPEG", quality=88)
+                    self._push_shot(buf.getvalue(), img.width, img.height, "area")
+                    return
+        self._clip_thread = threading.Thread(target=run, daemon=True, name="remote-clip")
+        self._clip_thread.start()
+
+    async def _shot(self, request):
+        from aiohttp import web
+        if not self._device(self._token(request)):
+            return web.Response(status=401)
+        jpg = self.shots.get(request.match_info["id"])
+        if not jpg:
+            return web.Response(status=404)
+        return web.Response(body=jpg, content_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
     # ================================================================ voice
     async def _voice(self, request):

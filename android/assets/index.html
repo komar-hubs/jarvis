@@ -26,6 +26,8 @@ svg{position:absolute;left:0;top:0;overflow:visible}
 .k.down .t{fill:#fff}
 .k.latch .f{fill:rgba(var(--rgb),.42);stroke:var(--acc2);stroke-width:1.4}
 .k.latch .t{fill:#fff}
+.k.lock .f{fill:rgba(var(--hot-rgb),.34);stroke:var(--hot);stroke-width:1.6}
+.k.lock .t{fill:#fff}
 .k.space .t{font:600 12px "Exo 2";fill:rgba(234,251,255,.75);letter-spacing:2px}
 .k.enter .f{fill:url(#entg)}
 .dim-kb .k{opacity:.45}
@@ -59,6 +61,46 @@ svg{position:absolute;left:0;top:0;overflow:visible}
 .bubble .cur{display:inline-block;width:2px;height:16px;margin-left:2px;vertical-align:-2px;background:var(--hot);animation:blink 1s infinite}
 .toast{position:absolute;top:296px;left:600px;transform:translateX(-50%);padding:6px 14px;border-radius:12px;font:600 12px "Exo 2";background:rgba(4,20,32,.9);border:1px solid rgba(var(--ok-rgb),.5);color:#c8ffe6;white-space:nowrap;pointer-events:none;transition:opacity .25s}
 .toast.warn{border-color:rgba(var(--hot-rgb),.6);color:#ffe2b8}
+/* header buttons, the panels that replace the keyboard */
+.hbtn{position:absolute;top:4px;height:22px;display:flex;align-items:center;gap:6px;padding:0 11px;border-radius:12px;font:700 9.5px "Orbitron","Exo 2";letter-spacing:1.5px;color:#cfefff;border:1px solid rgba(var(--rgb),.4);background:rgba(4,24,38,.8);white-space:nowrap}
+.hbtn svg{position:static}
+.hbtn.on{background:rgba(var(--rgb),.32);border-color:var(--acc2);color:#fff;box-shadow:0 0 14px rgba(var(--rgb),.45)}
+#b-screen{left:478px}#b-combo{left:576px}
+#L-kb,#L-pop{transition:opacity .25s,transform .3s}
+.kb-away #L-kb,.kb-away #L-pop{opacity:0;transform:translateY(-36px);pointer-events:none}
+.panel2{position:absolute;left:236px;top:34px;width:684px;height:288px;display:none;flex-direction:column;border-radius:16px;border:1px solid rgba(var(--rgb),.45);background:linear-gradient(180deg,rgba(6,30,46,.92),rgba(2,12,20,.95));box-shadow:0 0 30px rgba(var(--rgb),.18),inset 0 0 30px rgba(var(--rgb),.06);padding:8px 10px 10px}
+.panel2.show{display:flex;animation:rise .3s ease-out}
+@keyframes rise{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:none}}
+.p2-head{display:flex;align-items:center;gap:7px;height:26px;flex:none;margin-bottom:7px}
+.p2-title{font:800 11px "Orbitron","Exo 2";letter-spacing:3px;color:#fff;white-space:nowrap}
+.p2-info{font:600 11px "JetBrains Mono";color:#7fd6f2;margin-right:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.live{display:flex;align-items:center;gap:6px;font:800 10px "Orbitron","Exo 2";letter-spacing:2px;color:#ff8a7a}
+.live i{width:8px;height:8px;border-radius:50%;background:#ff5d4d;box-shadow:0 0 8px #ff5d4d;animation:blink 1.2s infinite}
+.sbtn{flex:none;height:26px;padding:0 11px;border-radius:9px;display:flex;align-items:center;font:600 12px "Exo 2";color:#cfefff;border:1px solid rgba(var(--rgb),.4);background:rgba(var(--rgb),.08);white-space:nowrap}
+.sbtn:active,.sbtn.on{background:rgba(var(--rgb),.38);color:#fff}
+.scr-view{position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;border-radius:10px;background:#000;overflow:hidden;border:1px solid rgba(var(--rgb),.25)}
+.scr-view img{max-width:100%;max-height:100%;display:block}
+.tapring{position:absolute;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;border:2px solid var(--hot);box-shadow:0 0 12px var(--hot);opacity:0;pointer-events:none}
+.tapring.go{animation:tapgo .45s ease-out}
+@keyframes tapgo{from{opacity:1;transform:scale(.5)}to{opacity:0;transform:scale(1.7)}}
+.panel2.big{left:0;top:0;width:932px;height:430px;border-radius:0;z-index:6;padding:6px 8px 8px}
+.cb-tabs{display:flex;gap:6px;margin-right:auto;min-width:0}
+.cb-tabs div{flex:none;height:26px;padding:0 12px;border-radius:9px;display:flex;align-items:center;font:600 12px "Exo 2";color:#cfefff;border:1px solid rgba(var(--rgb),.3)}
+.cb-tabs div.on{background:rgba(var(--rgb),.38);border-color:var(--acc2);color:#fff}
+.cb-grid{flex:1;min-height:0;overflow-y:auto;touch-action:pan-y;display:grid;grid-template-columns:repeat(4,1fr);gap:7px;align-content:start}
+.cb{position:relative;height:52px;border-radius:11px;border:1px solid rgba(var(--rgb),.4);background:linear-gradient(180deg,rgba(var(--rgb),.16),rgba(var(--rgb),.04));padding:7px 10px;overflow:hidden}
+.cb b{display:block;font:700 13px "Exo 2";color:#eafbff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:4px}
+.cb span{display:block;font:600 10.5px "JetBrains Mono";color:#7fd6f2;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cb.hit{background:rgba(var(--hot-rgb),.35);border-color:var(--hot)}
+.cb.arm{border-color:var(--hot);box-shadow:0 0 14px rgba(var(--hot-rgb),.5)}
+.cb.add{border-style:dashed;display:flex;align-items:center;justify-content:center;font:700 13px "Exo 2";color:#bfefff}
+.cb .del{position:absolute;right:0;top:0;width:30px;height:30px;display:flex;align-items:center;justify-content:center;color:#ffb8a8;font:700 13px sans-serif}
+.cb.own b{padding-right:22px}
+.shotv{position:absolute;inset:0;z-index:8;display:none;flex-direction:column;background:rgba(1,6,10,.97);padding:10px 12px}
+.shotv.show{display:flex;animation:rise .25s ease-out}
+.shotv img{flex:1;min-height:0;width:100%;object-fit:contain;border-radius:8px}
+.shot-bar{display:flex;align-items:center;gap:10px;margin-top:8px;flex:none}
+.shot-bar .p2-title{margin-right:auto}
 /* connect screen */
 .conn{position:absolute;inset:0;display:none;padding:22px 26px;background:radial-gradient(120% 95% at 62% 0%,#0d2c46,#04131f 55%,#01060a)}
 .connect .conn{display:block}
@@ -146,6 +188,13 @@ input.addr{width:100%;height:44px;margin:10px 0 4px;border-radius:12px;border:1.
   <div class="chip bad" id="chip"><i></i><span id="pcname">—</span><b id="ping"></b></div>
   <div class="gear" id="gear"><svg width="16" height="16" viewBox="0 0 24 24" style="position:static"><circle cx="12" cy="12" r="3.2" class="ico"/><path class="ico" d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg></div>
   <div id="ov"></div>
+  <div class="hbtn" id="b-screen"><svg width="13" height="13" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2" class="ico"/><path class="ico" d="M8 20h8M12 16v4"/></svg>ЭКРАН</div>
+  <div class="hbtn" id="b-combo"><svg width="13" height="13" viewBox="0 0 24 24"><rect x="3" y="7" width="7" height="7" rx="2" class="ico"/><rect x="14" y="7" width="7" height="7" rx="2" class="ico"/><path class="ico" d="M10 10.5h4"/></svg>КОМБО</div>
+  <div class="panel2" id="scr"><div class="p2-head"><span class="live"><i></i>LIVE</span><span class="p2-info" id="scr-info"></span>
+    <div class="sbtn" id="scr-mon">Монитор</div><div class="sbtn" id="scr-snap">Снимок</div><div class="sbtn" id="scr-big">Во весь экран</div><div class="sbtn" id="scr-x">✕</div></div>
+    <div class="scr-view" id="scr-view"><img id="scr-img" alt=""><div class="tapring" id="tapring"></div></div></div>
+  <div class="panel2" id="combo"><div class="p2-head"><span class="p2-title">КОМБО</span><div class="cb-tabs" id="cb-tabs"></div><div class="sbtn" id="cb-x">✕</div></div><div class="cb-grid" id="cb-grid"></div></div>
+  <div class="shotv" id="shotv"><img id="shot-img" alt=""><div class="shot-bar"><span class="p2-title" id="shot-cap">СНИМОК ЭКРАНА</span><div class="btn ghost" id="shot-save">Сохранить на телефон</div><div class="btn" id="shot-x">Закрыть</div></div></div>
 </div>
 
 <div class="conn">
@@ -171,7 +220,7 @@ input.addr{width:100%;height:44px;margin:10px 0 4px;border-radius:12px;border:1.
   <div class="srow"><label>Скорость прокрутки</label><input type="range" id="o-scroll" min="2" max="14" step="0.5"></div>
   <div class="srow"><label>Вибрация</label><div class="tg" id="o-buzz"></div></div>
   <div class="row2"><div class="btn ghost" id="o-pc">Сменить ПК</div><div class="btn" id="o-done">Готово</div></div>
-  <div class="note">J.A.R.V.I.S. Remote — только для Android. Работает внутри домашней сети Wi-Fi. Удерживайте круг JARVIS, чтобы сказать команду; короткое касание — набрать её на клавиатуре.</div>
+  <div class="note">J.A.R.V.I.S. Remote — только для Android. Работает внутри домашней сети Wi-Fi. Удерживайте круг JARVIS, чтобы сказать команду; короткое касание — набрать её на клавиатуре. Ctrl, Alt, Shift: касание — для следующей клавиши, двойное — закрепить, зажать — вместе с другой клавишей. Тачпад: три пальца влево/вправо — окна, вверх — все окна, вниз — рабочий стол.</div>
 </div></div>
 </div>
 
@@ -304,11 +353,11 @@ const ROWS_CH = { ru: ["йцукенгшщзх", "фывапролджэ", "яч
 const CODES = ["qwertyuiop[", "asdfghjkl;'", "zxcvbnm,./"];
 const SUBS = { ru: '!"№;%:?*()', en: "!@#$%^&*()" };
 const SHIFT_SYM = { ru: { ".": "," }, en: { "[": "{", ";": ":", "'": '"', ",": "<", ".": ">", "/": "?" } };
-function upper() { return KB.shift !== KB.caps; }
+function upper() { return active("shift") !== KB.caps; }
 function chOf(k) {             // what a character key types now
-  if (k.digit) return KB.shift ? SUBS[KB.lang][k.i] : k.ch;
+  if (k.digit) return active("shift") ? SUBS[KB.lang][k.i] : k.ch;
   const sym = SHIFT_SYM[KB.lang][k.ch];
-  if (sym) return KB.shift ? sym : k.ch;
+  if (sym) return active("shift") ? sym : k.ch;
   return upper() ? k.ch.toUpperCase() : k.ch;
 }
 function drawKeyboard() {
@@ -318,7 +367,7 @@ function drawKeyboard() {
   const letters = (s, ri) => s.split("").map((c, i) => ({ kind: "ch", ch: c, code: CODES[ri][i] }));
   const strip = [{ kind: "media", a: "vdown", icon: "vdown" }, { kind: "media", a: "mute", icon: "mute" }, { kind: "media", a: "vup", icon: "vup" },
     { kind: "media", a: "prev", icon: "prev" }, { kind: "media", a: "play", icon: "pause" }, { kind: "media", a: "next", icon: "next" },
-    { kind: "key", k: "win", t: "Win", cls: "s fn" }, { kind: "fn", t: "F1–F12", cls: "s fn" + (KB.fn ? " latch" : "") }].map((k) => ({ cls: "fn", ...k }));
+    { kind: "mod", m: "win", t: "Win", cls: "s fn" }, { kind: "fn", t: "F1–F12", cls: "s fn" + (KB.fn ? " latch" : "") }].map((k) => ({ cls: "fn", ...k }));
   const digits = KB.fn
     ? Array.from({ length: 12 }, (_, i) => ({ kind: "key", k: "f" + (i + 1), t: "F" + (i + 1), cls: "s" }))
     : [{ kind: "key", k: "esc", t: "Esc", cls: "s", w: 1.2 }, ..."1234567890".split("").map((c, i) => ({ kind: "ch", ch: c, code: c, digit: true, i, sub: SUBS[KB.lang][i] })), { kind: "key", k: "delete", t: "Del", cls: "s", w: 1.2, rep: true }];
@@ -327,13 +376,14 @@ function drawKeyboard() {
     [1234, 1272, digits],
     [1188, 1228, [{ kind: "key", k: "tab", t: "Tab", cls: "s", w: 1.3 }, ...letters(ROWS_CH[KB.lang][0], 0), { kind: "key", k: "backspace", t: "⌫", cls: "s", w: 1.3, rep: true }]],
     [1142, 1182, [{ kind: "caps", t: "Caps", cls: "s" + (KB.caps ? " latch" : ""), w: 1.2 }, ...letters(ROWS_CH[KB.lang][1], 1), { kind: "key", k: "enter", t: "Ввод", cls: "s enter", w: 1.8 }]],
-    [1096, 1136, [{ kind: "shift", t: "⇧", cls: "s" + (KB.shift ? " latch" : ""), w: 1.6 }, ...letters(ROWS_CH[KB.lang][2], 2), { kind: "shift", t: "⇧", cls: "s" + (KB.shift ? " latch" : ""), w: 1.6 }]],
-    [1050, 1090, [{ kind: "mod", m: "ctrl", t: "Ctrl", cls: "s" + (KB.ctrl ? " latch" : ""), w: 1.2 }, { kind: "mod", m: "alt", t: "Alt", cls: "s" + (KB.alt ? " latch" : ""), w: 1.2 },
+    [1096, 1136, [{ kind: "mod", m: "shift", t: "⇧", cls: "s", w: 1.6 }, ...letters(ROWS_CH[KB.lang][2], 2), { kind: "mod", m: "shift", t: "⇧", cls: "s", w: 1.6 }]],
+    [1050, 1090, [{ kind: "mod", m: "ctrl", t: "Ctrl", cls: "s", w: 1.2 }, { kind: "mod", m: "alt", t: "Alt", cls: "s", w: 1.2 },
       { kind: "lang", t: KB.lang === "ru" ? "RU" : "EN", cls: "s latch", w: 1 }, { kind: "ch", ch: " ", code: "space", t: "пробел", cls: "space", w: 4.6 },
       { kind: "key", k: "left", t: "←", cls: "s", rep: true }, { kind: "key", k: "up", t: "↑", cls: "s", rep: true }, { kind: "key", k: "down", t: "↓", cls: "s", rep: true }, { kind: "key", k: "right", t: "→", cls: "s", rep: true }]],
   ];
-  KEYS.length = 0;
+  KEYS.length = 0; KROWS.length = 0;
   R.forEach(([r0, r1, ks]) => {
+    const row = { r0, r1, keys: [] }; KROWS.push(row);
     const tot = ks.reduce((s, k) => s + (k.w || 1), 0);
     let a = a0;
     ks.forEach((k) => {
@@ -344,18 +394,34 @@ function drawKeyboard() {
       const am = (b0 + b1) / 2, rm = (r0 + r1) / 2, [x, y] = P(cx, cy, rm, am);
       const tg = el("g", { transform: `rotate(${am + 90} ${x} ${y})` }, kg);
       const label = k.t || (k.kind === "ch" ? chOf(k) : "");
+      let tEl = null, subEl = null;
       if (k.icon) icon(k.icon, x, y, 15, tg);
       else {
-        const t = el("text", { x, y: y + (k.sub ? 2 : 0), class: "t" }, tg); t.textContent = label;
-        t.dataset.maxw = Math.max(8, (b1 - b0) * Math.PI / 180 * rm - 8);
-        if (k.sub && !KB.shift) { const s = el("text", { x: x + 11, y: y - 11, class: "sub" }, tg); s.textContent = k.sub; }
+        tEl = el("text", { x, y: y + (k.sub ? 2 : 0), class: "t" }, tg); tEl.textContent = label;
+        tEl.dataset.maxw = Math.max(8, (b1 - b0) * Math.PI / 180 * rm - 8);
+        if (k.sub) { subEl = el("text", { x: x + 11, y: y - 11, class: "sub" }, tg); subEl.textContent = k.sub; }
       }
-      KEYS.push({ ...k, g: kg, x, y, rot: am + 90, label });
+      const kk = { ...k, g: kg, x, y, rot: am + 90, label, tEl, subEl, b0, b1 };
+      KEYS.push(kk); row.keys.push(kk);
     });
   });
+  // touch bands: each row reaches halfway to its neighbours, so a finger between two rows still hits one
+  const rs = [...KROWS].sort((p, q) => p.r0 - q.r0);
+  rs.forEach((w, i) => { w.lo = i ? (rs[i - 1].r1 + w.r0) / 2 : w.r0 - 10; w.hi = i < rs.length - 1 ? (w.r1 + rs[i + 1].r0) / 2 : w.r1 + 8; });
+  refreshMods();
   fitAll(L.kb);
 }
-const KEYS = [];
+const KEYS = [], KROWS = [];
+// the key under a finger: by the dome's own geometry (radius = row, angle = key), not by the painted outline,
+// so the gaps between keys belong to the nearest key. The finger lands a little below where the eye aims: +3 px up.
+function keyAt(x, y) {
+  const dx = x - 612, dy = y - 3 - 1334, r = Math.hypot(dx, dy), a = Math.atan2(dy, dx) * 180 / Math.PI;
+  const row = KROWS.find((w) => r >= w.lo && r < w.hi);
+  if (!row) return null;
+  const ks = row.keys, f = ks[0], l = ks[ks.length - 1];
+  if (a < f.b0 - 1.2 || a > l.b1 + 1.2) return null;
+  return ks.find((k) => a < k.b1) || l;
+}
 
 // ================================================================ the touchpad strip (static picture; the touch zones are html)
 let thumb = null;
@@ -411,7 +477,8 @@ function openWs() {
   ws.onmessage = (e) => {
     let m; try { m = JSON.parse(e.data); } catch (x) { return; }
     if (m.t === "pong") { ping = Math.max(1, Date.now() - m.ts); chipState(); }
-    else if (m.t === "hello") { if (m.name && m.name !== cur.name) { cur.name = m.name; savePc(cur); } chipState(); }
+    else if (m.t === "hello") { if (m.name && m.name !== cur.name) { cur.name = m.name; savePc(cur); } scrMons = m.mons || 1; chipState(); }
+    else if (m.t === "shot") showShot(m);
     else if (m.t === "vol" && m.vol != null) toast(`Громкость ${m.vol}%`);
   };
   ws.onclose = () => { wsOk = false; chipState(); clearTimeout(retry); retry = setTimeout(recheck, 1500); };
@@ -425,7 +492,10 @@ async function recheck() {
   } else { clearTimeout(retry); retry = setTimeout(recheck, 2500); }
 }
 setInterval(() => send({ t: "ping", ts: Date.now() }), 2000);
-document.addEventListener("visibilitychange", () => { if (!document.hidden && screen === "main" && !wsOk) recheck(); });
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && screen === "main" && !wsOk) recheck();
+  if (scrOn) { if (document.hidden) scrImg.removeAttribute("src"); else scrImg.src = scrUrl(); }
+});
 
 function savedPcs() { return pget("pcs", []); }
 function savePc(pc) {
@@ -444,6 +514,8 @@ let found = {}, sel = null, code = "", pairMsg = "", pairErr = false, adding = f
 const PC_ICON = `<svg width="20" height="20" viewBox="0 0 24 24" style="position:static"><rect x="3" y="4" width="18" height="12" rx="2" class="ico"/><path class="ico" d="M8 20h8M12 16v4"/></svg>`;
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 function showConnect(pc) {
+  if (scrOn) screenOpen(false);
+  if (comboOn) comboOpen(false);
   screen = "connect"; document.body.className = "connect";
   if (ws) { ws.onclose = null; try { ws.close(); } catch (e) {} ws = null; wsOk = false; }
   sel = pc || null; code = ""; pairMsg = ""; pairErr = false; adding = false;
@@ -596,15 +668,52 @@ function cmdMode(on) {
   if (on) { cmdShow(); toast("Наберите команду и нажмите «Ввод»"); } else bubble("");
   drawDial(listening);
 }
-function mods() { return (KB.ctrl ? "ctrl+" : "") + (KB.alt ? "alt+" : "") ; }
-function clearMods() { if (KB.ctrl || KB.alt) { KB.ctrl = KB.alt = false; return true; } return false; }
+// modifiers: a tap = for the next key, a double tap = locked, held = together with a key pressed by another finger
+const MODS = ["ctrl", "alt", "shift", "win"], MOD = { ctrl: 0, alt: 0, shift: 0, win: 0 }, HOLD = {}, USED = {}, LASTTAP = {};
+const MODNAME = { ctrl: "Ctrl", alt: "Alt", shift: "Shift", win: "Win" };
+function active(m) { return MOD[m] > 0 || HOLD[m] != null; }
+function modStr() { return MODS.filter(active).map((m) => m + "+").join(""); }
+function refreshMods() {
+  KEYS.forEach((k) => {
+    if (k.kind === "mod") { k.g.classList.toggle("latch", MOD[k.m] === 1 || HOLD[k.m] != null); k.g.classList.toggle("lock", MOD[k.m] === 2); }
+    else if (k.kind === "caps") k.g.classList.toggle("latch", KB.caps);
+  });
+  KEYS.forEach((k) => {
+    if (k.kind !== "ch" || !k.tEl || k.t) return;
+    k.tEl.textContent = chOf(k);
+    if (k.subEl) k.subEl.style.display = active("shift") ? "none" : "";
+  });
+}
+function modHint() {
+  const on = MODS.filter(active);
+  if (on.length && !(on.length === 1 && on[0] === "shift" && MOD.shift !== 2)) toast(on.map((m) => MODNAME[m] + (MOD[m] === 2 ? " (закреплён)" : "")).join(" + ") + " + …");
+}
+function modDown(k, pid) { HOLD[k.m] = pid; USED[k.m] = false; refreshMods(); }
+function modUp(k) {
+  const m = k.m;
+  HOLD[m] = null;
+  if (!USED[m]) {
+    const now = Date.now(), dbl = now - (LASTTAP[m] || 0) < 380;
+    LASTTAP[m] = now;
+    if (m === "win") { if (rec) recordCombo("win"); else send({ t: "key", k: "win" }); }   // Win alone opens Start
+    else if (MOD[m] === 0) MOD[m] = 1;
+    else if (MOD[m] === 1 && dbl) MOD[m] = 2;
+    else MOD[m] = 0;
+  }
+  refreshMods(); modHint();
+}
+function afterKey() {      // a key went out: held modifiers count as used, one-shot ones are spent
+  let ch = false;
+  MODS.forEach((m) => { if (HOLD[m] != null) USED[m] = true; if (MOD[m] === 1) { MOD[m] = 0; ch = true; } });
+  if (ch) refreshMods();
+}
 function press(k) {
-  let redraw = false;
+  if (rec && (k.kind === "ch" || k.kind === "key")) { recordCombo(modStr() + (k.kind === "ch" ? k.code : k.k)); afterKey(); return; }
   if (k.kind === "ch") {
     if (cmd !== null) { cmd += chOf(k); cmdShow(); }
-    else if (KB.ctrl || KB.alt) { send({ t: "key", k: mods() + (KB.shift ? "shift+" : "") + k.code }); redraw = clearMods(); }
+    else if (active("ctrl") || active("alt") || active("win")) send({ t: "key", k: modStr() + k.code });
     else send({ t: "text", s: chOf(k) });
-    if (KB.shift) { KB.shift = false; redraw = true; }
+    afterKey();
   } else if (k.kind === "key") {
     if (cmd !== null && ["backspace", "enter", "esc"].includes(k.k)) {
       if (k.k === "backspace") { cmd = cmd.slice(0, -1); cmdShow(); }
@@ -612,15 +721,12 @@ function press(k) {
       else cmdMode(false);
       return;
     }
-    send({ t: "key", k: mods() + (KB.shift ? "shift+" : "") + k.k });
-    redraw = clearMods() || KB.shift; KB.shift = false;
-  } else if (k.kind === "shift") { KB.shift = !KB.shift; redraw = true; }
-  else if (k.kind === "caps") { KB.caps = !KB.caps; redraw = true; toast(KB.caps ? "Заглавные буквы" : "Строчные буквы"); }
-  else if (k.kind === "mod") { KB[k.m] = !KB[k.m]; redraw = true; if (KB[k.m]) toast(`${k.t} нажат — следующая клавиша вместе с ним`); }
-  else if (k.kind === "lang") { KB.lang = KB.lang === "ru" ? "en" : "ru"; pput("lang", KB.lang); redraw = true; toast(KB.lang === "ru" ? "Русская раскладка" : "Английская раскладка"); }
-  else if (k.kind === "fn") { KB.fn = !KB.fn; redraw = true; }
+    send({ t: "key", k: modStr() + k.k });
+    afterKey();
+  } else if (k.kind === "caps") { KB.caps = !KB.caps; refreshMods(); toast(KB.caps ? "Заглавные буквы" : "Строчные буквы"); }
+  else if (k.kind === "lang") { KB.lang = KB.lang === "ru" ? "en" : "ru"; pput("lang", KB.lang); drawKeyboard(); toast(KB.lang === "ru" ? "Русская раскладка" : "Английская раскладка"); }
+  else if (k.kind === "fn") { KB.fn = !KB.fn; drawKeyboard(); }
   else if (k.kind === "media") send({ t: "media", a: k.a });
-  if (redraw) drawKeyboard();
 }
 function showPop(k) {
   L.pop.innerHTML = "";
@@ -633,32 +739,189 @@ function showPop(k) {
   const t = el("text", { x: bx, y: by + 1, "text-anchor": "middle", "dominant-baseline": "central", fill: "#fff", style: "font:700 19px 'Exo 2'" }, g);
   t.textContent = chOf(k);
 }
-const held = new Map();        // pointerId -> {k, rep}
+// a key goes out when the finger lifts (slide to the right one if you landed on its neighbour);
+// keys that repeat (⌫, Del, arrows) and modifiers act at once
+const held = new Map();        // pointerId -> {k, pending, rep}
 const svg = document.getElementById("s");
+function setDown(k, on) { if (k && k.g && k.g.isConnected) k.g.classList.toggle("down", on); }
+function commit(h) { if (!h.pending) return; h.pending = false; setDown(h.k, false); press(h.k); }
 svg.addEventListener("pointerdown", (e) => {
-  const kg = e.target.closest("[data-k]");
-  if (kg) {
-    e.preventDefault();
-    const k = KEYS[+kg.dataset.k]; if (!k) return;
-    buzz(); kg.classList.add("down"); showPop(k);
-    const h = { k, g: kg };
-    held.set(e.pointerId, h);
-    press(k);
-    if (k.rep) h.rep = setTimeout(function again() { press(k); buzz(4); h.rep = setTimeout(again, 55); }, 420);
-    return;
-  }
   const dg = e.target.closest("[data-act]");
   if (dg) { e.preventDefault(); dialDown(e, dg); return; }
-  if (e.target.closest("[data-core]")) { e.preventDefault(); coreDown(e); }
+  if (e.target.closest("[data-core]")) { e.preventDefault(); coreDown(e); return; }
+  if (stage.classList.contains("kb-away")) return;
+  const p = loc(e), k = keyAt(p.x, p.y);
+  if (!k) return;
+  e.preventDefault();
+  try { svg.setPointerCapture(e.pointerId); } catch (x) {}
+  held.forEach((h) => commit(h));          // fast typing: the earlier finger's key goes out first
+  buzz();
+  const h = { k, pending: false };
+  held.set(e.pointerId, h);
+  setDown(k, true);
+  if (k.kind === "mod") { modDown(k, e.pointerId); return; }
+  if (k.rep) { press(k); h.rep = setTimeout(function again() { press(k); buzz(4); h.rep = setTimeout(again, 55); }, 420); return; }
+  h.pending = true; showPop(k);
 });
-function keyUp(e) {
+svg.addEventListener("pointermove", (e) => {
+  const h = held.get(e.pointerId);
+  if (!h || !h.pending) return;
+  const p = loc(e), k = keyAt(p.x, p.y);
+  if (k && k !== h.k && k.kind !== "mod" && !k.rep) { setDown(h.k, false); h.k = k; setDown(k, true); showPop(k); buzz(3); }
+});
+function keyUp(e, cancel) {
   const h = held.get(e.pointerId); if (!h) return;
   held.delete(e.pointerId); clearTimeout(h.rep);
-  if (h.g.isConnected) h.g.classList.remove("down");
-  setTimeout(() => { if (![...held.values()].some((x) => x.k.kind === "ch")) L.pop.innerHTML = ""; }, 90);
+  if (h.k.kind === "mod") modUp(h.k);
+  else if (h.pending && !cancel) commit(h);
+  setDown(h.k, false);
+  setTimeout(() => { if (![...held.values()].some((x) => x.pending)) L.pop.innerHTML = ""; }, 90);
 }
 addEventListener("pointerup", (e) => { keyUp(e); dialUp(e); coreUp(e); });
-addEventListener("pointercancel", (e) => { keyUp(e); dialUp(e, true); coreUp(e); });
+addEventListener("pointercancel", (e) => { keyUp(e, true); dialUp(e, true); coreUp(e); });
+
+// ================================================================ КОМБО: ready shortcuts by topic + the user's own
+const COMBOS = {
+  "Окна": [["Все окна", "win+tab"], ["Переключить окно", "alt+tab"], ["Рабочий стол", "win+d"], ["Развернуть", "win+up"], ["Свернуть окно", "win+down"],
+    ["Окно влево", "win+left"], ["Окно вправо", "win+right"], ["На другой монитор", "win+shift+right"], ["Следующий стол", "win+ctrl+right"],
+    ["Прошлый стол", "win+ctrl+left"], ["Новый стол", "win+ctrl+d"], ["Полный экран", "f11"], ["Закрыть окно", "alt+f4", 1]],
+  "Браузер": [["Новая вкладка", "ctrl+t"], ["Закрыть вкладку", "ctrl+w"], ["Вернуть вкладку", "ctrl+shift+t"], ["Следующая вкладка", "ctrl+tab"],
+    ["Прошлая вкладка", "ctrl+shift+tab"], ["Адресная строка", "ctrl+l"], ["Обновить", "f5"], ["Найти на странице", "ctrl+f"], ["Назад", "alt+left"],
+    ["Вперёд", "alt+right"], ["Инкогнито", "ctrl+shift+n"], ["В закладки", "ctrl+d"], ["Крупнее", "ctrl+plus"], ["Мельче", "ctrl+minus"],
+    ["Масштаб 100%", "ctrl+0"], ["История", "ctrl+h"]],
+  "Текст": [["Выделить всё", "ctrl+a"], ["Копировать", "ctrl+c"], ["Вырезать", "ctrl+x"], ["Вставить", "ctrl+v"], ["Отменить", "ctrl+z"],
+    ["Повторить", "ctrl+y"], ["Сохранить", "ctrl+s"], ["Удалить слово", "ctrl+backspace"], ["Слово влево", "ctrl+left"], ["Слово вправо", "ctrl+right"],
+    ["Выделить до начала", "shift+home"], ["Выделить до конца", "shift+end"], ["В начало текста", "ctrl+home"], ["В конец текста", "ctrl+end"],
+    ["Печать", "ctrl+p"], ["Жирный", "ctrl+b"]],
+  "Система": [["Снимок на телефон", "@snap"], ["Вырезать область", "@shot"], ["Буфер обмена", "win+v"], ["Эмодзи", "win+."], ["Снимок в файл", "win+printscreen"],
+    ["Проводник", "win+e"], ["Параметры", "win+i"], ["Быстрые настройки", "win+a"], ["Уведомления", "win+n"], ["Диспетчер задач", "ctrl+shift+esc"],
+    ["Выполнить", "win+r"], ["Game Bar", "win+g"], ["Записать клип", "win+alt+r"], ["Режим экрана", "win+p"], ["Меню Пуск", "win"], ["Блок ПК", "@lock", 1]],
+};
+const PRETTY = { ctrl: "Ctrl", alt: "Alt", shift: "Shift", win: "Win", left: "←", right: "→", up: "↑", down: "↓", plus: "+", minus: "−", backspace: "⌫",
+  printscreen: "PrtSc", esc: "Esc", tab: "Tab", home: "Home", end: "End", enter: "Enter", space: "Пробел", delete: "Del",
+  "@snap": "весь экран → сюда", "@shot": "Win + Shift + S → сюда", "@lock": "Win + L" };
+const pretty = (k) => PRETTY[k] && k.startsWith("@") ? PRETTY[k] : k.split("+").map((x) => PRETTY[x] || x.toUpperCase()).join(" + ");
+let comboOn = false, comboTab = pget("ctab", "Окна"), rec = false, cbArm = null;
+function panelsAway() {
+  stage.classList.toggle("kb-away", scrOn || comboOn);
+  document.getElementById("b-screen").classList.toggle("on", scrOn);
+  document.getElementById("b-combo").classList.toggle("on", comboOn);
+}
+function comboOpen(on, tab) {
+  comboOn = on;
+  if (on && scrOn) screenOpen(false);
+  if (tab) comboTab = tab;
+  document.getElementById("combo").classList.toggle("show", on);
+  if (on) renderCombos();
+  panelsAway();
+}
+function renderCombos() {
+  const tabs = [...Object.keys(COMBOS), "Мои"];
+  if (!tabs.includes(comboTab)) comboTab = "Окна";
+  document.getElementById("cb-tabs").innerHTML = tabs.map((t) => `<div class="${t === comboTab ? "on" : ""}" data-t="${t}">${t}</div>`).join("");
+  document.querySelectorAll("#cb-tabs div").forEach((d) => d.onclick = () => { buzz(); comboTab = d.dataset.t; pput("ctab", comboTab); renderCombos(); });
+  const mine = comboTab === "Мои", list = mine ? pget("combos", []).map((c) => [c.n, c.k, 0, 1]) : COMBOS[comboTab];
+  const g = document.getElementById("cb-grid");
+  g.innerHTML = list.map(([n, k, risky, own], i) => `<div class="cb ${own ? "own" : ""}" data-i="${i}"><b>${esc(n)}</b><span>${esc(pretty(k))}</span>${own ? `<div class="del" data-del="${i}">✕</div>` : ""}</div>`).join("")
+    + (mine ? `<div class="cb add" id="cb-rec">+ Записать своё</div>` : "")
+    + (mine && !list.length ? `<div class="empty" style="grid-column:span 3">Нажмите «Записать своё» и наберите сочетание на клавиатуре пульта (например, зажмите Ctrl и Shift и нажмите T) — оно появится здесь.</div>` : "");
+  g.querySelectorAll(".cb[data-i]").forEach((d) => d.onpointerdown = (e) => {
+    if (e.target.dataset.del != null) { const all = pget("combos", []); all.splice(+e.target.dataset.del, 1); pput("combos", all); buzz(); renderCombos(); return; }
+    const [n, k, risky] = list[+d.dataset.i];
+    if (risky && (!cbArm || cbArm.k !== k || Date.now() - cbArm.t > 2500)) {
+      cbArm = { k, t: Date.now() }; d.classList.add("arm"); toast("Ещё раз — " + n.toLowerCase(), true); buzz(20);
+      setTimeout(() => d.classList.remove("arm"), 2500); return;
+    }
+    cbArm = null; runCombo(n, k); d.classList.add("hit"); setTimeout(() => d.classList.remove("hit"), 160);
+  });
+  const r = document.getElementById("cb-rec");
+  if (r) r.onclick = () => { buzz(); comboOpen(false); rec = true; bubble("ЗАПИСЬ СОЧЕТАНИЯ", "нажмите Ctrl, Alt, Shift или Win и клавишу…", true, true); };
+}
+function runCombo(n, k) {
+  const ok = k === "@snap" ? send({ t: "act", a: "snap" }) : k === "@shot" ? send({ t: "act", a: "shot" }) : k === "@lock" ? send({ t: "act", a: "lock" }) : send({ t: "key", k });
+  if (ok) { buzz(12); toast(k === "@shot" ? "Выделите область — снимок придёт сюда" : n); } else toast("Нет связи с ПК", true);
+}
+function recordCombo(k) {
+  rec = false;
+  const all = pget("combos", []), n = pretty(k);
+  if (!all.some((c) => c.k === k)) all.push({ n, k });
+  pput("combos", all.slice(-24));
+  bubble("СОХРАНЕНО", esc(n)); buzz(25);
+  setTimeout(() => comboOpen(true, "Мои"), 700);
+}
+
+// ================================================================ ЭКРАН: the PC's screen live in place of the keyboard
+let scrOn = false, scrMon = 0, scrMons = 1;
+const scrImg = document.getElementById("scr-img"), scrView = document.getElementById("scr-view");
+function scrUrl() { return `${base()}/screen?token=${encodeURIComponent(cur.token)}&w=1280&fps=8&m=${scrMon}&r=${Date.now()}`; }
+function scrLabel() {
+  const b = document.getElementById("scr-mon");
+  b.style.display = scrMons > 1 ? "" : "none";
+  b.textContent = scrMon ? `Монитор ${scrMon}` : "Монитор";
+}
+function screenOpen(on) {
+  if (on && !wsOk) { toast("Нет связи с ПК", true); return; }
+  scrOn = on;
+  if (on && comboOn) comboOpen(false);
+  const pn = document.getElementById("scr");
+  pn.classList.toggle("show", on);
+  if (!on) { pn.classList.remove("big"); document.getElementById("scr-big").textContent = "Во весь экран"; }
+  scrImg.removeAttribute("src");
+  if (on) scrImg.src = scrUrl();       // no src = the stream on the PC stops
+  document.getElementById("scr-info").textContent = on ? "подключаюсь…" : "";
+  scrLabel(); panelsAway();
+}
+scrImg.onload = () => { if (scrOn) document.getElementById("scr-info").textContent = "касание — клик, удержание — правый клик"; };
+scrImg.onerror = () => { if (scrOn) setTimeout(() => { if (scrOn) scrImg.src = scrUrl(); }, 1500); };
+document.getElementById("scr-mon").onclick = () => { buzz(); scrMon = scrMon % scrMons + 1; scrLabel(); scrImg.src = scrUrl(); };
+document.getElementById("scr-snap").onclick = () => { buzz(); if (send({ t: "act", a: "snap" })) toast("Снимок…"); };
+document.getElementById("scr-big").onclick = (e) => { buzz(); const pn = document.getElementById("scr"); pn.classList.toggle("big"); e.currentTarget.textContent = pn.classList.contains("big") ? "Свернуть" : "Во весь экран"; };
+document.getElementById("scr-x").onclick = () => screenOpen(false);
+document.getElementById("b-screen").onclick = () => { buzz(); screenOpen(!scrOn); };
+document.getElementById("b-combo").onclick = () => { buzz(); if (rec) { rec = false; bubble(""); toast("Запись отменена"); return; } comboOpen(!comboOn); };
+document.getElementById("cb-x").onclick = () => comboOpen(false);
+// a tap on the picture clicks that point on the PC, a long press right-clicks it
+let tapT = null, tapP = null;
+function imgRel(e) {
+  const b = scrImg.getBoundingClientRect();
+  if (!b.width) return null;
+  const x = (e.clientX - b.left) / b.width, y = (e.clientY - b.top) / b.height;
+  return x >= 0 && x <= 1 && y >= 0 && y <= 1 ? { x, y } : null;
+}
+function ring(e) {
+  const rg = document.getElementById("tapring"), vb = scrView.getBoundingClientRect();
+  rg.style.left = (e.clientX - vb.left) / SC + "px"; rg.style.top = (e.clientY - vb.top) / SC + "px";
+  rg.classList.remove("go"); void rg.offsetWidth; rg.classList.add("go");
+}
+scrView.addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  const r = imgRel(e); if (!r) return;
+  tapP = { r, x: e.clientX, y: e.clientY, long: false };
+  tapT = setTimeout(() => { if (!tapP) return; tapP.long = true; send({ t: "tap", x: r.x, y: r.y, b: "right" }); ring(e); buzz(25); }, 520);
+});
+scrView.addEventListener("pointermove", (e) => { if (tapP && Math.hypot(e.clientX - tapP.x, e.clientY - tapP.y) > 14 * SC) { clearTimeout(tapT); tapP = null; } });
+scrView.addEventListener("pointerup", (e) => {
+  clearTimeout(tapT);
+  if (tapP && !tapP.long) { send({ t: "tap", x: tapP.r.x, y: tapP.r.y, b: "left" }); ring(e); buzz(10); }
+  tapP = null;
+});
+scrView.addEventListener("pointercancel", () => { clearTimeout(tapT); tapP = null; });
+
+// screenshots from the PC: «Скриншот» on the dial (the cut-out area) or «Снимок» (the whole monitor)
+let shotUrl = "";
+function showShot(m) {
+  shotUrl = `${base()}/shot/${m.id}?token=${encodeURIComponent(cur.token)}`;
+  document.getElementById("shot-img").src = shotUrl;
+  document.getElementById("shot-cap").textContent = m.kind === "area" ? "ВЫРЕЗАННАЯ ОБЛАСТЬ" : "СНИМОК ЭКРАНА";
+  document.getElementById("shotv").classList.add("show"); buzz(20);
+}
+document.getElementById("shot-x").onclick = () => document.getElementById("shotv").classList.remove("show");
+document.getElementById("shot-save").onclick = () => {
+  buzz();
+  if (HAS) Native.saveImage(shotUrl);
+  else { const a = document.createElement("a"); a.href = shotUrl; a.download = "jarvis-shot.jpg"; a.click(); }
+};
+window.onSaved = (ok) => toast(ok ? "Сохранено в Галерею: Pictures/JARVIS" : "Не удалось сохранить", !ok);
 
 // ================================================================ the dial: an action on release over the same cell
 let dialHold = null, armed = null;
@@ -678,7 +941,7 @@ function dialUp(e, cancel) {
     return;
   }
   armed = null; dg.classList.remove("arm");
-  if (send({ t: "act", a })) { toast(NAMES[a]); buzz(14); } else toast("Нет связи с ПК", true);
+  if (send({ t: "act", a })) { toast(a === "shot" ? "Выделите область — снимок придёт сюда" : NAMES[a]); buzz(14); } else toast("Нет связи с ПК", true);
 }
 
 // ================================================================ the core: hold = voice, tap = typed command
@@ -744,12 +1007,17 @@ pad.addEventListener("pointermove", (e) => {
       mdx += dx * gain; mdy += dy * gain;
       trailAdd(p.x, p.y);
     } else if (pts.size === 2) { sdy += dy * OPT.scroll / 2; sdx -= dx * OPT.scroll / 2; }
+    else if (pts.size >= 3) { gest.sx = (gest.sx || 0) + dx / pts.size; gest.sy = (gest.sy || 0) + dy / pts.size; }
   }
 });
 function padUp(e) {
   if (!pts.delete(e.pointerId) || pts.size || !gest) return;
-  const dur = performance.now() - gest.t0;
-  if (gest.drag) send({ t: "up", b: "left" });
+  const dur = performance.now() - gest.t0, sx = gest.sx || 0, sy = gest.sy || 0;
+  if (gest.max >= 3 && Math.max(Math.abs(sx), Math.abs(sy)) > 30) {      // three fingers: windows
+    const k = Math.abs(sx) > Math.abs(sy) ? (sx > 0 ? "alt+tab" : "alt+shift+tab") : (sy < 0 ? "win+tab" : "win+d");
+    send({ t: "key", k }); buzz(14);
+    toast({ "alt+tab": "Следующее окно", "alt+shift+tab": "Прошлое окно", "win+tab": "Все окна", "win+d": "Рабочий стол" }[k]);
+  } else if (gest.drag) send({ t: "up", b: "left" });
   else if (gest.moved < 9 && dur < 260) {
     if (gest.max === 1) { send({ t: "click", b: "left" }); const p = loc(e); lastTap = { t: performance.now(), x: p.x, y: p.y }; }
     else if (gest.max === 2) { send({ t: "click", b: "right" }); buzz(14); }
@@ -843,6 +1111,10 @@ document.getElementById("o-pc").onclick = () => { shade.classList.remove("show")
 shade.addEventListener("pointerdown", (e) => { if (e.target === shade) shade.classList.remove("show"); });
 window.onBack = () => {           // the Android back button
   if (shade.classList.contains("show")) { shade.classList.remove("show"); return true; }
+  if (document.getElementById("shotv").classList.contains("show")) { document.getElementById("shotv").classList.remove("show"); return true; }
+  if (rec) { rec = false; bubble(""); return true; }
+  if (scrOn) { const pn = document.getElementById("scr"); if (pn.classList.contains("big")) document.getElementById("scr-big").click(); else screenOpen(false); return true; }
+  if (comboOn) { comboOpen(false); return true; }
   if (cmd !== null) { cmdMode(false); return true; }
   if (screen === "connect" && adding) { adding = false; renderConnect(); return true; }
   return false;
