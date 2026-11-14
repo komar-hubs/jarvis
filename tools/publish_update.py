@@ -51,7 +51,10 @@ def main():
     meta = ROOT.parent / "version.json"
     meta.write_text(json.dumps({"version": ver, "notes": notes, "size": ZIP.stat().st_size}, ensure_ascii=False),
                     encoding="utf-8")
-    r = gh("release", "create", "v" + ver, str(ZIP), str(meta), "--repo", REPO, "--title", f"J.A.R.V.I.S. {ver}",
+    # the Android remote rides along: phones download it over HTTPS from a stable link
+    # (releases/latest/download/jarvis-remote.apk) instead of a bare http://192.168… address
+    apk = [str(p) for p in (ROOT / "android" / "jarvis-remote.apk", ROOT / "android" / "jarvis-remote.sha256") if p.exists()]
+    r = gh("release", "create", "v" + ver, str(ZIP), str(meta), *apk, "--repo", REPO, "--title", f"J.A.R.V.I.S. {ver}",
            "--notes", notes, "--latest", check=False)
     meta.unlink(missing_ok=True)
     if r.returncode != 0:

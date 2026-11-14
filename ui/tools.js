@@ -198,11 +198,14 @@ async function remotePanel() {
     <div class="row"><button class="btn" id="rm-toggle">${r.enabled ? "Выключить пульт" : "Включить пульт"}</button>${featChip("remote")}</div>
     ${r.error ? `<p class="hint" style="color:var(--warn,#ffb347)">${esc(r.error)}</p>` : ""}
     ${r.enabled ? `<ol class="ph-steps">
-      <li>Установите приложение на телефон: ${r.kde ? `<button class="btn ghost" id="rm-send">${I("download", "lead")}Отправить на телефон</button> (через KDE Connect) или ` : ""}откройте в браузере телефона <b>${esc(r.link || "—")}</b> и скачайте APK${r.apk ? ` (${Math.round(r.apk_size / 1024)} КБ)` : " — пока не собран"}.</li>
+      <li>Установите приложение: откройте в браузере телефона <b>${esc(r.link || "—")}</b> — там кнопка «Скачать с GitHub» (по HTTPS, из открытого репозитория) и запасная «с этого ПК»${r.kde ? `, или <button class="btn ghost" id="rm-send">${I("download", "lead")}Отправить на телефон</button> через KDE Connect` : ""}. Android спросит разрешение на установку не из Google Play — это обычное предупреждение для любого APK.</li>
       <li>Откройте «JARVIS Пульт», выберите <b>${esc(r.name)}</b> и введите код, который появится здесь и прозвучит вслух.</li>
       <li>Если Windows спросит про брандмауэр — нажмите «Разрешить» для частных сетей.</li></ol>
       ${r.code ? `<div class="row"><span class="dim">Код для телефона:</span><b style="font:800 28px var(--head);letter-spacing:8px">${esc(r.code)}</b></div>` : ""}
-      <div class="sgrid"><label>Адрес ПК</label><span>${esc((r.ips || []).join(", ") || "—")} · порт ${r.port}</span></div>` : ""}
+      ${r.locked ? `<p class="hint" style="color:var(--warn,#ffb347)">Кто-то вводил неверные коды — привязка новых телефонов закрыта ещё на ${Math.ceil(r.locked / 60)} мин.</p>` : ""}
+      <div class="sgrid"><label>Адрес ПК</label><span>${esc((r.ips || []).join(", ") || "—")} · порт ${r.port}</span>
+        <label>Безопасность</label><span class="dim">только устройства из домашней сети; новый телефон — только по коду с этого экрана; 6 неверных кодов — блокировка на 10 минут</span>
+        ${r.sha256 ? `<label>SHA-256 приложения</label><span class="dim" style="word-break:break-all;font-family:var(--mono);font-size:11px">${esc(r.sha256)}</span>` : ""}</div>` : ""}
     ${r.devices.length ? `<div class="s-sub">Привязанные телефоны</div>${r.devices.map((d) => `<div class="row"><span>${I("user", "lead")}${esc(d.name)}</span><span class="dim">${ago(d.last)}</span><button class="btn ghost" data-forget="${esc(d.id)}">${I("trash", "lead")}Забыть</button></div>`).join("")}` : ""}`;
   $("#rm-toggle").onclick = async () => { $("#rm-toggle").disabled = true; await rpc("remote_set", { enabled: !r.enabled }); remotePanel(); if (window.featuresPanel) featuresPanel(); };
   if ($("#rm-send")) $("#rm-send").onclick = async () => { const x = await rpc("remote_send_apk"); toast(x.ok ? "Файл отправлен — откройте его на телефоне в «Загрузках»" : x.error, "Пульт"); };

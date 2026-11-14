@@ -37,6 +37,8 @@ from . import system as S
 from .config import ROOT
 
 APK = ROOT / "android" / "jarvis-remote.apk"
+GITHUB_APK = "https://github.com/komar-hubs/jarvis/releases/latest/download/jarvis-remote.apk"
+SOURCE = "https://github.com/komar-hubs/jarvis/tree/main/android"
 HELLO = b"JARVIS-REMOTE?"
 
 # the dial and the strip of the app: action id -> what it does on the PC
@@ -51,6 +53,27 @@ MEDIA = {"play": "play", "pause": "play", "next": "next", "prev": "prev", "vup":
 KEYS = {"enter", "backspace", "tab", "esc", "delete", "capslock", "up", "down", "left", "right", "home", "end",
         "page up", "page down", "space", "win", "printscreen", "insert", "apps"} | {f"f{i}" for i in range(1, 13)}
 MODS = {"ctrl", "alt", "shift", "win"}
+
+
+def private_ip(ip):
+    """Only the home network may talk to the remote: loopback, 10/8, 172.16/12, 192.168/16 (and link-local).
+    A port forwarded from the internet or a VPN peer gets nothing at all."""
+    import ipaddress
+    try:
+        a = ipaddress.ip_address((ip or "").split("%")[0])
+        if a.version == 6 and a.ipv4_mapped:
+            a = a.ipv4_mapped
+        return a.is_loopback or a.is_link_local or (a.is_private and not a.is_global)
+    except ValueError:
+        return False
+
+
+def apk_sha256():
+    import hashlib
+    try:
+        return hashlib.sha256(APK.read_bytes()).hexdigest()
+    except OSError:
+        return ""
 
 
 def _hash(token):
@@ -112,6 +135,8 @@ class Remote:
         self.held = set()             # mouse buttons held down by a drag (released if the phone drops)
         self.pool = ThreadPoolExecutor(1, thread_name_prefix="remote-input")   # one thread: input keeps its order
         self.error = ""
+        self.fails = []               # times of wrong codes: 6 in 10 minutes lock pairing for 10 minutes
+        self.locked_until = 0.0
 
     @property
     def port(self):
@@ -145,7 +170,14 @@ class Remote:
         loop = asyncio.SelectorEventLoop()
         asyncio.set_event_loop(loop)
         self.loop = loop
-        app = web.Application(client_max_size=8 * 1024 * 1024)
+        @web.middleware
+        async def home_only(request, handler):
+            if not private_ip(request.remote):
+                self.core.log(f"Пульт: отклонён запрос не из домашней сети ({request.remote})")
+                return web.Response(status=403, text="home network only")
+            return await handler(request)
+
+        app = web.Application(client_max_size=8 * 1024 * 1024, middlewares=[home_only])
         app.router.add_get("/hello", self._hello)
         app.router.add_post("/pair", self._pair)
         app.router.add_post("/pair/confirm", self._confirm)
@@ -189,7 +221,7 @@ class Remote:
                 data, addr = s.recvfrom(256)
             except OSError:
                 break
-            if data.strip() == HELLO:
+            if data.strip() == HELLO and private_ip(addr[0]):
                 reply = json.dumps({"jarvis": 1, "name": self.pc_name(), "port": self.port}, ensure_ascii=False)
                 try:
                     s.sendto(reply.encode(), addr)
@@ -233,6 +265,8 @@ class Remote:
             body = {}
         name = str(body.get("name") or "Телефон")[:40]
         now = time.time()
+        if now < self.locked_until:
+            return web.json_response({"ok": False, "error": f"Слишком много неверных кодов. Подождите {int(self.locked_until - now) // 60 + 1} мин."}, status=429)
         if now - self.last_pair < 4:
             return web.json_response({"ok": False, "error": "Подождите пару секунд"}, status=429)
         self.last_pair = now
@@ -250,14 +284,22 @@ class Remote:
         except Exception:
             body = {}
         p = self.pairing
-        if not p or time.time() > p["until"]:
+        now = time.time()
+        if now < self.locked_until:
+            return web.json_response({"ok": False, "error": "Привязка временно заблокирована"}, status=429)
+        if not p or now > p["until"]:
             return web.json_response({"ok": False, "error": "Код устарел — запросите новый"}, status=403)
         if not secrets.compare_digest(str(body.get("code") or ""), p["code"]):
             p["tries"] += 1
-            if p["tries"] >= 5:
+            self.fails = [t for t in self.fails if now - t < 600] + [now]
+            if p["tries"] >= 3:
                 self.pairing = None
-            return web.json_response({"ok": False, "error": "Неверный код"}, status=403)
-        self.pairing = None
+            if len(self.fails) >= 6:          # someone is guessing: no pairing for 10 minutes, and the user is told
+                self.pairing, self.locked_until, self.fails = None, now + 600, []
+                self.core.notify("Пульт с телефона", f"Кто-то подбирал код с {request.remote}. Привязка закрыта на 10 минут.")
+                self.core.log(f"Пульт: подбор кода с {request.remote} — привязка заблокирована на 10 минут")
+            return web.json_response({"ok": False, "error": "Неверный код" if self.pairing else "Неверный код. Запросите новый"}, status=403)
+        self.pairing, self.fails = None, []
         token = secrets.token_urlsafe(24)
         devs = self._devices()
         devs.append({"id": secrets.token_hex(4), "name": p["name"], "hash": _hash(token),
@@ -265,7 +307,7 @@ class Remote:
         self.cfg.set("remote.devices", devs[-8:])
         self.core.emit("remote_code", code="", name=p["name"])
         self.core.notify("Пульт с телефона", f"{p['name']} подключён")
-        self.core.log(f"Пульт: привязан телефон «{p['name']}»")
+        self.core.log(f"Пульт: привязан телефон «{p['name']}» ({request.remote})")
         return web.json_response({"ok": True, "token": token, "name": self.pc_name()})
 
     # ================================================================ the input channel
@@ -278,6 +320,8 @@ class Remote:
         await ws.prepare(request)
         self.clients[ws] = dev.get("name", "Телефон")
         self._touch(dev)
+        self.core.log(f"Пульт: подключился «{self.clients[ws]}» ({request.remote})")
+        self.core.emit("toast", title="Пульт с телефона", text=f"Подключён: {self.clients[ws]}")
         self.core.emit("remote_clients", n=len(self.clients))
         await ws.send_json({"t": "hello", "name": self.pc_name(), "vol": S.get_volume()})
         loop = asyncio.get_running_loop()
@@ -402,12 +446,22 @@ class Remote:
 
     async def _apk_page(self, request):
         from aiohttp import web
-        html = ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
-                "<title>J.A.R.V.I.S. Remote</title><body style='background:#03101a;color:#bff4ff;font:16px sans-serif;"
-                "text-align:center;padding:40px 16px'><h2 style='letter-spacing:4px'>J.A.R.V.I.S. · ПУЛЬТ</h2>"
-                "<p>Приложение только для Android.</p><p><a style='color:#4fd8ff;font-size:20px' href='/apk'>"
-                "Скачать jarvis-remote.apk</a></p><p style='opacity:.7'>После скачивания откройте файл и разрешите "
-                "установку из этого источника.</p></body>")
+        sha = apk_sha256()
+        size = APK.stat().st_size // 1024 if APK.exists() else 0
+        html = f"""<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>J.A.R.V.I.S. Remote</title>
+<body style="margin:0;background:#03101a;color:#cfefff;font:15px/1.5 system-ui,sans-serif;padding:28px 18px;max-width:560px">
+<h2 style="color:#fff;letter-spacing:3px;margin:0 0 4px">J.A.R.V.I.S. · ПУЛЬТ</h2>
+<p style="margin:0 0 18px;color:#8fc3d6">Приложение для управления вашим ПК с телефона. <b>Только для Android.</b></p>
+<a href="{GITHUB_APK}" style="display:block;text-align:center;padding:14px;border-radius:12px;background:#4fd8ff;color:#02121c;font-weight:700;text-decoration:none">Скачать с GitHub (рекомендуется)</a>
+<a href="/apk" style="display:block;text-align:center;margin-top:10px;padding:12px;border-radius:12px;border:1px solid #4fd8ff;color:#bff4ff;text-decoration:none">Скачать с этого ПК ({size} КБ)</a>
+<h3 style="color:#fff;margin:22px 0 6px">Почему телефон предупреждает</h3>
+<p>Приложение ставится не из Google Play, поэтому Android спросит разрешение «устанавливать неизвестные приложения» для браузера. Это обычное предупреждение для любого APK не из магазина.</p>
+<p>Что приложение может: связываться с вашим ПК <b>только внутри домашней Wi-Fi</b> и, пока вы держите круг JARVIS, записывать голос для команды. Контакты, файлы, SMS, геолокацию оно не читает: таких разрешений у него нет.</p>
+<h3 style="color:#fff;margin:22px 0 6px">Как проверить файл</h3>
+<p>Код приложения открыт: <a style="color:#4fd8ff" href="{SOURCE}">{SOURCE.replace("https://", "")}</a></p>
+<p>SHA-256 файла на этом ПК:<br><code style="word-break:break-all;color:#bff4ff">{sha}</code></p>
+</body>"""
         return web.Response(text=html, content_type="text/html")
 
     # ================================================================ RPC for Settings → «Телефон»
@@ -417,7 +471,8 @@ class Remote:
         return {"enabled": bool(self.cfg.get("remote.enabled", False)), "running": bool(self.thread and self.loop),
                 "error": self.error, "port": self.port, "ips": ips, "name": self.pc_name(), "devices": devs,
                 "clients": len(self.clients), "apk": APK.exists(),
-                "apk_size": APK.stat().st_size if APK.exists() else 0,
+                "apk_size": APK.stat().st_size if APK.exists() else 0, "sha256": apk_sha256(), "github": GITHUB_APK,
+                "locked": max(0, int(self.locked_until - time.time())),
                 "link": f"http://{ips[0]}:{self.port}/" if ips else "",
                 "code": self.pairing["code"] if self.pairing and time.time() < self.pairing["until"] else "",
                 "kde": bool(getattr(self.core.phone, "device", lambda: None)())}

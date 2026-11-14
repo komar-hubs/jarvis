@@ -81,7 +81,9 @@ def make_icons():
 def main():
     sdk, jdk = find_sdk(), find_jdk()
     bt = newest(sdk / "build-tools", ["aapt2.exe", "d8.bat", "zipalign.exe", "apksigner.bat"])
-    plat = newest(sdk / "platforms", ["android.jar"])
+    plat = sdk / "platforms" / "android-35"           # the same API level as targetSdkVersion
+    if not (plat / "android.jar").exists():
+        plat = newest(sdk / "platforms", ["android.jar"])
     jar = plat / "android.jar"
     env = dict(os.environ, JAVA_HOME=str(jdk), PATH=str(jdk / "bin") + os.pathsep + os.environ.get("PATH", ""))
     if not (HERE / "res" / "mipmap-xxxhdpi" / "ic_launcher.png").exists() or "--icons" in sys.argv:
@@ -109,15 +111,23 @@ def main():
         pw = secrets.token_urlsafe(18)
         run(jdk / "bin" / "keytool.exe", "-genkeypair", "-keystore", ks, "-alias", "jarvis", "-keyalg", "RSA",
             "-keysize", "2048", "-validity", "36500", "-storepass", pw, "-keypass", pw,
-            "-dname", "CN=J.A.R.V.I.S. Remote, O=komar-hubs", env=env)
+            "-dname", "CN=komar-hubs, OU=J.A.R.V.I.S. Remote, O=komar-hubs, L=github.com/komar-hubs/jarvis, C=RU", env=env)
         pw_file.write_text(pw, encoding="utf-8")
     pw = pw_file.read_text(encoding="utf-8").strip()
     run(bt / "apksigner.bat", "sign", "--ks", ks, "--ks-key-alias", "jarvis", "--ks-pass", "pass:" + pw,
-        "--key-pass", "pass:" + pw, "--out", OUT, BUILD / "aligned.apk", env=env)
+        "--key-pass", "pass:" + pw, "--min-sdk-version", "24",
+        # all three schemes: some phones' installers (Xiaomi, old Samsung) call a v2-only APK "damaged"
+        "--v1-signing-enabled", "true", "--v2-signing-enabled", "true", "--v3-signing-enabled", "true",
+        "--v4-signing-enabled", "false", "--out", OUT, BUILD / "aligned.apk", env=env)
     run(bt / "apksigner.bat", "verify", OUT, env=env)
     for f in OUT.parent.glob("jarvis-remote.apk.idsig"):
         f.unlink()
-    print(f"OK: {OUT} ({OUT.stat().st_size // 1024} КБ), версия {ver}")
+    import hashlib
+    sha = hashlib.sha256(OUT.read_bytes()).hexdigest()
+    with open(HERE / "jarvis-remote.sha256", "w", encoding="utf-8", newline="\n") as f:
+        f.write(f"{sha}  jarvis-remote.apk\n")
+    print(run(bt / "apksigner.bat", "verify", "--verbose", OUT, env=env).splitlines()[:4])
+    print(f"OK: {OUT} ({OUT.stat().st_size // 1024} КБ), версия {ver}, SHA-256 {sha}")
 
 
 if __name__ == "__main__":

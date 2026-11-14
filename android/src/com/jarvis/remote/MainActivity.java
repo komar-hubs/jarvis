@@ -17,8 +17,7 @@ import android.media.MediaRecorder;
 import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.VibrationEffect;
-import android.os.Vibrator;
+import android.view.HapticFeedbackConstants;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
@@ -127,15 +126,11 @@ public class MainActivity extends Activity {
             return m;
         }
 
+        /** A light tap of the vibro motor through the view's haptics: needs no VIBRATE permission. */
         @JavascriptInterface
-        public void vibrate(int ms) {
-            try {
-                Vibrator v = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
-                if (v == null || !v.hasVibrator()) return;
-                if (Build.VERSION.SDK_INT >= 26) v.vibrate(VibrationEffect.createOneShot(Math.max(1, ms), ms < 15 ? 90 : 160));
-                else v.vibrate(ms);
-            } catch (Exception ignored) {
-            }
+        public void vibrate(final int ms) {
+            web.post(() -> web.performHapticFeedback(ms >= 20 ? HapticFeedbackConstants.LONG_PRESS
+                    : HapticFeedbackConstants.KEYBOARD_TAP, HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING));
         }
 
         @JavascriptInterface
@@ -171,13 +166,8 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void discover() {
             new Thread(() -> {
-                WifiManager.MulticastLock lock = null;
                 try {
                     WifiManager wm = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
-                    if (wm != null) {
-                        lock = wm.createMulticastLock("jarvis");
-                        lock.acquire();
-                    }
                     DatagramSocket sock = new DatagramSocket();
                     sock.setBroadcast(true);
                     sock.setSoTimeout(400);
@@ -216,7 +206,6 @@ public class MainActivity extends Activity {
                     sock.close();
                 } catch (Exception ignored) {
                 } finally {
-                    if (lock != null) try { lock.release(); } catch (Exception ignored) { }
                     js("window.onFoundDone && window.onFoundDone()");
                 }
             }, "discover").start();
