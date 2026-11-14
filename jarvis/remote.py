@@ -218,6 +218,7 @@ class Remote:
         app.router.add_post("/voice", self._voice)
         app.router.add_post("/diag", self._diag)
         app.router.add_get("/apk", self._apk)
+        app.router.add_get("/apk/{ver}/{name}", self._apk_file)
         app.router.add_get("/frame", self._frame)
         app.router.add_get("/shot/{id}", self._shot)
         app.router.add_get("/", self._apk_page)
@@ -652,12 +653,28 @@ class Remote:
 
     # ================================================================ the app itself
     async def _apk(self, request):
+        """/apk -> /apk/<version>/jarvis-remote-<version>.apk: every build has its own address and file name, so a
+        phone never mixes it with an older or half-downloaded jarvis-remote.apk in Downloads ("пакет поврежден")."""
         from aiohttp import web
         if not APK.exists():
             return web.Response(status=404, text="APK not built")
-        return web.FileResponse(APK, headers={
+        ver = apk_version() or int(APK.stat().st_mtime)
+        raise web.HTTPFound(f"/apk/{ver}/jarvis-remote-{ver}.apk")
+
+    async def _apk_file(self, request):
+        """The whole file in one piece (no ranges): a download resumed across a rebuild cannot glue two versions."""
+        from aiohttp import web
+        if not APK.exists():
+            return web.Response(status=404, text="APK not built")
+        ver = apk_version() or int(APK.stat().st_mtime)
+        if request.match_info["ver"] != str(ver):        # an old link: send to the current build
+            raise web.HTTPFound(f"/apk/{ver}/jarvis-remote-{ver}.apk")
+        data = await asyncio.get_running_loop().run_in_executor(None, APK.read_bytes)
+        self.core.log(f"Пульт: отдал приложение версии {ver} ({len(data) // 1024} КБ) на {request.remote}")
+        return web.Response(body=data, headers={
             "Content-Type": "application/vnd.android.package-archive",
-            "Content-Disposition": 'attachment; filename="jarvis-remote.apk"'})
+            "Content-Disposition": f'attachment; filename="jarvis-remote-{ver}.apk"',
+            "Cache-Control": "no-store", "Accept-Ranges": "none"})
 
     async def _apk_page(self, request):
         from aiohttp import web
@@ -669,7 +686,8 @@ class Remote:
 <h2 style="color:#fff;letter-spacing:3px;margin:0 0 4px">J.A.R.V.I.S. · ПУЛЬТ</h2>
 <p style="margin:0 0 18px;color:#8fc3d6">Приложение для управления вашим ПК с телефона. <b>Только для Android.</b></p>
 <a href="/apk" style="display:block;text-align:center;padding:14px;border-radius:12px;background:#4fd8ff;color:#02121c;font-weight:700;text-decoration:none">Скачать с этого ПК ({size} КБ)</a>
-<p style="margin:6px 0 0;font-size:13px;color:#8fc3d6;text-align:center">Напрямую с компьютера по Wi-Fi, интернет не нужен.</p>
+<p style="margin:6px 0 0;font-size:13px;color:#8fc3d6;text-align:center">Напрямую с компьютера по Wi-Fi, интернет не нужен. Файл называется jarvis-remote-{apk_version()}.apk.</p>
+<p style="margin:10px 0 0;font-size:13px;color:#ffd2a8">Пишет «пакет повреждён»? Удалите в «Загрузках» все старые файлы jarvis-remote… и скачайте заново: телефон мог открыть старый, недокачанный файл.</p>
 <a href="{GITHUB_APK}" style="display:block;text-align:center;margin-top:12px;padding:12px;border-radius:12px;border:1px solid #4fd8ff;color:#bff4ff;text-decoration:none">То же с GitHub (если открывается)</a>
 <h3 style="color:#fff;margin:22px 0 6px">Почему телефон предупреждает</h3>
 <p>Приложение ставится не из Google Play, поэтому Android спросит разрешение «устанавливать неизвестные приложения» для браузера. Это обычное предупреждение для любого APK не из магазина.</p>
