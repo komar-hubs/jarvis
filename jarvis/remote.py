@@ -166,6 +166,7 @@ class Remote:
         self.shots = OrderedDict()    # id -> jpeg bytes (the last 6 screenshots for the phone)
         self.mon = None               # (left, top, width, height) of the monitor the phone watches
         self.watch_t = 0.0            # the last frame asked for: a new "смотрит экран" only after a pause
+        self.seen = {}                # device hash -> last connect time (no toast on every reconnect)
         self.clip_watch = 0.0
         self.locked_until = 0.0
 
@@ -353,13 +354,21 @@ class Remote:
         await ws.prepare(request)
         self.clients[ws] = dev.get("name", "Телефон")
         self._touch(dev)
-        self.core.log(f"Пульт: подключился «{self.clients[ws]}» ({request.remote})")
-        self.core.emit("toast", title="Пульт с телефона", text=f"Подключён: {self.clients[ws]}")
+        now = time.time()
+        if now - self.seen.get(dev.get("hash"), 0) > 90:     # a reconnect after a short drop is not news
+            self.core.log(f"Пульт: подключился «{self.clients[ws]}» ({request.remote})")
+            self.core.emit("toast", title="Пульт с телефона", text=f"Подключён: {self.clients[ws]}")
+        self.seen[dev.get("hash")] = now
         self.core.emit("remote_clients", n=len(self.clients))
         loop = asyncio.get_running_loop()
-        mons = await loop.run_in_executor(self.cap, self._mon_count)
-        await ws.send_json({"t": "hello", "name": self.pc_name(), "vol": S.get_volume(), "mons": mons, "apk": apk_version()})
         try:
+            hello = {"t": "hello", "name": self.pc_name(), "mons": 1, "apk": apk_version()}
+            try:                                    # extras must never break the link itself
+                hello["mons"] = await loop.run_in_executor(self.cap, self._mon_count)
+                hello["vol"] = S.get_volume()
+            except Exception as e:
+                self.core.log(f"Пульт: приветствие: {e}")
+            await ws.send_json(hello)
             async for msg in ws:
                 if msg.type != WSMsgType.TEXT:
                     continue
@@ -500,6 +509,15 @@ class Remote:
         jpg, mon, _ = await asyncio.get_running_loop().run_in_executor(self.cap, self._grab, index, width, 60)
         self.mon = mon
         return web.Response(body=jpg, content_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+    @staticmethod
+    def _mon_count():
+        try:
+            import mss
+            with mss.MSS() as sct:
+                return max(1, len(sct.monitors) - 1)
+        except Exception:
+            return 1
 
     def _tap(self, x, y, button, n):
         if not (0 <= x <= 1 and 0 <= y <= 1) or not self.mon:
