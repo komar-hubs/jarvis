@@ -65,7 +65,7 @@ svg{position:absolute;left:0;top:0;overflow:visible}
 .hbtn{position:absolute;top:4px;height:22px;display:flex;align-items:center;gap:6px;padding:0 11px;border-radius:12px;font:700 9.5px "Orbitron","Exo 2";letter-spacing:1.5px;color:#cfefff;border:1px solid rgba(var(--rgb),.4);background:rgba(4,24,38,.8);white-space:nowrap}
 .hbtn svg{position:static}
 .hbtn.on{background:rgba(var(--rgb),.32);border-color:var(--acc2);color:#fff;box-shadow:0 0 14px rgba(var(--rgb),.45)}
-#b-screen{left:478px}#b-combo{left:576px}
+#b-screen{left:478px}
 #L-kb,#L-pop{transition:opacity .25s,transform .3s}
 .kb-away #L-kb,.kb-away #L-pop{opacity:0;transform:translateY(-36px);pointer-events:none}
 .panel2{position:absolute;left:236px;top:34px;width:684px;height:288px;display:none;flex-direction:column;border-radius:16px;border:1px solid rgba(var(--rgb),.45);background:linear-gradient(180deg,rgba(6,30,46,.92),rgba(2,12,20,.95));box-shadow:0 0 30px rgba(var(--rgb),.18),inset 0 0 30px rgba(var(--rgb),.06);padding:8px 10px 10px}
@@ -84,18 +84,6 @@ svg{position:absolute;left:0;top:0;overflow:visible}
 .tapring.go{animation:tapgo .45s ease-out}
 @keyframes tapgo{from{opacity:1;transform:scale(.5)}to{opacity:0;transform:scale(1.7)}}
 .panel2.big{left:0;top:0;width:932px;height:430px;border-radius:0;z-index:6;padding:6px 8px 8px}
-.cb-tabs{display:flex;gap:6px;margin-right:auto;min-width:0}
-.cb-tabs div{flex:none;height:26px;padding:0 12px;border-radius:9px;display:flex;align-items:center;font:600 12px "Exo 2";color:#cfefff;border:1px solid rgba(var(--rgb),.3)}
-.cb-tabs div.on{background:rgba(var(--rgb),.38);border-color:var(--acc2);color:#fff}
-.cb-grid{flex:1;min-height:0;overflow-y:auto;touch-action:pan-y;display:grid;grid-template-columns:repeat(4,1fr);gap:7px;align-content:start}
-.cb{position:relative;height:52px;border-radius:11px;border:1px solid rgba(var(--rgb),.4);background:linear-gradient(180deg,rgba(var(--rgb),.16),rgba(var(--rgb),.04));padding:7px 10px;overflow:hidden}
-.cb b{display:block;font:700 13px "Exo 2";color:#eafbff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:4px}
-.cb span{display:block;font:600 10.5px "JetBrains Mono";color:#7fd6f2;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cb.hit{background:rgba(var(--hot-rgb),.35);border-color:var(--hot)}
-.cb.arm{border-color:var(--hot);box-shadow:0 0 14px rgba(var(--hot-rgb),.5)}
-.cb.add{border-style:dashed;display:flex;align-items:center;justify-content:center;font:700 13px "Exo 2";color:#bfefff}
-.cb .del{position:absolute;right:0;top:0;width:30px;height:30px;display:flex;align-items:center;justify-content:center;color:#ffb8a8;font:700 13px sans-serif}
-.cb.own b{padding-right:22px}
 .shotv{position:absolute;inset:0;z-index:8;display:none;flex-direction:column;background:rgba(1,6,10,.97);padding:10px 12px}
 .shotv.show{display:flex;animation:rise .25s ease-out}
 .shotv img{flex:1;min-height:0;width:100%;object-fit:contain;border-radius:8px}
@@ -189,11 +177,9 @@ input.addr{width:100%;height:44px;margin:10px 0 4px;border-radius:12px;border:1.
   <div class="gear" id="gear"><svg width="16" height="16" viewBox="0 0 24 24" style="position:static"><circle cx="12" cy="12" r="3.2" class="ico"/><path class="ico" d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg></div>
   <div id="ov"></div>
   <div class="hbtn" id="b-screen"><svg width="13" height="13" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2" class="ico"/><path class="ico" d="M8 20h8M12 16v4"/></svg>ЭКРАН</div>
-  <div class="hbtn" id="b-combo"><svg width="13" height="13" viewBox="0 0 24 24"><rect x="3" y="7" width="7" height="7" rx="2" class="ico"/><rect x="14" y="7" width="7" height="7" rx="2" class="ico"/><path class="ico" d="M10 10.5h4"/></svg>КОМБО</div>
   <div class="panel2" id="scr"><div class="p2-head"><span class="live"><i></i>LIVE</span><span class="p2-info" id="scr-info"></span>
     <div class="sbtn" id="scr-mon">Монитор</div><div class="sbtn" id="scr-snap">Снимок</div><div class="sbtn" id="scr-big">Во весь экран</div><div class="sbtn" id="scr-x">✕</div></div>
     <div class="scr-view" id="scr-view"><img id="scr-img" alt=""><div class="tapring" id="tapring"></div></div></div>
-  <div class="panel2" id="combo"><div class="p2-head"><span class="p2-title">КОМБО</span><div class="cb-tabs" id="cb-tabs"></div><div class="sbtn" id="cb-x">✕</div></div><div class="cb-grid" id="cb-grid"></div></div>
   <div class="shotv" id="shotv"><img id="shot-img" alt=""><div class="shot-bar"><span class="p2-title" id="shot-cap">СНИМОК ЭКРАНА</span><div class="btn ghost" id="shot-save">Сохранить на телефон</div><div class="btn" id="shot-x">Закрыть</div></div></div>
 </div>
 
@@ -220,7 +206,7 @@ input.addr{width:100%;height:44px;margin:10px 0 4px;border-radius:12px;border:1.
   <div class="srow"><label>Скорость прокрутки</label><input type="range" id="o-scroll" min="2" max="14" step="0.5"></div>
   <div class="srow"><label>Вибрация</label><div class="tg" id="o-buzz"></div></div>
   <div class="row2"><div class="btn ghost" id="o-pc">Сменить ПК</div><div class="btn" id="o-done">Готово</div></div>
-  <div class="note">J.A.R.V.I.S. Remote — только для Android. Работает внутри домашней сети Wi-Fi. Удерживайте круг JARVIS, чтобы сказать команду; короткое касание — набрать её на клавиатуре. Ctrl, Alt, Shift: касание — для следующей клавиши, двойное — закрепить, зажать — вместе с другой клавишей. Тачпад: три пальца влево/вправо — окна, вверх — все окна, вниз — рабочий стол.</div>
+  <div class="note">J.A.R.V.I.S. Remote — только для Android. Работает внутри домашней сети Wi-Fi. Удерживайте круг JARVIS, чтобы сказать команду; короткое касание — набрать её на клавиатуре. Ctrl, Win, Alt, Shift слева можно зажимать в любых сочетаниях и нажимать букву другим пальцем; касание — для следующей клавиши, двойное — закрепить. Тачпад: три пальца влево/вправо — окна, вверх — все окна, вниз — рабочий стол.</div>
 </div></div>
 </div>
 
@@ -367,7 +353,7 @@ function drawKeyboard() {
   const letters = (s, ri) => s.split("").map((c, i) => ({ kind: "ch", ch: c, code: CODES[ri][i] }));
   const strip = [{ kind: "media", a: "vdown", icon: "vdown" }, { kind: "media", a: "mute", icon: "mute" }, { kind: "media", a: "vup", icon: "vup" },
     { kind: "media", a: "prev", icon: "prev" }, { kind: "media", a: "play", icon: "pause" }, { kind: "media", a: "next", icon: "next" },
-    { kind: "mod", m: "win", t: "Win", cls: "s fn" }, { kind: "fn", t: "F1–F12", cls: "s fn" + (KB.fn ? " latch" : "") }].map((k) => ({ cls: "fn", ...k }));
+    { kind: "fn", t: "F1–F12", cls: "s fn" + (KB.fn ? " latch" : ""), w: 2 }].map((k) => ({ cls: "fn", ...k }));
   const digits = KB.fn
     ? Array.from({ length: 12 }, (_, i) => ({ kind: "key", k: "f" + (i + 1), t: "F" + (i + 1), cls: "s" }))
     : [{ kind: "key", k: "esc", t: "Esc", cls: "s", w: 1.2 }, ..."1234567890".split("").map((c, i) => ({ kind: "ch", ch: c, code: c, digit: true, i, sub: SUBS[KB.lang][i] })), { kind: "key", k: "delete", t: "Del", cls: "s", w: 1.2, rep: true }];
@@ -377,8 +363,8 @@ function drawKeyboard() {
     [1188, 1228, [{ kind: "key", k: "tab", t: "Tab", cls: "s", w: 1.3 }, ...letters(ROWS_CH[KB.lang][0], 0), { kind: "key", k: "backspace", t: "⌫", cls: "s", w: 1.3, rep: true }]],
     [1142, 1182, [{ kind: "caps", t: "Caps", cls: "s" + (KB.caps ? " latch" : ""), w: 1.2 }, ...letters(ROWS_CH[KB.lang][1], 1), { kind: "key", k: "enter", t: "Ввод", cls: "s enter", w: 1.8 }]],
     [1096, 1136, [{ kind: "mod", m: "shift", t: "⇧", cls: "s", w: 1.6 }, ...letters(ROWS_CH[KB.lang][2], 2), { kind: "mod", m: "shift", t: "⇧", cls: "s", w: 1.6 }]],
-    [1050, 1090, [{ kind: "mod", m: "ctrl", t: "Ctrl", cls: "s", w: 1.2 }, { kind: "mod", m: "alt", t: "Alt", cls: "s", w: 1.2 },
-      { kind: "lang", t: KB.lang === "ru" ? "RU" : "EN", cls: "s latch", w: 1 }, { kind: "ch", ch: " ", code: "space", t: "пробел", cls: "space", w: 4.6 },
+    [1050, 1090, [{ kind: "mod", m: "ctrl", t: "Ctrl", cls: "s", w: 1.25 }, { kind: "mod", m: "win", t: "Win", cls: "s", w: 1.15 }, { kind: "mod", m: "alt", t: "Alt", cls: "s", w: 1.2 },
+      { kind: "lang", t: KB.lang === "ru" ? "RU" : "EN", cls: "s latch", w: 1 }, { kind: "ch", ch: " ", code: "space", t: "пробел", cls: "space", w: 3.8 },
       { kind: "key", k: "left", t: "←", cls: "s", rep: true }, { kind: "key", k: "up", t: "↑", cls: "s", rep: true }, { kind: "key", k: "down", t: "↓", cls: "s", rep: true }, { kind: "key", k: "right", t: "→", cls: "s", rep: true }]],
   ];
   KEYS.length = 0; KROWS.length = 0;
@@ -515,7 +501,6 @@ const PC_ICON = `<svg width="20" height="20" viewBox="0 0 24 24" style="position
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 function showConnect(pc) {
   if (scrOn) screenOpen(false);
-  if (comboOn) comboOpen(false);
   screen = "connect"; document.body.className = "connect";
   if (ws) { ws.onclose = null; try { ws.close(); } catch (e) {} ws = null; wsOk = false; }
   sel = pc || null; code = ""; pairMsg = ""; pairErr = false; adding = false;
@@ -695,7 +680,7 @@ function modUp(k) {
   if (!USED[m]) {
     const now = Date.now(), dbl = now - (LASTTAP[m] || 0) < 380;
     LASTTAP[m] = now;
-    if (m === "win") { if (rec) recordCombo("win"); else send({ t: "key", k: "win" }); }   // Win alone opens Start
+    if (m === "win") send({ t: "key", k: "win" });          // Win alone opens Start
     else if (MOD[m] === 0) MOD[m] = 1;
     else if (MOD[m] === 1 && dbl) MOD[m] = 2;
     else MOD[m] = 0;
@@ -708,7 +693,6 @@ function afterKey() {      // a key went out: held modifiers count as used, one-
   if (ch) refreshMods();
 }
 function press(k) {
-  if (rec && (k.kind === "ch" || k.kind === "key")) { recordCombo(modStr() + (k.kind === "ch" ? k.code : k.k)); afterKey(); return; }
   if (k.kind === "ch") {
     if (cmd !== null) { cmd += chOf(k); cmdShow(); }
     else if (active("ctrl") || active("alt") || active("win")) send({ t: "key", k: modStr() + k.code });
@@ -780,74 +764,9 @@ function keyUp(e, cancel) {
 addEventListener("pointerup", (e) => { keyUp(e); dialUp(e); coreUp(e); });
 addEventListener("pointercancel", (e) => { keyUp(e, true); dialUp(e, true); coreUp(e); });
 
-// ================================================================ КОМБО: ready shortcuts by topic + the user's own
-const COMBOS = {
-  "Окна": [["Все окна", "win+tab"], ["Переключить окно", "alt+tab"], ["Рабочий стол", "win+d"], ["Развернуть", "win+up"], ["Свернуть окно", "win+down"],
-    ["Окно влево", "win+left"], ["Окно вправо", "win+right"], ["На другой монитор", "win+shift+right"], ["Следующий стол", "win+ctrl+right"],
-    ["Прошлый стол", "win+ctrl+left"], ["Новый стол", "win+ctrl+d"], ["Полный экран", "f11"], ["Закрыть окно", "alt+f4", 1]],
-  "Браузер": [["Новая вкладка", "ctrl+t"], ["Закрыть вкладку", "ctrl+w"], ["Вернуть вкладку", "ctrl+shift+t"], ["Следующая вкладка", "ctrl+tab"],
-    ["Прошлая вкладка", "ctrl+shift+tab"], ["Адресная строка", "ctrl+l"], ["Обновить", "f5"], ["Найти на странице", "ctrl+f"], ["Назад", "alt+left"],
-    ["Вперёд", "alt+right"], ["Инкогнито", "ctrl+shift+n"], ["В закладки", "ctrl+d"], ["Крупнее", "ctrl+plus"], ["Мельче", "ctrl+minus"],
-    ["Масштаб 100%", "ctrl+0"], ["История", "ctrl+h"]],
-  "Текст": [["Выделить всё", "ctrl+a"], ["Копировать", "ctrl+c"], ["Вырезать", "ctrl+x"], ["Вставить", "ctrl+v"], ["Отменить", "ctrl+z"],
-    ["Повторить", "ctrl+y"], ["Сохранить", "ctrl+s"], ["Удалить слово", "ctrl+backspace"], ["Слово влево", "ctrl+left"], ["Слово вправо", "ctrl+right"],
-    ["Выделить до начала", "shift+home"], ["Выделить до конца", "shift+end"], ["В начало текста", "ctrl+home"], ["В конец текста", "ctrl+end"],
-    ["Печать", "ctrl+p"], ["Жирный", "ctrl+b"]],
-  "Система": [["Снимок на телефон", "@snap"], ["Вырезать область", "@shot"], ["Буфер обмена", "win+v"], ["Эмодзи", "win+."], ["Снимок в файл", "win+printscreen"],
-    ["Проводник", "win+e"], ["Параметры", "win+i"], ["Быстрые настройки", "win+a"], ["Уведомления", "win+n"], ["Диспетчер задач", "ctrl+shift+esc"],
-    ["Выполнить", "win+r"], ["Game Bar", "win+g"], ["Записать клип", "win+alt+r"], ["Режим экрана", "win+p"], ["Меню Пуск", "win"], ["Блок ПК", "@lock", 1]],
-};
-const PRETTY = { ctrl: "Ctrl", alt: "Alt", shift: "Shift", win: "Win", left: "←", right: "→", up: "↑", down: "↓", plus: "+", minus: "−", backspace: "⌫",
-  printscreen: "PrtSc", esc: "Esc", tab: "Tab", home: "Home", end: "End", enter: "Enter", space: "Пробел", delete: "Del",
-  "@snap": "весь экран → сюда", "@shot": "Win + Shift + S → сюда", "@lock": "Win + L" };
-const pretty = (k) => PRETTY[k] && k.startsWith("@") ? PRETTY[k] : k.split("+").map((x) => PRETTY[x] || x.toUpperCase()).join(" + ");
-let comboOn = false, comboTab = pget("ctab", "Окна"), rec = false, cbArm = null;
 function panelsAway() {
-  stage.classList.toggle("kb-away", scrOn || comboOn);
+  stage.classList.toggle("kb-away", scrOn);
   document.getElementById("b-screen").classList.toggle("on", scrOn);
-  document.getElementById("b-combo").classList.toggle("on", comboOn);
-}
-function comboOpen(on, tab) {
-  comboOn = on;
-  if (on && scrOn) screenOpen(false);
-  if (tab) comboTab = tab;
-  document.getElementById("combo").classList.toggle("show", on);
-  if (on) renderCombos();
-  panelsAway();
-}
-function renderCombos() {
-  const tabs = [...Object.keys(COMBOS), "Мои"];
-  if (!tabs.includes(comboTab)) comboTab = "Окна";
-  document.getElementById("cb-tabs").innerHTML = tabs.map((t) => `<div class="${t === comboTab ? "on" : ""}" data-t="${t}">${t}</div>`).join("");
-  document.querySelectorAll("#cb-tabs div").forEach((d) => d.onclick = () => { buzz(); comboTab = d.dataset.t; pput("ctab", comboTab); renderCombos(); });
-  const mine = comboTab === "Мои", list = mine ? pget("combos", []).map((c) => [c.n, c.k, 0, 1]) : COMBOS[comboTab];
-  const g = document.getElementById("cb-grid");
-  g.innerHTML = list.map(([n, k, risky, own], i) => `<div class="cb ${own ? "own" : ""}" data-i="${i}"><b>${esc(n)}</b><span>${esc(pretty(k))}</span>${own ? `<div class="del" data-del="${i}">✕</div>` : ""}</div>`).join("")
-    + (mine ? `<div class="cb add" id="cb-rec">+ Записать своё</div>` : "")
-    + (mine && !list.length ? `<div class="empty" style="grid-column:span 3">Нажмите «Записать своё» и наберите сочетание на клавиатуре пульта (например, зажмите Ctrl и Shift и нажмите T) — оно появится здесь.</div>` : "");
-  g.querySelectorAll(".cb[data-i]").forEach((d) => d.onpointerdown = (e) => {
-    if (e.target.dataset.del != null) { const all = pget("combos", []); all.splice(+e.target.dataset.del, 1); pput("combos", all); buzz(); renderCombos(); return; }
-    const [n, k, risky] = list[+d.dataset.i];
-    if (risky && (!cbArm || cbArm.k !== k || Date.now() - cbArm.t > 2500)) {
-      cbArm = { k, t: Date.now() }; d.classList.add("arm"); toast("Ещё раз — " + n.toLowerCase(), true); buzz(20);
-      setTimeout(() => d.classList.remove("arm"), 2500); return;
-    }
-    cbArm = null; runCombo(n, k); d.classList.add("hit"); setTimeout(() => d.classList.remove("hit"), 160);
-  });
-  const r = document.getElementById("cb-rec");
-  if (r) r.onclick = () => { buzz(); comboOpen(false); rec = true; bubble("ЗАПИСЬ СОЧЕТАНИЯ", "нажмите Ctrl, Alt, Shift или Win и клавишу…", true, true); };
-}
-function runCombo(n, k) {
-  const ok = k === "@snap" ? send({ t: "act", a: "snap" }) : k === "@shot" ? send({ t: "act", a: "shot" }) : k === "@lock" ? send({ t: "act", a: "lock" }) : send({ t: "key", k });
-  if (ok) { buzz(12); toast(k === "@shot" ? "Выделите область — снимок придёт сюда" : n); } else toast("Нет связи с ПК", true);
-}
-function recordCombo(k) {
-  rec = false;
-  const all = pget("combos", []), n = pretty(k);
-  if (!all.some((c) => c.k === k)) all.push({ n, k });
-  pput("combos", all.slice(-24));
-  bubble("СОХРАНЕНО", esc(n)); buzz(25);
-  setTimeout(() => comboOpen(true, "Мои"), 700);
 }
 
 // ================================================================ ЭКРАН: the PC's screen live in place of the keyboard
@@ -862,7 +781,6 @@ function scrLabel() {
 function screenOpen(on) {
   if (on && !wsOk) { toast("Нет связи с ПК", true); return; }
   scrOn = on;
-  if (on && comboOn) comboOpen(false);
   const pn = document.getElementById("scr");
   pn.classList.toggle("show", on);
   if (!on) { pn.classList.remove("big"); document.getElementById("scr-big").textContent = "Во весь экран"; }
@@ -878,8 +796,6 @@ document.getElementById("scr-snap").onclick = () => { buzz(); if (send({ t: "act
 document.getElementById("scr-big").onclick = (e) => { buzz(); const pn = document.getElementById("scr"); pn.classList.toggle("big"); e.currentTarget.textContent = pn.classList.contains("big") ? "Свернуть" : "Во весь экран"; };
 document.getElementById("scr-x").onclick = () => screenOpen(false);
 document.getElementById("b-screen").onclick = () => { buzz(); screenOpen(!scrOn); };
-document.getElementById("b-combo").onclick = () => { buzz(); if (rec) { rec = false; bubble(""); toast("Запись отменена"); return; } comboOpen(!comboOn); };
-document.getElementById("cb-x").onclick = () => comboOpen(false);
 // a tap on the picture clicks that point on the PC, a long press right-clicks it
 let tapT = null, tapP = null;
 function imgRel(e) {
@@ -1112,9 +1028,7 @@ shade.addEventListener("pointerdown", (e) => { if (e.target === shade) shade.cla
 window.onBack = () => {           // the Android back button
   if (shade.classList.contains("show")) { shade.classList.remove("show"); return true; }
   if (document.getElementById("shotv").classList.contains("show")) { document.getElementById("shotv").classList.remove("show"); return true; }
-  if (rec) { rec = false; bubble(""); return true; }
   if (scrOn) { const pn = document.getElementById("scr"); if (pn.classList.contains("big")) document.getElementById("scr-big").click(); else screenOpen(false); return true; }
-  if (comboOn) { comboOpen(false); return true; }
   if (cmd !== null) { cmdMode(false); return true; }
   if (screen === "connect" && adding) { adding = false; renderConnect(); return true; }
   return false;
