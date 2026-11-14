@@ -497,17 +497,36 @@ function chipState() {
   const c = document.getElementById("chip");
   c.classList.toggle("bad", !wsOk);
   document.getElementById("pcname").textContent = cur ? (cur.name || cur.host) : "—";
-  document.getElementById("ping").textContent = wsOk ? (ping ? ping + " мс" : "") : "нет связи";
+  document.getElementById("ping").textContent = wsOk ? (ping ? ping + " мс" : "") : ws && ws.readyState === 0 ? "подключаюсь…" : "нет связи";
   if (typeof scrOn !== "undefined" && scrOn) scrMeta();
 }
+// short lines about the link and script errors go to the PC's log (data/jarvis.log): problems on the phone become visible
+let diagN = 0, diagT0 = 0;
+function diag(ev) {
+  if (!cur) return;
+  const now = Date.now();
+  if (now - diagT0 > 60000) { diagT0 = now; diagN = 0; }
+  if (++diagN > 20) return;
+  http("POST", base() + "/diag", { ev: String(ev).slice(0, 240) }, cur.token);
+}
+window.addEventListener("error", (e) => diag(`ошибка скрипта: ${e.message} (${(e.filename || "").split("/").pop()}:${e.lineno})`));
+window.addEventListener("unhandledrejection", (e) => diag(`ошибка скрипта: ${e.reason && e.reason.message || e.reason}`));
+let lastPong = 0, wsTries = 0;
 function openWs() {
   if (!cur || !cur.token) return;
   if (ws) { ws.onclose = null; try { ws.close(); } catch (e) {} }
-  ws = new WebSocket(`ws://${cur.host}:${cur.port}/ws?token=${encodeURIComponent(cur.token)}`);
-  ws.onopen = () => { wsOk = true; chipState(); send({ t: "ping", ts: Date.now() }); };
-  ws.onmessage = (e) => {
+  const w = new WebSocket(`ws://${cur.host}:${cur.port}/ws?token=${encodeURIComponent(cur.token)}`);
+  ws = w; wsTries++;
+  // a link that neither opens nor fails used to leave «подключаюсь» forever: give it 6 s, then start over
+  setTimeout(() => { if (ws === w && w.readyState === 0) { diag("связь не открылась за 6 с, пробую снова"); try { w.close(); } catch (e) {} if (ws === w) w.onclose(); } }, 6000);
+  w.onopen = () => {
+    wsOk = true; lastPong = Date.now(); chipState(); send({ t: "ping", ts: Date.now() });
+    if (wsTries > 1) diag(`связь восстановлена (попытка ${wsTries})`);
+    wsTries = 0;
+  };
+  w.onmessage = (e) => {
     let m; try { m = JSON.parse(e.data); } catch (x) { return; }
-    if (m.t === "pong") { ping = Math.max(1, Date.now() - m.ts); chipState(); }
+    if (m.t === "pong") { lastPong = Date.now(); ping = Math.max(1, Date.now() - m.ts); chipState(); }
     else if (m.t === "hello") {
       if (m.name && m.name !== cur.name) { cur.name = m.name; savePc(cur); }
       scrMons = m.mons || 1; chipState();
@@ -517,7 +536,12 @@ function openWs() {
     else if (m.t === "shot") showShot(m);
     else if (m.t === "vol" && m.vol != null) toast(`Громкость ${m.vol}%`);
   };
-  ws.onclose = () => { wsOk = false; chipState(); clearTimeout(retry); retry = setTimeout(recheck, 1500); };
+  w.onclose = (e) => {
+    if (ws !== w || w._done) return;
+    w._done = true;
+    if (wsOk || wsTries === 1 || wsTries % 5 === 0) diag(`связь закрылась (код ${e && e.code || "—"}, попытка ${wsTries})`);
+    wsOk = false; chipState(); clearTimeout(retry); retry = setTimeout(recheck, 1500);
+  };
 }
 async function recheck() {
   if (!cur || screen !== "main") return;
@@ -526,8 +550,12 @@ async function recheck() {
     if (!r.json.paired) { cur.token = ""; savePc(cur); toast("ПК забыл этот телефон — нужен новый код", true); showConnect(cur); return; }
     openWs();
   } else { clearTimeout(retry); retry = setTimeout(recheck, 2500); }
+  if (r.status && r.status !== 200) diag(`проверка связи: ответ ${r.status}`);
 }
-setInterval(() => send({ t: "ping", ts: Date.now() }), 2000);
+setInterval(() => {
+  send({ t: "ping", ts: Date.now() });
+  if (ws && ws.readyState === 1 && lastPong && Date.now() - lastPong > 7000) { diag("нет ответа ПК 7 с — переподключаюсь"); lastPong = 0; try { ws.close(); } catch (e) {} }
+}, 2000);
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && screen === "main" && !wsOk) recheck();
   if (scrOn && !document.hidden) scrRestart(false);
@@ -541,6 +569,8 @@ function savePc(pc) {
 }
 function useMain(pc) {
   cur = pc; savePc(pc); pput("cur", pc.host + ":" + pc.port);
+  let v = 0; try { v = HAS ? Native.appVersion() : 0; } catch (e) {}
+  diag(`приложение открыто (версия ${v || "?"}, экран ${innerWidth}x${innerHeight})`);
   screen = "main"; document.body.className = "";
   chipState(); openWs();
 }

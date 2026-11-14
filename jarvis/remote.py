@@ -167,6 +167,7 @@ class Remote:
         self.mon = None               # (left, top, width, height) of the monitor the phone watches
         self.watch_t = 0.0            # the last frame asked for: a new "смотрит экран" only after a pause
         self.seen = {}                # device hash -> last connect time (no toast on every reconnect)
+        self.diag_t = []              # times of the phone's diagnostic lines (30 a minute at most)
         self.clip_watch = 0.0
         self.locked_until = 0.0
 
@@ -215,6 +216,7 @@ class Remote:
         app.router.add_post("/pair/confirm", self._confirm)
         app.router.add_get("/ws", self._ws)
         app.router.add_post("/voice", self._voice)
+        app.router.add_post("/diag", self._diag)
         app.router.add_get("/apk", self._apk)
         app.router.add_get("/frame", self._frame)
         app.router.add_get("/shot/{id}", self._shot)
@@ -596,6 +598,26 @@ class Remote:
         if not jpg:
             return web.Response(status=404)
         return web.Response(body=jpg, content_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+    async def _diag(self, request):
+        """Short lines from the app about itself (link opened/closed, script errors): into data/jarvis.log, so a
+        problem on the phone can be seen from the PC."""
+        from aiohttp import web
+        now = time.time()
+        self.diag_t = [t for t in self.diag_t if now - t < 60]
+        if len(self.diag_t) >= 30:
+            return web.Response(status=429)
+        self.diag_t.append(now)
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        dev = self._device(self._token(request))
+        who = dev.get("name") if dev else f"телефон {request.remote}"
+        ev = " ".join(str(body.get("ev") or "").split())[:240]
+        if ev:
+            self.core.log(f"Пульт ({who}): {ev}")
+        return web.Response(status=204)
 
     # ================================================================ voice
     async def _voice(self, request):
