@@ -1,6 +1,6 @@
 # J.A.R.V.I.S. — голосовой ассистент для Windows
 
-[![VirusTotal: 0 из 66](https://img.shields.io/badge/VirusTotal-0%2F66%20%D1%87%D0%B8%D1%81%D1%82%D0%BE-brightgreen?logo=virustotal)](https://www.virustotal.com/gui/file/72de35ebe28bbb7df59f470a3bdabf2ec6a0f0f6a9519dca21daf4c8637156ce)
+[![VirusTotal: 0 из 66](https://img.shields.io/badge/VirusTotal-0%2F66%20%D1%87%D0%B8%D1%81%D1%82%D0%BE-brightgreen?logo=virustotal)](https://www.virustotal.com/gui/file/f71209855c7d6337f7f29267cf25c9b0b9756930fa72e0f957b0083661cd5d85)
 [![Лицензия MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?logo=windows)
 ![Python 3.10–3.13](https://img.shields.io/badge/Python-3.10%E2%80%933.13-3776AB?logo=python&logoColor=white)
@@ -18,7 +18,7 @@
 | **Свои команды — цепочки действий на фразу** | **Настройки, личности: Джарвис, Пятница, Альтрон** |
 | ![Команды](docs/screenshots/commands.jpg) | ![Настройки](docs/screenshots/settings.jpg) |
 
-> Это не вирус — проверьте сами: [VirusTotal, 0 из 66 антивирусов](https://www.virustotal.com/gui/file/72de35ebe28bbb7df59f470a3bdabf2ec6a0f0f6a9519dca21daf4c8637156ce),
+> Это не вирус — проверьте сами: [VirusTotal, 0 из 66 антивирусов](https://www.virustotal.com/gui/file/f71209855c7d6337f7f29267cf25c9b0b9756930fa72e0f957b0083661cd5d85),
 > весь код открыт, ни одного `.exe`. Подробно — в разделе [«Безопасность»](#безопасность-это-не-вирус).
 
 ## Что умеет
@@ -100,10 +100,10 @@ Radmin или WireGuard), там же есть подключение по IP. �
   она нужна, куда уходят её данные, и переключатель.
 - **Весь код открыт.** Только Python и JavaScript, ни одного `.exe`, `.dll` или запутанного кода: любой файл можно
   открыть в Блокноте и прочитать.
-- **Проверка 66 антивирусами.** Архив релиза v2026.11.14.2026 от 14 ноября (`jarvis_share.zip`, SHA-256
-  `72de35ebe28bbb7df59f470a3bdabf2ec6a0f0f6a9519dca21daf4c8637156ce`) на VirusTotal:
-  [0 из 66 — «No security vendors flagged this file as malicious»](https://www.virustotal.com/gui/file/72de35ebe28bbb7df59f470a3bdabf2ec6a0f0f6a9519dca21daf4c8637156ce).
-  Ссылка на скачивание из релизов: [0 из 93](https://www.virustotal.com/gui/url/d6d6cee693f222057e85b6a3b3ec71ac1bdb504c6ffeef4cdb5b55be90719a10).
+- **Проверка 66 антивирусами.** Архив релиза v2026.11.14.2027 от 14 ноября (`jarvis_share.zip`, SHA-256
+  `f71209855c7d6337f7f29267cf25c9b0b9756930fa72e0f957b0083661cd5d85`) на VirusTotal:
+  [0 из 66 — «No security vendors flagged this file as malicious»](https://www.virustotal.com/gui/file/f71209855c7d6337f7f29267cf25c9b0b9756930fa72e0f957b0083661cd5d85).
+  Ссылка на скачивание из релизов: [0 из 93](https://www.virustotal.com/gui/url/2d52c07061b5943172f73adc1cd5708cf5b69b51e1aa99270f07a5edc1f484fb).
 - **Что делает `install.bat`.** Он только запускает `install.ps1` (его тоже можно прочитать), а тот:
   1. снимает с распакованных файлов метку «скачано из интернета»;
   2. если Python нет — ставит Python 3.12 с python.org (или через winget);
