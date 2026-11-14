@@ -458,6 +458,19 @@ class Router:
             return random.choice([f"Включаю: {nlu.short_title(title)}.", f"Ставлю {nlu.short_title(title)}."])
         self.play_youtube = play_youtube
 
+        # «выключи монитор» went to the AI, which tried to answer with PowerShell code: a plain local command now,
+        # before the search rule (it took «включи монитор» for something to play)
+        @R(r"^(?:выключи|отключи|погаси|потуши|усыпи|выруби|отруби)\s+(?:(?:мой|мои|все)\s+)?(?:монитор\w*|экран\w*|дисплей\w*)$")
+        def _monitor_off(m, t):
+            core.say("Гашу экран. Пошевелите мышью — включится.")
+            S.monitor_off()
+            return True
+
+        @R(r"^(?:включи|разбуди|зажги|верни)\s+(?:(?:мой|мои|все)\s+)?(?:монитор\w*|экран\w*|дисплей\w*)$")
+        def _monitor_on(m, t):
+            S.monitor_on()
+            return "Экран включён."
+
         # explicit site or content word ("в ютубе", "видео с ...", "картинки ...") — before every other rule
         @R(r"^(?:найди|поищи|ищи|загугли|погугли|поиск|найти|поискать|покажи|посмотри|глянь|включи|поставь|запусти|открой|вбей|забей|отыщи|выведи|"
            r"воспроизведи|вруби|врубай|проиграй|сыграй)\s+.+$")

@@ -1628,6 +1628,23 @@ def lock():
     ctypes.windll.user32.LockWorkStation()
 
 
+def monitor_off(delay=1.2):
+    """Puts the monitors to sleep (WM_SYSCOMMAND SC_MONITORPOWER = 2). Any mouse move or key wakes them, the phone
+    remote included. A short delay: Jarvis finishes speaking and a key release does not wake them right back."""
+    def run():
+        time.sleep(delay)
+        ctypes.windll.user32.PostMessageW(0xFFFF, 0x0112, 0xF170, 2)   # HWND_BROADCAST: post, never wait on a window
+    threading.Thread(target=run, daemon=True, name="monitor-off").start()
+
+
+def monitor_on():
+    """Wakes the monitors: 'the display is needed' plus a 1-pixel mouse nudge there and back."""
+    ctypes.windll.kernel32.SetThreadExecutionState(0x00000002)          # ES_DISPLAY_REQUIRED
+    u = ctypes.windll.user32
+    u.mouse_event(0x0001, 1, 0, 0, 0)
+    u.mouse_event(0x0001, -1, 0, 0, 0)
+
+
 def sleep_pc():
     subprocess.Popen(["rundll32.exe", "powrprof.dll,SetSuspendState", "0,1,0"])
 
