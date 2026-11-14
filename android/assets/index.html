@@ -36,6 +36,7 @@ svg{position:absolute;left:0;top:0;overflow:visible}
 .dial .f{fill:url(#dg);stroke:rgba(var(--rgb),.55);stroke-width:1}
 .dial .t{fill:#dff8ff;font:600 9.5px "Exo 2";text-anchor:middle}
 .dial.on .f{fill:rgba(var(--rgb),.35);stroke:var(--acc2)}
+.dial.live .f{fill:rgba(var(--hot-rgb),.3);stroke:var(--hot)}
 .dial.arm .f{fill:rgba(var(--hot-rgb),.3);stroke:var(--hot)}
 /* touch surfaces (html over the svg) */
 .zone{position:absolute}
@@ -256,7 +257,7 @@ function arcLine(cx, cy, r, a0, a1) { const [x1, y1] = P(cx, cy, r, a0), [x2, y2
 const ICON = {
   copy: "M8 8h11v12H8z M5 16V4h11", paste: "M8 4h8v3H8z M6 6H5v15h14V6h-1", undo: "M9 7L4 12l5 5 M4 12h10a6 6 0 0 1 0 12", sel: "M4 4h3M10 4h4M17 4h3v3M20 10v4M20 17v3h-3M14 20h-4M7 20H4v-3M4 14v-4",
   shot: "M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4 M12 9.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5", alttab: "M4 6h11v9H4z M9 10h11v9H9",
-  min: "M4 5h16v14H4z M8 15h8", close: "M4 5h16v14H4z M9 9l6 6M15 9l-6 6", task: "M4 20V12M9 20V6M14 20v-9M19 20V4", lock: "M6 11h12v10H6z M9 11V8a3 3 0 0 1 6 0v3",
+  min: "M4 5h16v14H4z M8 15h8", close: "M4 5h16v14H4z M9 9l6 6M15 9l-6 6", task: "M4 20V12M9 20V6M14 20v-9M19 20V4", screen: "M3 5h18v11H3z M8 20h8M12 16v4 M7 9l3 2-3 2", lock: "M6 11h12v10H6z M9 11V8a3 3 0 0 1 6 0v3",
   search: "M10.5 4a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13 M15.5 15.5L20 20", folder: "M3 7h7l2 2h9v10H3z",
   vdown: "M4 10h3l4-4v12l-4-4H4z M15 12h5", vup: "M4 10h3l4-4v12l-4-4H4z M15 12h5M17.5 9.5v5", mute: "M4 10h3l4-4v12l-4-4H4z M15 10l4 4M19 10l-4 4",
   prev: "M7 6v12 M18 6l-9 6 9 6z", play: "M8 6l10 6-10 6z", pause: "M8 6v12M16 6v12", next: "M17 6v12 M6 6l9 6-9 6z" };
@@ -295,7 +296,7 @@ const L = {};
 
 // ================================================================ the half dial (actions) and the JARVIS core (voice)
 const DIAL_IN = [["copy", "Копировать"], ["paste", "Вставить"], ["undo", "Отменить"], ["shot", "Скриншот"], ["alttab", "Alt+Tab"], ["search", "Поиск"]];
-const DIAL_OUT = [["min", "Свернуть"], ["sel", "Выделить"], ["close", "Закрыть"], ["lock", "Блок ПК"], ["task", "Диспетчер"], ["folder", "Проводник"]];
+const DIAL_OUT = [["min", "Свернуть"], ["sel", "Выделить"], ["close", "Закрыть"], ["lock", "Блок ПК"], ["screen", "Экран"], ["folder", "Проводник"]];
 const NAMES = Object.fromEntries([...DIAL_IN, ...DIAL_OUT]);
 let waves = [];
 function drawDial(on) {
@@ -331,6 +332,7 @@ function drawDial(on) {
   const t = el("text", { x: mx, y: my + 17, "text-anchor": "middle", fill: "#fff", style: "font:800 7.5px Orbitron,'Exo 2';letter-spacing:1px", "pointer-events": "none" }, c);
   t.textContent = on ? "СЛУШАЮ" : cmd !== null ? "ТЕКСТ" : "JARVIS";
   fitAll(L.dial);
+  if (typeof scrOn !== "undefined" && scrOn) panelsAway();
 }
 
 // ================================================================ the keyboard dome
@@ -767,6 +769,8 @@ addEventListener("pointercancel", (e) => { keyUp(e, true); dialUp(e, true); core
 function panelsAway() {
   stage.classList.toggle("kb-away", scrOn);
   document.getElementById("b-screen").classList.toggle("on", scrOn);
+  const cell = document.querySelector('[data-act="screen"]');
+  if (cell) cell.classList.toggle("live", scrOn);
 }
 
 // ================================================================ ЭКРАН: the PC's screen live in place of the keyboard
@@ -850,6 +854,7 @@ function dialUp(e, cancel) {
   const over = document.elementFromPoint(e.clientX, e.clientY);
   if (!over || over.closest("[data-act]") !== dg) return;
   const a = dg.dataset.act;
+  if (a === "screen") { buzz(14); screenOpen(!scrOn); return; }     // the live screen in place of the keyboard
   if (RISKY[a] && (!armed || armed.a !== a || Date.now() - armed.t > 2500)) {
     armed = { a, t: Date.now() }; document.querySelectorAll(".dial.arm").forEach((x) => x.classList.remove("arm"));
     dg.classList.add("arm"); toast(RISKY[a], true);
