@@ -19,7 +19,9 @@ Only for Android. Works only inside the home Wi-Fi and only while Settings → �
 - a WebSocket carries the input (relative mouse moves through SendInput, clicks, wheel, keys, text, the dial's
   actions, media keys); POST /voice carries a push-to-talk recording (PCM 16 kHz mono) that runs as a voice command;
 - GET /apk hands out the app itself (android/jarvis-remote.apk), so a phone can install it from the browser;
-- GET /screen is a live MJPEG picture of one monitor (only while the phone shows it; a toast on the PC says so),
+- GET /frame is one fresh JPEG of a monitor: the phone asks for the next one as soon as it has drawn the last
+  (an MJPEG stream kept breaking in the Android WebView: a black screen between reconnects). A toast on the PC says
+  when a phone starts watching,
   a tap on it ("tap") clicks that very point; screenshots (the dial's «Скриншот» = the snipping tool, watched in the
   clipboard, or "snap" = the whole monitor at once) are pushed to the phone and served at /shot/<id>."""
 import asyncio
@@ -155,7 +157,7 @@ class Remote:
         self.cap = ThreadPoolExecutor(2, thread_name_prefix="remote-screen")   # screen grabs never wait for input
         self.shots = OrderedDict()    # id -> jpeg bytes (the last 6 screenshots for the phone)
         self.mon = None               # (left, top, width, height) of the monitor the phone watches
-        self.streams = 0
+        self.watch_t = 0.0            # the last frame asked for: a new "смотрит экран" only after a pause
         self.clip_watch = 0.0
         self.locked_until = 0.0
 
@@ -205,7 +207,7 @@ class Remote:
         app.router.add_get("/ws", self._ws)
         app.router.add_post("/voice", self._voice)
         app.router.add_get("/apk", self._apk)
-        app.router.add_get("/screen", self._screen)
+        app.router.add_get("/frame", self._frame)
         app.router.add_get("/shot/{id}", self._shot)
         app.router.add_get("/", self._apk_page)
         try:
@@ -473,50 +475,23 @@ class Remote:
         img.save(buf, "JPEG", quality=quality, optimize=False)
         return buf.getvalue(), (mo["left"], mo["top"], mo["width"], mo["height"]), n
 
-    async def _screen(self, request):
-        """multipart/x-mixed-replace JPEG frames: an <img> on the phone shows it as video."""
+    async def _frame(self, request):
+        """One JPEG of the watched monitor (the cursor drawn as a ring)."""
         from aiohttp import web
         dev = self._device(self._token(request))
         if not dev:
             return web.Response(status=401)
-        if self.streams >= 2:
-            return web.Response(status=429, text="busy")
         q = request.query
         width = max(320, min(1920, int(q.get("w", 1280) or 1280)))
-        fps = max(1, min(15, int(q.get("fps", 8) or 8)))
         index = int(q.get("m", 0) or 0) or None
-        resp = web.StreamResponse(headers={"Content-Type": "multipart/x-mixed-replace; boundary=jarvisframe",
-                                           "Cache-Control": "no-store", "Pragma": "no-cache"})
-        await resp.prepare(request)
-        self.streams += 1
-        self.core.log(f"Пульт: «{dev.get('name')}» смотрит экран")
-        self.core.emit("toast", title="Пульт с телефона", text=f"{dev.get('name')} смотрит экран этого ПК")
-        loop = asyncio.get_running_loop()
-        last, last_t = None, 0.0
-        try:
-            while self.loop:
-                t0 = time.time()
-                jpg, mon, n = await loop.run_in_executor(self.cap, self._grab, index, width, 55)
-                self.mon = mon
-                if jpg != last or t0 - last_t > 2:      # an unchanged screen is not sent again
-                    await resp.write(b"--jarvisframe\r\nContent-Type: image/jpeg\r\nContent-Length: "
-                                     + str(len(jpg)).encode() + b"\r\n\r\n" + jpg + b"\r\n")
-                    last, last_t = jpg, t0
-                await asyncio.sleep(max(0.01, 1 / fps - (time.time() - t0)))
-        except (ConnectionResetError, asyncio.CancelledError, RuntimeError):
-            pass
-        finally:
-            self.streams -= 1
-        return resp
-
-    @staticmethod
-    def _mon_count():
-        try:
-            import mss
-            with mss.MSS() as sct:
-                return max(1, len(sct.monitors) - 1)
-        except Exception:
-            return 1
+        now = time.time()
+        if now - self.watch_t > 8:
+            self.core.log(f"Пульт: «{dev.get('name')}» смотрит экран")
+            self.core.emit("toast", title="Пульт с телефона", text=f"{dev.get('name')} смотрит экран этого ПК")
+        self.watch_t = now
+        jpg, mon, _ = await asyncio.get_running_loop().run_in_executor(self.cap, self._grab, index, width, 60)
+        self.mon = mon
+        return web.Response(body=jpg, content_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
     def _tap(self, x, y, button, n):
         if not (0 <= x <= 1 and 0 <= y <= 1) or not self.mon:

@@ -82,8 +82,8 @@ svg{position:absolute;left:0;top:0;overflow:visible}
 .panel2.scrp{left:296px;top:38px;width:620px;height:280px;flex-direction:row;gap:8px;padding:0;border:none;border-radius:0;background:none;box-shadow:none}
 .scr-stage{position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;justify-content:center}
 .scr-frame{position:relative;width:498px;height:280px;border-radius:14px;background:#000;box-shadow:0 0 0 1px rgba(var(--rgb),.55),0 0 18px rgba(var(--rgb),.25)}
-.scr-frame img{position:absolute;inset:0;width:100%;height:100%;border-radius:14px;display:block}
-.scr-frame.wait img{opacity:0}
+.scr-frame canvas{position:absolute;inset:0;width:100%;height:100%;border-radius:14px;display:block}
+.scr-frame.wait canvas{opacity:0}
 .scr-frame.wait{background:radial-gradient(70% 70% at 50% 50%,rgba(13,53,80,.85),rgba(2,10,16,.95))}
 .scr-scan{position:absolute;inset:0;border-radius:14px;overflow:hidden;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(79,216,255,.045) 0 1px,transparent 1px 3px)}
 .scr-scan::after{content:"";position:absolute;left:0;right:0;height:70px;top:-80px;background:linear-gradient(180deg,transparent,rgba(127,227,255,.10),transparent);animation:sweep 5s linear infinite}
@@ -209,7 +209,7 @@ input.addr{width:100%;height:44px;margin:10px 0 4px;border-radius:12px;border:1.
   <div id="ov"></div>
   <div class="panel2 scrp" id="scr">
     <div class="scr-stage" id="scr-view"><div class="scr-frame wait" id="scr-frame">
-      <img id="scr-img" alt=""><div class="scr-scan"></div>
+      <canvas id="scr-img" width="16" height="9"></canvas><div class="scr-scan"></div>
       <i class="cn tl"></i><i class="cn tr"></i><i class="cn bl"></i><i class="cn br"></i>
       <div class="scr-badge"><span class="live"><i></i>LIVE</span></div><div class="scr-meta" id="scr-info">ЭКРАН ПК</div>
       <div class="scr-wait"><div class="ring3"><i></i><i></i><i></i></div>ПОДКЛЮЧАЮСЬ К ЭКРАНУ</div>
@@ -522,7 +522,7 @@ async function recheck() {
 setInterval(() => send({ t: "ping", ts: Date.now() }), 2000);
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && screen === "main" && !wsOk) recheck();
-  if (scrOn) { if (document.hidden) scrImg.removeAttribute("src"); else scrImg.src = scrUrl(); }
+  if (scrOn && !document.hidden) scrRestart(false);
 });
 
 function savedPcs() { return pget("pcs", []); }
@@ -815,7 +815,37 @@ function panelsAway() {
 // ================================================================ ЭКРАН: the PC's screen live in place of the keyboard
 let scrOn = false, scrMon = 0, scrMons = 1;
 const scrImg = document.getElementById("scr-img"), scrView = document.getElementById("scr-view"), scrFrame = document.getElementById("scr-frame");
-function scrUrl() { return `${base()}/screen?token=${encodeURIComponent(cur.token)}&w=1280&fps=8&m=${scrMon}&r=${Date.now()}`; }
+const sctx = scrImg.getContext("2d");
+let scrGen = 0, scrFails = 0, scrAR = 16 / 9;
+function scrUrl() { return `${base()}/frame?token=${encodeURIComponent(cur.token)}&w=1280&m=${scrMon}&r=${Date.now()}`; }
+// frame by frame: ask for the next picture only when the last one is drawn. The canvas keeps the last good frame,
+// so a slow or lost frame never shows black; the waiting rings come back only after 3 failures in a row.
+function scrLoop(gen) {
+  if (!scrOn || gen !== scrGen || document.hidden) return;
+  const im = new Image(), t0 = performance.now();
+  let done = false;
+  const to = setTimeout(() => { if (!done) { done = true; im.src = ""; scrFail(gen); } }, 4000);
+  im.onload = () => {
+    if (done) return;
+    done = true; clearTimeout(to);
+    if (gen !== scrGen || !scrOn) return;
+    if (scrImg.width !== im.naturalWidth || scrImg.height !== im.naturalHeight) {
+      scrImg.width = im.naturalWidth; scrImg.height = im.naturalHeight; scrAR = im.naturalWidth / im.naturalHeight; fitScr();
+    }
+    sctx.drawImage(im, 0, 0);
+    scrFails = 0;
+    if (scrFrame.classList.contains("wait")) { scrFrame.classList.remove("wait"); scrMeta(); }
+    setTimeout(() => scrLoop(gen), Math.max(0, 110 - (performance.now() - t0)));     // up to ~9 frames a second
+  };
+  im.onerror = () => { if (done) return; done = true; clearTimeout(to); scrFail(gen); };
+  im.src = scrUrl();
+}
+function scrFail(gen) {
+  if (gen !== scrGen || !scrOn) return;
+  if (++scrFails >= 3) scrFrame.classList.add("wait");
+  setTimeout(() => scrLoop(gen), scrFails > 5 ? 1500 : 500);
+}
+function scrRestart(wait) { scrGen++; scrFails = 0; if (wait) scrFrame.classList.add("wait"); scrLoop(scrGen); }
 function scrLabel() {
   const b = document.getElementById("scr-mon");
   b.style.display = scrMons > 1 ? "" : "none";
@@ -829,9 +859,8 @@ function scrMeta() {
 // the frame hugs the picture: as big as the space allows, at the screen's own proportions
 function fitScr() {
   const W = scrView.clientWidth, H = scrView.clientHeight;
-  const ar = scrImg.naturalWidth && scrImg.naturalHeight ? scrImg.naturalWidth / scrImg.naturalHeight : 16 / 9;
-  let w = W, h = W / ar;
-  if (h > H) { h = H; w = H * ar; }
+  let w = W, h = W / scrAR;
+  if (h > H) { h = H; w = H * scrAR; }
   scrFrame.style.width = Math.max(0, w) + "px"; scrFrame.style.height = Math.max(0, h) + "px";
 }
 function screenOpen(on) {
@@ -840,16 +869,13 @@ function screenOpen(on) {
   const pn = document.getElementById("scr");
   pn.classList.toggle("show", on);
   if (!on) { pn.classList.remove("big"); document.querySelector("#scr-big span").textContent = "Во весь экран"; }
-  scrFrame.classList.add("wait");
-  scrImg.removeAttribute("src");
-  if (on) scrImg.src = scrUrl();       // no src = the stream on the PC stops
+  scrGen++;                          // a closed screen stops asking for frames
+  if (on) scrRestart(true);
   scrLabel(); panelsAway();
   if (on) requestAnimationFrame(fitScr);
 }
-scrImg.onload = () => { if (!scrOn) return; scrFrame.classList.remove("wait"); fitScr(); scrMeta(); };
-scrImg.onerror = () => { if (scrOn) { scrFrame.classList.add("wait"); setTimeout(() => { if (scrOn) scrImg.src = scrUrl(); }, 1500); } };
 addEventListener("resize", () => { if (scrOn) fitScr(); });
-document.getElementById("scr-mon").onclick = () => { buzz(); scrMon = scrMon % scrMons + 1; scrLabel(); scrFrame.classList.add("wait"); scrImg.src = scrUrl(); };
+document.getElementById("scr-mon").onclick = () => { buzz(); scrMon = scrMon % scrMons + 1; scrLabel(); scrRestart(true); };
 document.getElementById("scr-snap").onclick = () => { buzz(); if (send({ t: "act", a: "snap" })) toast("Снимок…"); };
 document.getElementById("scr-big").onclick = () => {
   buzz();
