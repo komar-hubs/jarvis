@@ -44,6 +44,24 @@ STOP_OVER_SPEECH = re.compile(r"^(?:ладно\s+|все\s+|всё\s+)?(?:сто
                               r"подожди|погоди|помолчи|харэ|понял|ясно)(?:\s+(?:хватит|стоп|спасибо|уже))?$")
 # emoji: the UI never shows system emoji, and the voice cannot say them (issue #3: a reply full of them)
 EMOJI = re.compile("[\U0001F000-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF\uFE0F\u200D\u20E3]+")
+# service markup some OpenAI-compatible relays leak into the text instead of an answer:
+# "[[assistant]", "(api://tool/complete)]", "<|im_end|>", "[INST]" — never shown, never spoken
+JUNK = re.compile(r"\[\[\s*(?:assistant|user|system|tool|function)[^\]\n]{0,40}\]?\]?|\(?\b\w{0,6}://tool/[\w./-]*\)?\]?|"
+                  r"<\|[^|>\n]{1,30}\|>|\[/?(?:INST|SYS)\]", re.I)
+# the tail of a chunk that may be the start of such markup: held back until the next chunk shows what it is
+JUNK_TAIL = re.compile(r"(?:\[\[?|\(|<\|?|\w{0,6}:/{0,2})[^\s\]\)>]{0,40}$")
+
+
+def degenerate(text):
+    """True when the end of an answer is one piece repeated over and over: a model stuck in a loop."""
+    tail = text[-480:]
+    if len(tail) < 120:
+        return False
+    for n in range(6, 81):
+        seg = tail[-n:]
+        if len(seg.strip()) >= 5 and tail.count(seg) >= 6:
+            return True
+    return False
 
 TOOLS_DOC = """Инструменты (поле "tool" и аргументы):
 - open_app {"name": "telegram"} — запустить программу по названию
@@ -1062,6 +1080,7 @@ class Core:
         t0 = time.time()
         web_used = False
         said_wait = False
+        pend, shown, junk = "", "", 0               # held-back tail, the cleaned text so far, markup pieces removed
         try:
             for chunk in stream_chat(prov, messages, temperature=float(self.cfg.get("ai.temperature", 0.6)),
                                      bridges=self.bridges, cancel=lambda: gen != self.cancel_gen):
@@ -1078,10 +1097,41 @@ class Core:
                 if not chunk:
                     continue
                 full += chunk
-                self.emit("chat_stream", state="chunk", text=chunk)
-                if feeder:
-                    feeder.feed(chunk)
+                # service markup of a broken relay: cut out before it is shown or spoken (it may span chunks)
+                pend += chunk
+                m = JUNK_TAIL.search(pend)
+                out, pend = (pend[:m.start()], pend[m.start():]) if m else (pend, "")
+                out, n = JUNK.subn("", out)
+                junk += n
+                if out:
+                    shown += out
+                    self.emit("chat_stream", state="chunk", text=out)
+                    if feeder:
+                        feeder.feed(out)
+                # an answer made of markup, or one piece repeated in a loop: stop it instead of reading it out
+                if (junk >= 3 and junk * 12 > len(shown.strip())) or degenerate(full):
+                    raise LLMError("garbage")
+            if pend:
+                out, n = JUNK.subn("", pend)
+                junk += n
+                if out:
+                    shown += out
+                    self.emit("chat_stream", state="chunk", text=out)
+                    if feeder:
+                        feeder.feed(out)
         except (LLMError, Exception) as e:
+            if str(e) == "garbage" and gen == self.cancel_gen:
+                if feeder:
+                    feeder.close()
+                self.tts.stop()
+                self.log(f"ИИ ответил бессмыслицей (служебная разметка или повтор по кругу): {full[-160:]!r}", "warn")
+                err = (f"«{prov.get('title')}» вместо ответа прислал бессмыслицу (служебные теги или повтор по кругу), "
+                       f"ответ остановлен. Так бывает у сторонних серверов-ретрансляторов: повторите вопрос или выберите "
+                       f"другую модель в Настройках → ИИ.")
+                self.emit("chat_stream", state="error", text=err)
+                self._chat_add("assistant", err, "error")
+                self.say("Сэр, сервер ИИ ответил бессмыслицей. Попробуйте ещё раз.")
+                return None, [], False
             if feeder:
                 feeder.close()
             if gen != self.cancel_gen:
@@ -1124,7 +1174,8 @@ class Core:
                 except Exception:
                     pass
         visible = re.sub(r"<jarvis>.*?(?:</jarvis>|\Z)", "", full, flags=re.S)
-        visible = re.sub(r"\{\s*\"tool\"\s*:[^{}]*\}?", "", visible).replace("</jarvis>", "").strip()
+        visible = re.sub(r"\{\s*\"tool\"\s*:[^{}]*\}?", "", visible).replace("</jarvis>", "")
+        visible = JUNK.sub("", visible).strip()
         self.emit("chat_stream", state="end", ms=int((time.time() - t0) * 1000))
         if visible in ("—", "-", "–", "...", "…") and not tools:
             # a nameless phrase the model judged as not meant for it: stay silent, keep the window closed
