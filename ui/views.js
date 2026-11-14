@@ -608,6 +608,7 @@ async function loadSettings() {
 
   <section class="s-sec" id="ss-phone">${head("phone", "chat", "Телефон", "уведомления, звонки, SMS и «ушёл — вернулся» через KDE Connect")}<div class="s-grid s-wide" id="sec-phone">
   <div class="panel" id="phone-panel"></div>
+  <div class="panel" id="remote-panel"></div>
   <div class="panel" id="vk-panel"></div>
   <div class="panel" id="standin-panel"></div>
   </div></section>

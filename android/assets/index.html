@@ -1,0 +1,867 @@
+<!doctype html>
+<!-- J.A.R.V.I.S. Remote — the Android app's screen. © 2026 komar-hubs, KotikVanil. MIT License.
+     Original: https://github.com/komar-hubs/jarvis -->
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover">
+<title>J.A.R.V.I.S. Remote</title>
+<link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@500;600;700;800&family=Orbitron:wght@600;700;800&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root{--acc:#4fd8ff;--acc2:#bff4ff;--rgb:79,216,255;--hot:#ffb347;--hot-rgb:255,179,71;--ok:#5dffb0;--ok-rgb:93,255,176;--bg:#02070c;--bad:#ff6b5d}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#01060a;font-family:"Exo 2",sans-serif;color:#e6f7ff;user-select:none;-webkit-user-select:none;touch-action:none}
+#stage{position:absolute;left:0;top:0;width:932px;height:430px;transform-origin:0 0;overflow:hidden;background:var(--bg)}
+svg{position:absolute;left:0;top:0;overflow:visible}
+/* keys */
+.k .f{fill:url(#kg);stroke:rgba(var(--rgb),.75);stroke-width:1}
+.k .hl{fill:none;stroke:rgba(255,255,255,.16);stroke-width:1;pointer-events:none}
+.k text,.k .ico,.dial text,.dial .ico{pointer-events:none}
+.k .t{fill:#eafbff;font:600 16px "Exo 2";text-anchor:middle;dominant-baseline:central}
+.k .sub{fill:rgba(191,244,255,.45);font:600 8.5px "JetBrains Mono";text-anchor:middle;dominant-baseline:central}
+.k.s .t{font:700 10.5px "JetBrains Mono";fill:#a8ecff}
+.k.fn .f{fill:url(#fg);stroke:rgba(var(--rgb),.5)}
+.k.fn .t{font:600 9.5px "Exo 2";fill:#cdf3ff}
+.k.down .f{fill:url(#hotg);stroke:var(--hot);stroke-width:1.6}
+.k.down .t{fill:#fff}
+.k.latch .f{fill:rgba(var(--rgb),.42);stroke:var(--acc2);stroke-width:1.4}
+.k.latch .t{fill:#fff}
+.k.space .t{font:600 12px "Exo 2";fill:rgba(234,251,255,.75);letter-spacing:2px}
+.k.enter .f{fill:url(#entg)}
+.dim-kb .k{opacity:.45}
+.ico{fill:none;stroke:#bff4ff;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.lbl{fill:var(--acc2);font:700 11px "Orbitron","Exo 2";letter-spacing:3px}
+.dial .f{fill:url(#dg);stroke:rgba(var(--rgb),.55);stroke-width:1}
+.dial .t{fill:#dff8ff;font:600 9.5px "Exo 2";text-anchor:middle}
+.dial.on .f{fill:rgba(var(--rgb),.35);stroke:var(--acc2)}
+.dial.arm .f{fill:rgba(var(--hot-rgb),.3);stroke:var(--hot)}
+/* touch surfaces (html over the svg) */
+.zone{position:absolute}
+#pad{left:296px;top:328px;width:498px;height:96px;border-radius:14px}
+#trail{position:absolute;left:296px;top:328px;width:498px;height:96px;pointer-events:none}
+.mbtn{left:802px;width:54px;height:45px;border-radius:10px}
+.mbtn.on{background:rgba(var(--rgb),.28);box-shadow:0 0 18px rgba(var(--rgb),.5)}
+#mbl{top:328px}#mbr{top:379px}
+#rail{left:864px;top:328px;width:52px;height:96px;border-radius:14px}
+/* html overlays */
+.chip{position:absolute;right:50px;top:6px;height:24px;display:flex;align-items:center;gap:8px;padding:0 12px;border-radius:13px;font:600 12px "Exo 2";max-width:240px;white-space:nowrap;
+  border:1px solid rgba(var(--rgb),.4);background:rgba(4,24,38,.75);box-shadow:0 0 14px rgba(var(--rgb),.15)}
+.chip span{overflow:hidden;text-overflow:ellipsis}
+.chip i{flex:none;width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.chip.bad i{background:var(--hot);box-shadow:0 0 8px var(--hot);animation:blink 1s infinite}
+.chip b{font:600 11px "JetBrains Mono";color:#7fd6f2;font-weight:600}
+@keyframes blink{50%{opacity:.25}}
+.gear{position:absolute;right:14px;top:6px;width:26px;height:26px;border-radius:50%;border:1px solid rgba(var(--rgb),.35);background:rgba(4,24,38,.75);display:flex;align-items:center;justify-content:center}
+.bubble{position:absolute;left:400px;top:340px;max-width:380px;padding:8px 16px;border-radius:14px;background:rgba(4,20,32,.94);border:1px solid rgba(var(--rgb),.6);box-shadow:0 0 24px rgba(var(--rgb),.35);font:600 15px "Exo 2";white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+.bubble small{display:block;font:700 9.5px "Orbitron","Exo 2";letter-spacing:2.5px;color:var(--acc);margin-bottom:3px}
+.bubble.hot{border-color:rgba(var(--hot-rgb),.7);box-shadow:0 0 24px rgba(var(--hot-rgb),.35)}
+.bubble.hot small{color:var(--hot)}
+.bubble .cur{display:inline-block;width:2px;height:16px;margin-left:2px;vertical-align:-2px;background:var(--hot);animation:blink 1s infinite}
+.toast{position:absolute;top:296px;left:600px;transform:translateX(-50%);padding:6px 14px;border-radius:12px;font:600 12px "Exo 2";background:rgba(4,20,32,.9);border:1px solid rgba(var(--ok-rgb),.5);color:#c8ffe6;white-space:nowrap;pointer-events:none;transition:opacity .25s}
+.toast.warn{border-color:rgba(var(--hot-rgb),.6);color:#ffe2b8}
+/* connect screen */
+.conn{position:absolute;inset:0;display:none;padding:22px 26px;background:radial-gradient(120% 95% at 62% 0%,#0d2c46,#04131f 55%,#01060a)}
+.connect .conn{display:block}
+.connect #ui{display:none}
+.conn h1{font:800 22px "Orbitron","Exo 2";letter-spacing:4px;color:#fff;text-shadow:0 0 18px rgba(var(--rgb),.7)}
+.conn .sub{font:500 13px "Exo 2";color:#9fcfe2;margin-top:6px;max-width:860px}
+.cols{display:flex;gap:22px;margin-top:16px}
+.col{flex:1;min-width:0}
+.cap{font:700 10px "Orbitron","Exo 2";letter-spacing:3px;color:var(--acc);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.cap .scan{width:14px;height:14px;border-radius:50%;border:2px solid var(--acc);border-top-color:transparent}
+.scanning .scan{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#list{max-height:176px;overflow-y:auto;touch-action:pan-y}
+.pcrow{display:flex;align-items:center;gap:14px;padding:11px 14px;border-radius:14px;margin-bottom:9px;border:1px solid rgba(var(--rgb),.3);background:linear-gradient(90deg,rgba(var(--rgb),.12),rgba(var(--rgb),.03))}
+.pcrow.sel{border-color:var(--acc);box-shadow:0 0 20px rgba(var(--rgb),.3),inset 0 0 20px rgba(var(--rgb),.08)}
+.pcrow .ic{flex:none;width:38px;height:38px;border-radius:10px;border:1px solid rgba(var(--rgb),.5);display:flex;align-items:center;justify-content:center;background:rgba(var(--rgb),.08)}
+.pcrow .tx{min-width:0}
+.pcrow .nm{font:700 16px "Exo 2";white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pcrow .ip{font:600 11.5px "JetBrains Mono";color:#7fbcd2;margin-top:2px;white-space:nowrap}
+.pcrow .st{margin-left:auto;flex:none;font:600 12px "Exo 2";color:var(--ok)}
+.pcrow.off .st{color:#6b8796}
+.empty{font:500 12.5px/1.5 "Exo 2";color:#7fa9ba;padding:8px 2px 12px}
+.add{display:flex;align-items:center;justify-content:center;gap:8px;height:40px;border-radius:14px;border:1px dashed rgba(var(--rgb),.45);font:600 13px "Exo 2";color:#bfefff}
+.codebox{padding:14px 16px;border-radius:18px;border:1px solid rgba(var(--rgb),.45);background:rgba(4,22,34,.7);box-shadow:inset 0 0 30px rgba(var(--rgb),.08);min-height:200px}
+.codebox p{font:500 12.5px/1.45 "Exo 2";color:#bfe6f3}
+.codebox p.err{color:#ffc2a0}
+.digits{display:flex;gap:10px;margin:10px 0}
+.digits div{width:50px;height:58px;border-radius:13px;border:1.5px solid rgba(var(--rgb),.6);display:flex;align-items:center;justify-content:center;font:800 30px "Exo 2";color:#fff;text-shadow:0 0 14px var(--acc);background:rgba(var(--rgb),.07)}
+.digits div.cur{border-color:var(--hot);box-shadow:0 0 18px rgba(var(--hot-rgb),.5)}
+.digits div.cur::after{content:"";width:2px;height:28px;background:var(--hot);box-shadow:0 0 8px var(--hot);animation:blink 1s infinite}
+.digits.shake{animation:shake .35s}
+@keyframes shake{25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+.np{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.np div{height:32px;border-radius:9px;border:1px solid rgba(var(--rgb),.4);background:rgba(var(--rgb),.08);display:flex;align-items:center;justify-content:center;font:700 15px "Exo 2";color:#e6faff}
+.np div.on{background:rgba(var(--hot-rgb),.35);border-color:var(--hot)}
+.note{font:500 11.5px "Exo 2";color:#7fa9ba;display:flex;gap:8px;align-items:center}
+.btn{display:inline-flex;align-items:center;justify-content:center;height:38px;padding:0 20px;border-radius:12px;font:700 13px "Exo 2";letter-spacing:.5px;color:#02121c;background:linear-gradient(180deg,#9ff0ff,#4fd8ff);box-shadow:0 0 18px rgba(var(--rgb),.5)}
+.btn.ghost{background:none;color:#bfefff;border:1px solid rgba(var(--rgb),.5);box-shadow:none}
+.row2{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px}
+.foot{position:absolute;left:26px;right:26px;bottom:18px}
+input.addr{width:100%;height:44px;margin:10px 0 4px;border-radius:12px;border:1.5px solid rgba(var(--rgb),.6);background:rgba(var(--rgb),.07);color:#fff;font:700 18px "JetBrains Mono";padding:0 14px;outline:none;user-select:text;-webkit-user-select:text}
+/* settings sheet */
+.shade{position:absolute;inset:0;background:rgba(0,6,10,.72);display:none}
+.shade.show{display:block}
+.sheet{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:470px;padding:18px 22px;border-radius:18px;background:rgba(4,20,32,.97);border:1px solid rgba(var(--rgb),.5);box-shadow:0 0 40px rgba(var(--rgb),.25)}
+.sheet h2{font:800 15px "Orbitron","Exo 2";letter-spacing:3px;color:#fff;margin-bottom:12px}
+.srow{display:flex;align-items:center;gap:14px;margin:10px 0;font:600 13px "Exo 2";color:#cfefff}
+.srow label{width:150px;flex:none}
+.srow input[type=range]{flex:1;accent-color:var(--acc);height:28px}
+.tg{width:44px;height:24px;border-radius:12px;border:1px solid rgba(var(--rgb),.5);position:relative;background:rgba(var(--rgb),.1)}
+.tg::after{content:"";position:absolute;left:3px;top:3px;width:16px;height:16px;border-radius:50%;background:#7fa9ba;transition:left .15s}
+.tg.on{background:rgba(var(--rgb),.4)}.tg.on::after{left:23px;background:#fff}
+.sheet .note{margin-top:12px;line-height:1.4}
+</style>
+</head>
+<body>
+<div id="stage">
+<svg id="s" width="932" height="430" viewBox="0 0 932 430" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bgg" cx="62%" cy="0%" r="95%"><stop offset="0" stop-color="#0d2c46"/><stop offset=".55" stop-color="#04131f"/><stop offset="1" stop-color="#01060a"/></radialGradient>
+    <linearGradient id="kg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5fdcff" stop-opacity=".30"/><stop offset=".55" stop-color="#2a9fcf" stop-opacity=".12"/><stop offset="1" stop-color="#0b3b55" stop-opacity=".25"/></linearGradient>
+    <linearGradient id="fg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4fd8ff" stop-opacity=".16"/><stop offset="1" stop-color="#0b3b55" stop-opacity=".18"/></linearGradient>
+    <linearGradient id="entg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5dffb0" stop-opacity=".30"/><stop offset="1" stop-color="#1b7a5a" stop-opacity=".15"/></linearGradient>
+    <linearGradient id="hotg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd27a" stop-opacity=".75"/><stop offset="1" stop-color="#b86a10" stop-opacity=".45"/></linearGradient>
+    <radialGradient id="dg" cx="0%" cy="50%" r="100%"><stop offset="0" stop-color="#4fd8ff" stop-opacity=".22"/><stop offset="1" stop-color="#0b3b55" stop-opacity=".1"/></radialGradient>
+    <radialGradient id="core" cx="45%" cy="40%" r="65%"><stop offset="0" stop-color="#36b6e8" stop-opacity=".75"/><stop offset=".6" stop-color="#0b3550"/><stop offset="1" stop-color="#03121d"/></radialGradient>
+    <radialGradient id="coreon" cx="45%" cy="40%" r="65%"><stop offset="0" stop-color="#ffe3a8"/><stop offset=".45" stop-color="#ff9d2e" stop-opacity=".85"/><stop offset="1" stop-color="#3a1c04"/></radialGradient>
+    <radialGradient id="vig" cx="55%" cy="45%" r="75%"><stop offset=".6" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".55"/></radialGradient>
+    <filter id="gl" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="gl2" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <linearGradient id="tpg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0d3550" stop-opacity=".78"/><stop offset="1" stop-color="#04131f" stop-opacity=".88"/></linearGradient>
+    <linearGradient id="btng" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5fdcff" stop-opacity=".26"/><stop offset="1" stop-color="#0b3b55" stop-opacity=".3"/></linearGradient>
+    <pattern id="dots" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="8" cy="8" r=".9" fill="#7fe3ff" fill-opacity=".22"/></pattern>
+    <pattern id="hex" width="24" height="41.57" patternUnits="userSpaceOnUse"><path d="M12 0 L24 6.93 V20.78 L12 27.71 L0 20.78 V6.93 Z M12 27.71 V41.57" fill="none" stroke="#4fd8ff" stroke-opacity=".05"/></pattern>
+    <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="1" fill="#4fd8ff" fill-opacity=".025"/></pattern>
+  </defs>
+  <rect width="932" height="430" fill="url(#bgg)"/><rect width="932" height="430" fill="url(#hex)"/>
+  <g id="main"></g>
+  <rect width="932" height="430" fill="url(#scan)" pointer-events="none"/><rect width="932" height="430" fill="url(#vig)" pointer-events="none"/>
+</svg>
+<div id="ui">
+  <canvas id="trail"></canvas>
+  <div class="zone" id="pad"></div>
+  <div class="zone mbtn" id="mbl"></div><div class="zone mbtn" id="mbr"></div>
+  <div class="zone" id="rail"></div>
+  <div class="chip bad" id="chip"><i></i><span id="pcname">—</span><b id="ping"></b></div>
+  <div class="gear" id="gear"><svg width="16" height="16" viewBox="0 0 24 24" style="position:static"><circle cx="12" cy="12" r="3.2" class="ico"/><path class="ico" d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg></div>
+  <div id="ov"></div>
+</div>
+
+<div class="conn">
+  <h1>ПОДКЛЮЧЕНИЕ</h1>
+  <div class="sub">Компьютеры с J.A.R.V.I.S. в этой сети Wi-Fi. Выберите свой и введите код, который J.A.R.V.I.S. покажет на экране ПК.</div>
+  <div class="cols">
+    <div class="col">
+      <div class="cap" id="cap1"><span class="scan"></span>НАЙДЕНО В СЕТИ</div>
+      <div id="list"></div>
+      <div class="add" id="add">+ Добавить по адресу</div>
+    </div>
+    <div class="col">
+      <div class="cap" id="cap2">КОД С ЭКРАНА ПК</div>
+      <div class="codebox" id="codebox"></div>
+    </div>
+  </div>
+  <div class="note foot">Нет вашего ПК в списке? На компьютере: J.A.R.V.I.S. → Настройки → «Телефон» → «Пульт с телефона» → включить. Телефон и ПК должны быть в одной сети Wi-Fi.</div>
+</div>
+
+<div class="shade" id="shade"><div class="sheet">
+  <h2>НАСТРОЙКИ ПУЛЬТА</h2>
+  <div class="srow"><label>Скорость курсора</label><input type="range" id="o-speed" min="0.8" max="4.5" step="0.1"></div>
+  <div class="srow"><label>Скорость прокрутки</label><input type="range" id="o-scroll" min="2" max="14" step="0.5"></div>
+  <div class="srow"><label>Вибрация</label><div class="tg" id="o-buzz"></div></div>
+  <div class="row2"><div class="btn ghost" id="o-pc">Сменить ПК</div><div class="btn" id="o-done">Готово</div></div>
+  <div class="note">J.A.R.V.I.S. Remote — только для Android. Работает внутри домашней сети Wi-Fi. Удерживайте круг JARVIS, чтобы сказать команду; короткое касание — набрать её на клавиатуре.</div>
+</div></div>
+</div>
+
+<script>
+"use strict";
+// ================================================================ the native side (MainActivity.java) or a browser
+const HAS = !!window.Native;
+const P0 = new URLSearchParams(location.search);
+let _id = 0; const _cb = {};
+window.__nat = (id, status, text) => { const f = _cb[id]; delete _cb[id]; if (f) f(status, text); };
+function http(method, url, body, token) {
+  return new Promise((res) => {
+    const done = (s, t) => { let j = null; try { j = JSON.parse(t); } catch (e) {} res({ status: s, json: j }); };
+    if (HAS) { const id = ++_id; _cb[id] = done; Native.http(id, method, url, body ? JSON.stringify(body) : "", token || ""); return; }
+    const ctl = new AbortController(); setTimeout(() => ctl.abort(), 3500);
+    fetch(url, { method, signal: ctl.signal, headers: { "Content-Type": "application/json", "X-Token": token || "" }, body: body ? JSON.stringify(body) : undefined })
+      .then((r) => r.text().then((t) => done(r.status, t))).catch(() => done(0, ""));
+  });
+}
+function pget(k, d) { try { const v = HAS ? Native.get(k) : localStorage.getItem("jr_" + k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
+function pput(k, v) { try { const s = JSON.stringify(v); if (HAS) Native.put(k, s); else localStorage.setItem("jr_" + k, s); } catch (e) {} }
+const OPT = Object.assign({ speed: 2.2, scroll: 6, buzz: true }, pget("opt", {}));
+function buzz(ms = 8) { if (OPT.buzz && HAS) try { Native.vibrate(ms); } catch (e) {} }
+
+// ================================================================ stage scaling: the 932x430 design fills any phone
+const stage = document.getElementById("stage");
+let SC = 1;
+function fit() {
+  SC = Math.min(innerWidth / 932, innerHeight / 430);
+  stage.style.transform = `translate(${(innerWidth - 932 * SC) / 2}px,${(innerHeight - 430 * SC) / 2}px) scale(${SC})`;
+  sizeTrail();
+}
+addEventListener("resize", fit);
+function loc(e) { const r = stage.getBoundingClientRect(); return { x: (e.clientX - r.left) / SC, y: (e.clientY - r.top) / SC }; }
+
+// ================================================================ drawing helpers
+const NS = "http://www.w3.org/2000/svg", main = document.getElementById("main"), ov = document.getElementById("ov");
+const el = (t, a, p = main) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); p.appendChild(e); return e; };
+const P = (cx, cy, r, a) => [cx + r * Math.cos(a * Math.PI / 180), cy + r * Math.sin(a * Math.PI / 180)];
+function sector(cx, cy, r0, r1, a0, a1, gap = 1.8) {
+  const g0 = gap / r1 * 180 / Math.PI, g1 = gap / r0 * 180 / Math.PI;
+  const [x1, y1] = P(cx, cy, r1, a0 + g0), [x2, y2] = P(cx, cy, r1, a1 - g0), [x3, y3] = P(cx, cy, r0, a1 - g1), [x4, y4] = P(cx, cy, r0, a0 + g1);
+  const big = a1 - a0 > 180 ? 1 : 0;
+  return `M${x1} ${y1} A${r1} ${r1} 0 ${big} 1 ${x2} ${y2} L${x3} ${y3} A${r0} ${r0} 0 ${big} 0 ${x4} ${y4} Z`;
+}
+function arcLine(cx, cy, r, a0, a1) { const [x1, y1] = P(cx, cy, r, a0), [x2, y2] = P(cx, cy, r, a1); return `M${x1} ${y1} A${r} ${r} 0 0 1 ${x2} ${y2}`; }
+const ICON = {
+  copy: "M8 8h11v12H8z M5 16V4h11", paste: "M8 4h8v3H8z M6 6H5v15h14V6h-1", undo: "M9 7L4 12l5 5 M4 12h10a6 6 0 0 1 0 12", sel: "M4 4h3M10 4h4M17 4h3v3M20 10v4M20 17v3h-3M14 20h-4M7 20H4v-3M4 14v-4",
+  shot: "M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4 M12 9.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5", alttab: "M4 6h11v9H4z M9 10h11v9H9",
+  min: "M4 5h16v14H4z M8 15h8", close: "M4 5h16v14H4z M9 9l6 6M15 9l-6 6", task: "M4 20V12M9 20V6M14 20v-9M19 20V4", lock: "M6 11h12v10H6z M9 11V8a3 3 0 0 1 6 0v3",
+  search: "M10.5 4a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13 M15.5 15.5L20 20", folder: "M3 7h7l2 2h9v10H3z",
+  vdown: "M4 10h3l4-4v12l-4-4H4z M15 12h5", vup: "M4 10h3l4-4v12l-4-4H4z M15 12h5M17.5 9.5v5", mute: "M4 10h3l4-4v12l-4-4H4z M15 10l4 4M19 10l-4 4",
+  prev: "M7 6v12 M18 6l-9 6 9 6z", play: "M8 6l10 6-10 6z", pause: "M8 6v12M16 6v12", next: "M17 6v12 M6 6l9 6-9 6z" };
+function icon(name, x, y, s, p, cls = "ico") {
+  const g = el("g", { transform: `translate(${x - s / 2} ${y - s / 2}) scale(${s / 24})` }, p);
+  el("path", { d: ICON[name], class: cls, "stroke-width": 1.6 * 24 / s }, g);
+  return g;
+}
+function T(x, y, s, cls, p = main) { const t = el("text", { x, y, class: cls }, p); t.textContent = s; return t; }
+const _cv = document.createElement("canvas").getContext("2d");
+function measure(t, font) { _cv.font = font; return _cv.measureText(t).width; }
+// a label never spills out of its key or dial cell: shrink it until it fits
+function fitAll(root = document) {
+  root.querySelectorAll("text[data-maxw]").forEach((t) => {
+    const max = +t.dataset.maxw;
+    t.style.fontSize = "";
+    let fs = parseFloat(getComputedStyle(t).fontSize);
+    while (t.getComputedTextLength() > max && fs > 6) { fs -= 0.5; t.style.fontSize = fs + "px"; }
+  });
+}
+function cellWidth(cx, cy, r0, r1, a0, a1, yy) {
+  const pts = [];
+  for (let i = 0; i <= 30; i++) pts.push(P(cx, cy, r1, a0 + (a1 - a0) * i / 30));
+  for (let i = 30; i >= 0; i--) pts.push(P(cx, cy, r0, a0 + (a1 - a0) * i / 30));
+  const xs = [];
+  for (let i = 0; i < pts.length; i++) {
+    const [xa, ya] = pts[i], [xb, yb] = pts[(i + 1) % pts.length];
+    if ((ya - yy) * (yb - yy) <= 0 && ya !== yb) xs.push(xa + (yy - ya) * (xb - xa) / (yb - ya));
+  }
+  return xs.length >= 2 ? Math.max(...xs) - Math.min(...xs) : 40;
+}
+
+// layers, bottom to top
+const L = {};
+["head", "dial", "kb", "pad", "pop"].forEach((n) => L[n] = el("g", { id: "L-" + n }));
+
+// ================================================================ the half dial (actions) and the JARVIS core (voice)
+const DIAL_IN = [["copy", "Копировать"], ["paste", "Вставить"], ["undo", "Отменить"], ["shot", "Скриншот"], ["alttab", "Alt+Tab"], ["search", "Поиск"]];
+const DIAL_OUT = [["min", "Свернуть"], ["sel", "Выделить"], ["close", "Закрыть"], ["lock", "Блок ПК"], ["task", "Диспетчер"], ["folder", "Проводник"]];
+const NAMES = Object.fromEntries([...DIAL_IN, ...DIAL_OUT]);
+let waves = [];
+function drawDial(on) {
+  L.dial.innerHTML = "";
+  const cx = 0, cy = 215;
+  const g = el("g", { filter: "url(#gl)" }, L.dial);
+  const ring = (list, r0, r1, isz) => list.forEach(([ic, name], i) => {
+    const a0 = -90 + i * 30, a1 = a0 + 30, gg = el("g", { class: "dial", "data-act": ic }, g);
+    el("path", { class: "f", d: sector(cx, cy, r0, r1, a0, a1, 1.6) }, gg);
+    const [x, y] = P(cx, cy, (r0 + r1) / 2, (a0 + a1) / 2);
+    icon(ic, x, y - 7, isz, gg);
+    const t = el("text", { x, y: y + 11, class: "t" }, gg); t.textContent = name;
+    t.dataset.maxw = cellWidth(cx, cy, r0, r1, a0, a1, y + 8) - 6;
+  });
+  ring(DIAL_IN, 98, 152, 15); ring(DIAL_OUT, 156, 203, 14);
+  for (let i = 0; i <= 60; i++) { const a = -90 + i * 3, [x1, y1] = P(cx, cy, 206, a), [x2, y2] = P(cx, cy, i % 5 ? 208 : 212, a); el("line", { x1, y1, x2, y2, stroke: "#4fd8ff", "stroke-opacity": i % 5 ? .35 : .8 }, g); }
+  const spin = el("path", { d: arcLine(cx, cy, 214, -56, -26), fill: "none", stroke: "#bff4ff", "stroke-width": 2.2, "stroke-linecap": "round" }, g);
+  spin.innerHTML = `<animateTransform attributeName="transform" type="rotate" from="0 0 215" to="${on ? 360 : 180} 0 215" dur="${on ? 3 : 24}s" repeatCount="indefinite"/>`;
+  el("path", { d: arcLine(cx, cy, 95, -76, 76), fill: "none", stroke: on ? "#ffb347" : "#4fd8ff", "stroke-opacity": on ? .95 : .35, "stroke-width": on ? 2.4 : 1, "stroke-dasharray": on ? "6 4" : "2 5" }, g);
+  const mx = 40, my = cy, cr = 34;
+  const c = el("g", { filter: "url(#gl2)", "data-core": "1" }, L.dial);
+  waves = [];
+  for (let i = 1; i <= 3; i++) {
+    const rr = cr + 3 + i * 5, lim = Math.acos(Math.max(-1, Math.min(1, (4 - mx) / rr))) * 57.3;   // never past the left edge
+    waves.push(el("path", { d: arcLine(mx, my, rr, -Math.min(lim, 75), Math.min(lim, 75)), fill: "none", stroke: "#ffb347", "stroke-opacity": on ? .75 / i : 0, "stroke-width": 2, "stroke-linecap": "round" }, c));
+  }
+  el("circle", { cx: mx, cy: my, r: cr + 8, fill: "transparent" }, c);   // a slightly bigger target for the thumb
+  el("circle", { cx: mx, cy: my, r: cr, fill: on ? "url(#coreon)" : "url(#core)", stroke: on ? "#ffd27a" : (cmd !== null ? "#ffb347" : "#bff4ff"), "stroke-width": 2 }, c);
+  el("circle", { cx: mx, cy: my, r: cr - 7, fill: "none", stroke: on ? "#fff3dc" : "#4fd8ff", "stroke-opacity": .6, "stroke-dasharray": "3 4", "pointer-events": "none" }, c);
+  const mic = el("g", { transform: `translate(${mx - 9.5} ${my - 18}) scale(.75)`, "pointer-events": "none" }, c);
+  el("rect", { x: 9, y: 2, width: 8, height: 15, rx: 4, fill: "none", stroke: "#fff", "stroke-width": 2.6 }, mic);
+  el("path", { d: "M4 12a9 9 0 0 0 18 0M13 21v4", fill: "none", stroke: "#fff", "stroke-width": 2.6, "stroke-linecap": "round" }, mic);
+  const t = el("text", { x: mx, y: my + 17, "text-anchor": "middle", fill: "#fff", style: "font:800 7.5px Orbitron,'Exo 2';letter-spacing:1px", "pointer-events": "none" }, c);
+  t.textContent = on ? "СЛУШАЮ" : cmd !== null ? "ТЕКСТ" : "JARVIS";
+  fitAll(L.dial);
+}
+
+// ================================================================ the keyboard dome
+const KB = { lang: pget("lang", "ru"), shift: false, caps: false, fn: false, ctrl: false, alt: false };
+const ROWS_CH = { ru: ["йцукенгшщзх", "фывапролджэ", "ячсмитьбю."], en: ["qwertyuiop[", "asdfghjkl;'", "zxcvbnm,./"] };
+const CODES = ["qwertyuiop[", "asdfghjkl;'", "zxcvbnm,./"];
+const SUBS = { ru: '!"№;%:?*()', en: "!@#$%^&*()" };
+const SHIFT_SYM = { ru: { ".": "," }, en: { "[": "{", ";": ":", "'": '"', ",": "<", ".": ">", "/": "?" } };
+function upper() { return KB.shift !== KB.caps; }
+function chOf(k) {             // what a character key types now
+  if (k.digit) return KB.shift ? SUBS[KB.lang][k.i] : k.ch;
+  const sym = SHIFT_SYM[KB.lang][k.ch];
+  if (sym) return KB.shift ? sym : k.ch;
+  return upper() ? k.ch.toUpperCase() : k.ch;
+}
+function drawKeyboard() {
+  L.kb.innerHTML = "";
+  const cx = 612, cy = 1334, h = 13.2, a0 = -90 - h, a1 = -90 + h;
+  const g = el("g", { filter: "url(#gl)" }, L.kb);
+  const letters = (s, ri) => s.split("").map((c, i) => ({ kind: "ch", ch: c, code: CODES[ri][i] }));
+  const strip = [{ kind: "media", a: "vdown", icon: "vdown" }, { kind: "media", a: "mute", icon: "mute" }, { kind: "media", a: "vup", icon: "vup" },
+    { kind: "media", a: "prev", icon: "prev" }, { kind: "media", a: "play", icon: "pause" }, { kind: "media", a: "next", icon: "next" },
+    { kind: "key", k: "win", t: "Win", cls: "s fn" }, { kind: "fn", t: "F1–F12", cls: "s fn" + (KB.fn ? " latch" : "") }].map((k) => ({ cls: "fn", ...k }));
+  const digits = KB.fn
+    ? Array.from({ length: 12 }, (_, i) => ({ kind: "key", k: "f" + (i + 1), t: "F" + (i + 1), cls: "s" }))
+    : [{ kind: "key", k: "esc", t: "Esc", cls: "s", w: 1.2 }, ..."1234567890".split("").map((c, i) => ({ kind: "ch", ch: c, code: c, digit: true, i, sub: SUBS[KB.lang][i] })), { kind: "key", k: "delete", t: "Del", cls: "s", w: 1.2, rep: true }];
+  const R = [
+    [1280, 1306, strip],
+    [1234, 1272, digits],
+    [1188, 1228, [{ kind: "key", k: "tab", t: "Tab", cls: "s", w: 1.3 }, ...letters(ROWS_CH[KB.lang][0], 0), { kind: "key", k: "backspace", t: "⌫", cls: "s", w: 1.3, rep: true }]],
+    [1142, 1182, [{ kind: "caps", t: "Caps", cls: "s" + (KB.caps ? " latch" : ""), w: 1.2 }, ...letters(ROWS_CH[KB.lang][1], 1), { kind: "key", k: "enter", t: "Ввод", cls: "s enter", w: 1.8 }]],
+    [1096, 1136, [{ kind: "shift", t: "⇧", cls: "s" + (KB.shift ? " latch" : ""), w: 1.6 }, ...letters(ROWS_CH[KB.lang][2], 2), { kind: "shift", t: "⇧", cls: "s" + (KB.shift ? " latch" : ""), w: 1.6 }]],
+    [1050, 1090, [{ kind: "mod", m: "ctrl", t: "Ctrl", cls: "s" + (KB.ctrl ? " latch" : ""), w: 1.2 }, { kind: "mod", m: "alt", t: "Alt", cls: "s" + (KB.alt ? " latch" : ""), w: 1.2 },
+      { kind: "lang", t: KB.lang === "ru" ? "RU" : "EN", cls: "s latch", w: 1 }, { kind: "ch", ch: " ", code: "space", t: "пробел", cls: "space", w: 4.6 },
+      { kind: "key", k: "left", t: "←", cls: "s", rep: true }, { kind: "key", k: "up", t: "↑", cls: "s", rep: true }, { kind: "key", k: "down", t: "↓", cls: "s", rep: true }, { kind: "key", k: "right", t: "→", cls: "s", rep: true }]],
+  ];
+  KEYS.length = 0;
+  R.forEach(([r0, r1, ks]) => {
+    const tot = ks.reduce((s, k) => s + (k.w || 1), 0);
+    let a = a0;
+    ks.forEach((k) => {
+      const da = (a1 - a0) * (k.w || 1) / tot, b0 = a, b1 = a + da; a = b1;
+      const kg = el("g", { class: "k " + (k.cls || ""), "data-k": KEYS.length }, g);
+      el("path", { class: "f", d: sector(cx, cy, r0, r1, b0, b1) }, kg);
+      el("path", { class: "hl", d: arcLine(cx, cy, r1 - 2.2, b0 + 2.6 / r1 * 57.3, b1 - 2.6 / r1 * 57.3) }, kg);
+      const am = (b0 + b1) / 2, rm = (r0 + r1) / 2, [x, y] = P(cx, cy, rm, am);
+      const tg = el("g", { transform: `rotate(${am + 90} ${x} ${y})` }, kg);
+      const label = k.t || (k.kind === "ch" ? chOf(k) : "");
+      if (k.icon) icon(k.icon, x, y, 15, tg);
+      else {
+        const t = el("text", { x, y: y + (k.sub ? 2 : 0), class: "t" }, tg); t.textContent = label;
+        t.dataset.maxw = Math.max(8, (b1 - b0) * Math.PI / 180 * rm - 8);
+        if (k.sub && !KB.shift) { const s = el("text", { x: x + 11, y: y - 11, class: "sub" }, tg); s.textContent = k.sub; }
+      }
+      KEYS.push({ ...k, g: kg, x, y, rot: am + 90, label });
+    });
+  });
+  fitAll(L.kb);
+}
+const KEYS = [];
+
+// ================================================================ the touchpad strip (static picture; the touch zones are html)
+let thumb = null;
+function drawPad() {
+  L.pad.innerHTML = "";
+  const x = 296, y = 328, h = 96, padW = 498, X2 = x + padW + 8, g = L.pad;
+  el("rect", { x, y, width: padW, height: h, rx: 14, fill: "url(#tpg)", stroke: "#4fd8ff", "stroke-opacity": .55 }, g);
+  el("rect", { x: x + 1, y: y + 1, width: padW - 2, height: h - 2, rx: 13, fill: "url(#dots)" }, g);
+  el("path", { d: `M${x + 14} ${y + 1.5} H${x + padW - 14}`, stroke: "#bff4ff", "stroke-opacity": .35 }, g);
+  const br = (cx, cy, sx, sy) => el("path", { d: `M${cx} ${cy + sy * 12} V${cy} H${cx + sx * 12}`, fill: "none", stroke: "#bff4ff", "stroke-width": 2, "stroke-linecap": "round" }, g);
+  br(x + 6, y + 6, 1, 1); br(x + padW - 6, y + 6, -1, 1); br(x + 6, y + h - 6, 1, -1); br(x + padW - 6, y + h - 6, -1, -1);
+  T(x + 22, y + 22, "ТАЧПАД", "lbl", g).setAttribute("style", "font-size:9.5px;letter-spacing:3px");
+  const mb = (yy, left) => {
+    el("rect", { x: X2, y: yy, width: 54, height: 45, rx: 10, fill: "url(#btng)", stroke: "#4fd8ff", "stroke-opacity": .55 }, g);
+    const mx = X2 + 27, my = yy + 17;
+    el("path", { d: `M${mx - 7} ${my - 3} a7 7 0 0 1 14 0 v7 a7 7 0 0 1 -14 0 z M${mx} ${my - 10} v8`, fill: "none", stroke: "#bff4ff", "stroke-width": 1.5 }, g);
+    el("path", { d: left ? `M${mx - 7} ${my - 3} a7 7 0 0 1 7 -7 v8 h-7 z` : `M${mx + 7} ${my - 3} a7 7 0 0 0 -7 -7 v8 h7 z`, fill: "#4fd8ff", "fill-opacity": .8 }, g);
+    const t = el("text", { x: mx, y: yy + 37, "text-anchor": "middle", fill: "#a9e3f5", style: "font:600 9px 'Exo 2'" }, g);
+    t.textContent = left ? "клик" : "правый";
+  };
+  mb(y, true); mb(y + h - 45, false);
+  const sx = X2 + 62, sw = 52;
+  el("rect", { x: sx, y, width: sw, height: h, rx: 14, fill: "url(#tpg)", stroke: "#4fd8ff", "stroke-opacity": .55 }, g);
+  el("path", { d: `M${sx + sw / 2 - 6} ${y + 15} l6 -6 l6 6 M${sx + sw / 2 - 6} ${y + h - 15} l6 6 l6 -6`, fill: "none", stroke: "#bff4ff", "stroke-width": 1.8, "stroke-linecap": "round", "stroke-linejoin": "round" }, g);
+  thumb = el("g", {}, g);
+  el("rect", { x: sx + sw / 2 - 9, y: y + 31, width: 18, height: 34, rx: 9, fill: "#4fd8ff", "fill-opacity": .32, stroke: "#bff4ff", "stroke-opacity": .6 }, thumb);
+  for (let i = 0; i < 3; i++) el("line", { x1: sx + sw / 2 - 4, y1: y + 42 + i * 6, x2: sx + sw / 2 + 4, y2: y + 42 + i * 6, stroke: "#e6faff", "stroke-opacity": .8 }, thumb);
+}
+
+function drawAll() {
+  L.head.innerHTML = "";
+  T(250, 25, "J.A.R.V.I.S. · ПУЛЬТ", "lbl", L.head);
+  drawDial(listening);
+  drawKeyboard();
+  drawPad();
+}
+
+// ================================================================ the link to the PC
+let cur = null, ws = null, wsOk = false, ping = 0, retry = null, screen = "connect";
+const base = () => `http://${cur.host}:${cur.port}`;
+function send(m) { if (ws && ws.readyState === 1) { ws.send(JSON.stringify(m)); return true; } return false; }
+function chipState() {
+  const c = document.getElementById("chip");
+  c.classList.toggle("bad", !wsOk);
+  document.getElementById("pcname").textContent = cur ? (cur.name || cur.host) : "—";
+  document.getElementById("ping").textContent = wsOk ? (ping ? ping + " мс" : "") : "нет связи";
+}
+function openWs() {
+  if (!cur || !cur.token) return;
+  if (ws) { ws.onclose = null; try { ws.close(); } catch (e) {} }
+  ws = new WebSocket(`ws://${cur.host}:${cur.port}/ws?token=${encodeURIComponent(cur.token)}`);
+  ws.onopen = () => { wsOk = true; chipState(); send({ t: "ping", ts: Date.now() }); };
+  ws.onmessage = (e) => {
+    let m; try { m = JSON.parse(e.data); } catch (x) { return; }
+    if (m.t === "pong") { ping = Math.max(1, Date.now() - m.ts); chipState(); }
+    else if (m.t === "hello") { if (m.name && m.name !== cur.name) { cur.name = m.name; savePc(cur); } chipState(); }
+    else if (m.t === "vol" && m.vol != null) toast(`Громкость ${m.vol}%`);
+  };
+  ws.onclose = () => { wsOk = false; chipState(); clearTimeout(retry); retry = setTimeout(recheck, 1500); };
+}
+async function recheck() {
+  if (!cur || screen !== "main") return;
+  const r = await http("GET", base() + "/hello", null, cur.token);
+  if (r.status === 200 && r.json) {
+    if (!r.json.paired) { cur.token = ""; savePc(cur); toast("ПК забыл этот телефон — нужен новый код", true); showConnect(cur); return; }
+    openWs();
+  } else { clearTimeout(retry); retry = setTimeout(recheck, 2500); }
+}
+setInterval(() => send({ t: "ping", ts: Date.now() }), 2000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden && screen === "main" && !wsOk) recheck(); });
+
+function savedPcs() { return pget("pcs", []); }
+function savePc(pc) {
+  const list = savedPcs().filter((p) => !(p.host === pc.host && p.port === pc.port));
+  list.unshift({ host: pc.host, port: pc.port, name: pc.name || "", token: pc.token || "", seen: Date.now() });
+  pput("pcs", list.slice(0, 6));
+}
+function useMain(pc) {
+  cur = pc; savePc(pc); pput("cur", pc.host + ":" + pc.port);
+  screen = "main"; document.body.className = "";
+  chipState(); openWs();
+}
+
+// ================================================================ the connect screen
+let found = {}, sel = null, code = "", pairMsg = "", pairErr = false, adding = false;
+const PC_ICON = `<svg width="20" height="20" viewBox="0 0 24 24" style="position:static"><rect x="3" y="4" width="18" height="12" rx="2" class="ico"/><path class="ico" d="M8 20h8M12 16v4"/></svg>`;
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+function showConnect(pc) {
+  screen = "connect"; document.body.className = "connect";
+  if (ws) { ws.onclose = null; try { ws.close(); } catch (e) {} ws = null; wsOk = false; }
+  sel = pc || null; code = ""; pairMsg = ""; pairErr = false; adding = false;
+  renderConnect(); discover();
+  if (sel && !sel.token) requestCode();
+}
+function allPcs() {
+  const map = {};
+  savedPcs().forEach((p) => map[p.host + ":" + p.port] = { ...p, online: false });
+  Object.values(found).forEach((f) => { const k = f.host + ":" + f.port; map[k] = { ...(map[k] || {}), ...f, online: true }; });
+  return Object.values(map);
+}
+function renderConnect() {
+  const pcs = allPcs(), list = document.getElementById("list");
+  list.innerHTML = pcs.length ? pcs.map((p, i) => `<div class="pcrow ${p.online ? "" : "off"} ${sel && sel.host === p.host && sel.port === p.port ? "sel" : ""}" data-i="${i}">
+      <div class="ic">${PC_ICON}</div><div class="tx"><div class="nm">${esc(p.name || p.host)}</div><div class="ip">${esc(p.host)}${p.version ? " · J.A.R.V.I.S. " + esc(String(p.version).slice(0, 10)) : p.token ? " · привязан" : ""}</div></div>
+      <div class="st">${p.online ? "● в сети" : "не в сети"}</div></div>`).join("")
+    : `<div class="empty">Ищу компьютеры с J.A.R.V.I.S. в этой сети…</div>`;
+  list.querySelectorAll(".pcrow").forEach((r) => r.onclick = () => { buzz(); pick(pcs[+r.dataset.i]); });
+  const box = document.getElementById("codebox"), cap = document.getElementById("cap2");
+  if (adding) {
+    cap.textContent = "АДРЕС ПК";
+    box.innerHTML = `<p>Адрес компьютера в домашней сети. Его видно на ПК: J.A.R.V.I.S. → Настройки → «Телефон» → «Пульт с телефона».</p>
+      <input class="addr" id="addr" inputmode="decimal" placeholder="192.168.1.5" value="${esc(pget("lastaddr", ""))}">
+      <div class="row2"><div class="btn ghost" id="a-cancel">Отмена</div><div class="btn" id="a-ok">Найти</div></div>`;
+    const inp = document.getElementById("addr");
+    setTimeout(() => inp.focus(), 50);
+    document.getElementById("a-cancel").onclick = () => { adding = false; renderConnect(); };
+    document.getElementById("a-ok").onclick = () => addByAddress(inp.value);
+    inp.onkeydown = (e) => { if (e.key === "Enter") addByAddress(inp.value); };
+    return;
+  }
+  if (!sel) {
+    cap.textContent = "КОД С ЭКРАНА ПК";
+    box.innerHTML = `<p>Выберите компьютер слева. J.A.R.V.I.S. на нём покажет и произнесёт четыре цифры — введите их здесь. Это нужно один раз: дальше телефон узнаётся сам.</p>
+      <div class="row2" style="margin-top:18px"><div class="note"><svg width="14" height="14" viewBox="0 0 24 24" style="position:static"><path class="ico" d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/></svg>Работает только внутри домашней сети</div></div>`;
+    return;
+  }
+  if (sel.token) {
+    cap.textContent = "ПОДКЛЮЧЕНИЕ";
+    box.innerHTML = `<p>${esc(sel.name || sel.host)} уже знает этот телефон.</p><p class="${pairErr ? "err" : ""}" style="margin-top:6px">${esc(pairMsg)}</p>
+      <div class="row2" style="margin-top:22px"><div class="btn ghost" id="c-new">Новый код</div><div class="btn" id="c-go">Подключить</div></div>`;
+    document.getElementById("c-go").onclick = () => { buzz(); tryPaired(sel); };
+    document.getElementById("c-new").onclick = () => { sel.token = ""; savePc(sel); renderConnect(); requestCode(); };
+    return;
+  }
+  cap.textContent = "КОД С ЭКРАНА ПК";
+  const d = [0, 1, 2, 3].map((i) => `<div class="${i === code.length ? "cur" : ""}">${code[i] || ""}</div>`).join("");
+  box.innerHTML = `<p class="${pairErr ? "err" : ""}">${esc(pairMsg || `На «${sel.name || sel.host}» J.A.R.V.I.S. показал и произнёс четыре цифры. Введите их.`)}</p>
+    <div class="digits" id="digits">${d}</div>
+    <div class="np">${["1", "2", "3", "4", "5", "⌫", "6", "7", "8", "9", "0", "↻"].map((c) => `<div data-c="${c}">${c}</div>`).join("")}</div>`;
+  box.querySelectorAll(".np div").forEach((b) => b.onpointerdown = () => {
+    buzz(); b.classList.add("on"); setTimeout(() => b.classList.remove("on"), 120);
+    const c = b.dataset.c;
+    if (c === "⌫") code = code.slice(0, -1);
+    else if (c === "↻") { code = ""; requestCode(); return; }
+    else if (code.length < 4) code += c;
+    pairErr = false; renderConnect();
+    if (code.length === 4) confirmCode();
+  });
+}
+function pick(p) {
+  adding = false; sel = p; code = ""; pairMsg = ""; pairErr = false;
+  renderConnect();
+  if (p.token) tryPaired(p); else requestCode();
+}
+async function tryPaired(p) {
+  pairMsg = "Подключаюсь…"; pairErr = false; renderConnect();
+  cur = p;
+  const r = await http("GET", `http://${p.host}:${p.port}/hello`, null, p.token);
+  if (r.status === 200 && r.json && r.json.paired) { p.name = r.json.name || p.name; useMain(p); return; }
+  if (r.status === 200 && r.json) { p.token = ""; savePc(p); pairMsg = "ПК не узнал телефон. Нужен новый код."; pairErr = true; renderConnect(); requestCode(); return; }
+  pairMsg = "ПК не отвечает. Он включён, пульт в J.A.R.V.I.S. включён, телефон в той же Wi-Fi?"; pairErr = true; renderConnect();
+}
+async function requestCode() {
+  if (!sel) return;
+  pairMsg = "Прошу код у компьютера…"; pairErr = false; renderConnect();
+  const r = await http("POST", `http://${sel.host}:${sel.port}/pair`, { name: HAS ? Native.deviceName() : "Телефон" });
+  if (r.status === 200) pairMsg = `На «${sel.name || sel.host}» J.A.R.V.I.S. показал и произнёс четыре цифры. Введите их.`;
+  else if (r.status === 429) pairMsg = "Код только что отправлен — посмотрите на экран ПК.";
+  else { pairMsg = "ПК не отвечает. Включите на нём пульт: Настройки → «Телефон» → «Пульт с телефона»."; pairErr = true; }
+  renderConnect();
+}
+async function confirmCode() {
+  const r = await http("POST", `http://${sel.host}:${sel.port}/pair/confirm`, { code, name: HAS ? Native.deviceName() : "Телефон" });
+  if (r.status === 200 && r.json && r.json.token) {
+    buzz(30);
+    sel.token = r.json.token; sel.name = r.json.name || sel.name;
+    useMain(sel); toast("Подключено");
+    return;
+  }
+  code = ""; pairErr = true; pairMsg = (r.json && r.json.error) || "Не получилось. Попробуйте ещё раз.";
+  renderConnect(); buzz(60);
+  const d = document.getElementById("digits"); if (d) d.classList.add("shake");
+}
+async function addByAddress(v) {
+  v = String(v || "").trim(); if (!v) return;
+  pput("lastaddr", v);
+  let [host, port] = v.split(":"); port = +(port || 8790);
+  const r = await http("GET", `http://${host}:${port}/hello`, null, "");
+  if (r.status === 200 && r.json && r.json.jarvis) {
+    found[host + ":" + port] = { host, port, name: r.json.name, version: r.json.version };
+    adding = false; pick({ ...(allPcs().find((p) => p.host === host && p.port === port) || {}), host, port, name: r.json.name });
+  } else { toast("По этому адресу J.A.R.V.I.S. не отвечает", true); }
+}
+document.getElementById("add").onclick = () => { buzz(); adding = true; renderConnect(); };
+let discT = null;
+function discover() {
+  const cap = document.getElementById("cap1");
+  cap.classList.add("scanning");
+  if (HAS) { try { Native.discover(); } catch (e) {} }
+  else if (location.protocol.startsWith("http")) {      // a browser preview served by the PC itself
+    http("GET", "/hello").then((r) => { if (r.json) window.onFound(JSON.stringify({ host: location.hostname, port: +location.port || 80, name: r.json.name })); window.onFoundDone(); });
+  }
+  // the saved PCs answer /hello too (another subnet, broadcasts blocked by the router)
+  savedPcs().forEach((p) => http("GET", `http://${p.host}:${p.port}/hello`, null, p.token).then((r) => {
+    if (r.json && r.json.jarvis) { found[p.host + ":" + p.port] = { host: p.host, port: p.port, name: r.json.name, version: r.json.version }; if (screen === "connect") renderConnect(); }
+  }));
+  clearTimeout(discT);
+  discT = setTimeout(() => { if (screen === "connect") discover(); }, 6000);
+}
+window.onFound = (j) => {
+  let f; try { f = typeof j === "string" ? JSON.parse(j) : j; } catch (e) { return; }
+  if (!f || !f.host) return;
+  found[f.host + ":" + f.port] = { ...(found[f.host + ":" + f.port] || {}), host: f.host, port: f.port, name: f.name };
+  if (screen === "connect" && !adding) renderConnect();
+};
+window.onFoundDone = () => document.getElementById("cap1").classList.remove("scanning");
+
+// ================================================================ overlays
+let toastT = null;
+function toast(text, warn) {
+  let t = document.getElementById("toast");
+  if (!t) { t = document.createElement("div"); t.id = "toast"; t.className = "toast"; stage.appendChild(t); }
+  t.textContent = text; t.classList.toggle("warn", !!warn); t.style.opacity = 1;
+  clearTimeout(toastT); toastT = setTimeout(() => t.style.opacity = 0, 1800);
+}
+let bubbleT = null;
+function bubble(cap, text, hot, keep) {
+  clearTimeout(bubbleT);
+  ov.innerHTML = cap ? `<div class="bubble ${hot ? "hot" : ""}"><small>${esc(cap)}</small>${text}</div>` : "";
+  if (cap && !keep) bubbleT = setTimeout(() => ov.innerHTML = "", 3800);
+}
+
+// ================================================================ keys
+let cmd = null;          // typed command for J.A.R.V.I.S. (a short tap on the core): the holo keyboard types into it
+function cmdShow() { bubble("КОМАНДА ДЛЯ J.A.R.V.I.S.", `${esc(cmd)}<span class="cur"></span>`, true, true); }
+function cmdMode(on) {
+  cmd = on ? "" : null;
+  if (on) { cmdShow(); toast("Наберите команду и нажмите «Ввод»"); } else bubble("");
+  drawDial(listening);
+}
+function mods() { return (KB.ctrl ? "ctrl+" : "") + (KB.alt ? "alt+" : "") ; }
+function clearMods() { if (KB.ctrl || KB.alt) { KB.ctrl = KB.alt = false; return true; } return false; }
+function press(k) {
+  let redraw = false;
+  if (k.kind === "ch") {
+    if (cmd !== null) { cmd += chOf(k); cmdShow(); }
+    else if (KB.ctrl || KB.alt) { send({ t: "key", k: mods() + (KB.shift ? "shift+" : "") + k.code }); redraw = clearMods(); }
+    else send({ t: "text", s: chOf(k) });
+    if (KB.shift) { KB.shift = false; redraw = true; }
+  } else if (k.kind === "key") {
+    if (cmd !== null && ["backspace", "enter", "esc"].includes(k.k)) {
+      if (k.k === "backspace") { cmd = cmd.slice(0, -1); cmdShow(); }
+      else if (k.k === "enter") { const s = cmd.trim(); cmdMode(false); if (s) { send({ t: "say", s }); bubble("ОТПРАВЛЕНО", "«" + esc(s) + "»"); } }
+      else cmdMode(false);
+      return;
+    }
+    send({ t: "key", k: mods() + (KB.shift ? "shift+" : "") + k.k });
+    redraw = clearMods() || KB.shift; KB.shift = false;
+  } else if (k.kind === "shift") { KB.shift = !KB.shift; redraw = true; }
+  else if (k.kind === "caps") { KB.caps = !KB.caps; redraw = true; toast(KB.caps ? "Заглавные буквы" : "Строчные буквы"); }
+  else if (k.kind === "mod") { KB[k.m] = !KB[k.m]; redraw = true; if (KB[k.m]) toast(`${k.t} нажат — следующая клавиша вместе с ним`); }
+  else if (k.kind === "lang") { KB.lang = KB.lang === "ru" ? "en" : "ru"; pput("lang", KB.lang); redraw = true; toast(KB.lang === "ru" ? "Русская раскладка" : "Английская раскладка"); }
+  else if (k.kind === "fn") { KB.fn = !KB.fn; redraw = true; }
+  else if (k.kind === "media") send({ t: "media", a: k.a });
+  if (redraw) drawKeyboard();
+}
+function showPop(k) {
+  L.pop.innerHTML = "";
+  if (k.kind !== "ch" || k.ch === " ") return;
+  const g = el("g", { filter: "url(#gl2)", class: "popup", "pointer-events": "none" }, L.pop);
+  el("circle", { cx: k.x, cy: k.y, r: 22, fill: "none", stroke: "#ffb347", "stroke-opacity": .5, "stroke-width": 1.6 }, g);
+  el("circle", { cx: k.x, cy: k.y, r: 29, fill: "none", stroke: "#ffb347", "stroke-opacity": .2, "stroke-width": 1.2 }, g);
+  const bx = k.x, by = k.y - 38;
+  el("path", { d: `M${bx - 15} ${by - 17} h30 a7 7 0 0 1 7 7 v20 a7 7 0 0 1 -7 7 h-10 l-5 6 l-5 -6 h-10 a7 7 0 0 1 -7 -7 v-20 a7 7 0 0 1 7 -7 z`, fill: "rgba(40,24,4,.95)", stroke: "#ffb347", "stroke-width": 1.4 }, g);
+  const t = el("text", { x: bx, y: by + 1, "text-anchor": "middle", "dominant-baseline": "central", fill: "#fff", style: "font:700 19px 'Exo 2'" }, g);
+  t.textContent = chOf(k);
+}
+const held = new Map();        // pointerId -> {k, rep}
+const svg = document.getElementById("s");
+svg.addEventListener("pointerdown", (e) => {
+  const kg = e.target.closest("[data-k]");
+  if (kg) {
+    e.preventDefault();
+    const k = KEYS[+kg.dataset.k]; if (!k) return;
+    buzz(); kg.classList.add("down"); showPop(k);
+    const h = { k, g: kg };
+    held.set(e.pointerId, h);
+    press(k);
+    if (k.rep) h.rep = setTimeout(function again() { press(k); buzz(4); h.rep = setTimeout(again, 55); }, 420);
+    return;
+  }
+  const dg = e.target.closest("[data-act]");
+  if (dg) { e.preventDefault(); dialDown(e, dg); return; }
+  if (e.target.closest("[data-core]")) { e.preventDefault(); coreDown(e); }
+});
+function keyUp(e) {
+  const h = held.get(e.pointerId); if (!h) return;
+  held.delete(e.pointerId); clearTimeout(h.rep);
+  if (h.g.isConnected) h.g.classList.remove("down");
+  setTimeout(() => { if (![...held.values()].some((x) => x.k.kind === "ch")) L.pop.innerHTML = ""; }, 90);
+}
+addEventListener("pointerup", (e) => { keyUp(e); dialUp(e); coreUp(e); });
+addEventListener("pointercancel", (e) => { keyUp(e); dialUp(e, true); coreUp(e); });
+
+// ================================================================ the dial: an action on release over the same cell
+let dialHold = null, armed = null;
+const RISKY = { close: "Ещё раз — закрыть окно", lock: "Ещё раз — заблокировать ПК" };
+function dialDown(e, dg) { buzz(); dg.classList.add("on"); dialHold = { id: e.pointerId, g: dg }; }
+function dialUp(e, cancel) {
+  if (!dialHold || dialHold.id !== e.pointerId) return;
+  const dg = dialHold.g; dialHold = null; dg.classList.remove("on");
+  if (cancel) return;
+  const over = document.elementFromPoint(e.clientX, e.clientY);
+  if (!over || over.closest("[data-act]") !== dg) return;
+  const a = dg.dataset.act;
+  if (RISKY[a] && (!armed || armed.a !== a || Date.now() - armed.t > 2500)) {
+    armed = { a, t: Date.now() }; document.querySelectorAll(".dial.arm").forEach((x) => x.classList.remove("arm"));
+    dg.classList.add("arm"); toast(RISKY[a], true);
+    setTimeout(() => dg.classList.remove("arm"), 2500);
+    return;
+  }
+  armed = null; dg.classList.remove("arm");
+  if (send({ t: "act", a })) { toast(NAMES[a]); buzz(14); } else toast("Нет связи с ПК", true);
+}
+
+// ================================================================ the core: hold = voice, tap = typed command
+let listening = false, coreHold = null;
+function coreDown(e) {
+  buzz(12);
+  coreHold = { id: e.pointerId, t: Date.now(), timer: setTimeout(startVoice, 220) };
+}
+function coreUp(e) {
+  if (!coreHold || coreHold.id !== e.pointerId) return;
+  clearTimeout(coreHold.timer);
+  const tap = !listening && Date.now() - coreHold.t < 220;
+  coreHold = null;
+  if (listening) stopVoice();
+  else if (tap) cmdMode(cmd === null);
+}
+function startVoice() {
+  if (!HAS) { toast("Голос работает только в приложении", true); return; }
+  if (!wsOk) { toast("Нет связи с ПК", true); return; }
+  if (cmd !== null) cmdMode(false);
+  const r = Native.startVoice();
+  if (r !== "ok") { toast(r === "perm" ? "Разрешите микрофон и удерживайте ещё раз" : "Микрофон занят", true); return; }
+  listening = true; buzz(25);
+  drawDial(true); L.kb.classList.add("dim-kb");
+  bubble("СЛУШАЮ", "говорите, пока держите круг…", true, true);
+}
+function stopVoice() {
+  listening = false;
+  drawDial(false); L.kb.classList.remove("dim-kb");
+  bubble("РАСПОЗНАЮ", "…", false, true);
+  Native.stopVoice(base() + "/voice", cur.token);
+}
+window.onLevel = (v) => { if (!listening) return; waves.forEach((w, i) => { w.setAttribute("stroke-opacity", Math.min(1, .25 + v * 2.2) / (i + 1)); w.setAttribute("stroke-width", 2 + v * 3); }); };
+window.onVoice = (j) => {
+  let r = null; try { r = typeof j === "string" ? JSON.parse(j) : j; } catch (e) {}
+  if (r && r.text) bubble("СЛЫШУ", "«" + esc(r.text) + "»");
+  else if (r && r.error === "short") bubble("");
+  else bubble("НЕ РАССЛЫШАЛ", r && r.error === "net" ? "ПК не ответил" : "скажите ещё раз, держа круг", true);
+};
+
+// ================================================================ the touchpad: move, tap, two-finger scroll and right click, tap-and-drag
+const pad = document.getElementById("pad"), pts = new Map();
+let gest = null, lastTap = { t: 0, x: 0, y: 0 }, mdx = 0, mdy = 0, sdy = 0, sdx = 0;
+pad.addEventListener("pointerdown", (e) => {
+  e.preventDefault(); pad.setPointerCapture(e.pointerId);
+  const p = loc(e), now = performance.now();
+  pts.set(e.pointerId, { x: p.x, y: p.y, t: now });
+  if (pts.size === 1) {
+    gest = { t0: now, max: 1, moved: 0, drag: false };
+    if (now - lastTap.t < 300 && Math.hypot(p.x - lastTap.x, p.y - lastTap.y) < 45) { gest.drag = true; send({ t: "down", b: "left" }); lastTap.t = 0; buzz(10); }
+  } else if (gest) gest.max = Math.max(gest.max, pts.size);
+  trailAdd(p.x, p.y, true);
+});
+pad.addEventListener("pointermove", (e) => {
+  const q = pts.get(e.pointerId); if (!q || !gest) return;
+  const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+  for (const ev of evs.length ? evs : [e]) {
+    const p = loc(ev), now = performance.now(), dx = p.x - q.x, dy = p.y - q.y, dt = Math.max(1, now - q.t);
+    q.x = p.x; q.y = p.y; q.t = now;
+    gest.moved += Math.hypot(dx, dy);
+    if (pts.size === 1) {
+      const v = Math.hypot(dx, dy) / dt, gain = OPT.speed * (1 + Math.min(3, v * 1.1));
+      mdx += dx * gain; mdy += dy * gain;
+      trailAdd(p.x, p.y);
+    } else if (pts.size === 2) { sdy += dy * OPT.scroll / 2; sdx -= dx * OPT.scroll / 2; }
+  }
+});
+function padUp(e) {
+  if (!pts.delete(e.pointerId) || pts.size || !gest) return;
+  const dur = performance.now() - gest.t0;
+  if (gest.drag) send({ t: "up", b: "left" });
+  else if (gest.moved < 9 && dur < 260) {
+    if (gest.max === 1) { send({ t: "click", b: "left" }); const p = loc(e); lastTap = { t: performance.now(), x: p.x, y: p.y }; }
+    else if (gest.max === 2) { send({ t: "click", b: "right" }); buzz(14); }
+    else send({ t: "click", b: "middle" });
+  }
+  gest = null;
+}
+pad.addEventListener("pointerup", padUp); pad.addEventListener("pointercancel", padUp);
+// the mouse buttons: held = held (a drag with one thumb on the button and the other on the pad)
+[["mbl", "left"], ["mbr", "right"]].forEach(([id, b]) => {
+  const z = document.getElementById(id);
+  z.addEventListener("pointerdown", (e) => { e.preventDefault(); z.setPointerCapture(e.pointerId); z.classList.add("on"); buzz(10); send({ t: "down", b }); });
+  const up = () => { if (!z.classList.contains("on")) return; z.classList.remove("on"); send({ t: "up", b }); };
+  z.addEventListener("pointerup", up); z.addEventListener("pointercancel", up);
+});
+// the scroll rail: drag the grip like a scroll bar, tap the arrows for a notch
+const rail = document.getElementById("rail");
+let railP = null;
+rail.addEventListener("pointerdown", (e) => { e.preventDefault(); rail.setPointerCapture(e.pointerId); const p = loc(e); railP = { y: p.y, y0: p.y, moved: 0 }; buzz(6); });
+rail.addEventListener("pointermove", (e) => {
+  if (!railP) return;
+  const p = loc(e), dy = p.y - railP.y; railP.y = p.y; railP.moved += Math.abs(dy);
+  sdy -= dy * OPT.scroll * 1.6;
+  thumb.setAttribute("transform", `translate(0 ${Math.max(-22, Math.min(28, p.y - railP.y0))})`);
+});
+function railUp(e) {
+  if (!railP) return;
+  if (railP.moved < 6) { const p = loc(e); send({ t: "scroll", dy: p.y < 328 + 48 ? 120 : -120 }); }
+  railP = null; thumb.setAttribute("transform", "");
+}
+rail.addEventListener("pointerup", railUp); rail.addEventListener("pointercancel", railUp);
+// at most one move and one scroll message per frame; fractions carry over
+function flush() {
+  const ix = Math.trunc(mdx), iy = Math.trunc(mdy);
+  if (ix || iy) { send({ t: "move", dx: ix, dy: iy }); mdx -= ix; mdy -= iy; }
+  const sy = Math.trunc(sdy), sx = Math.trunc(sdx);
+  if (sy || sx) { send({ t: "scroll", dy: sy, dx: sx }); sdy -= sy; sdx -= sx; }
+  trailDraw();
+  requestAnimationFrame(flush);
+}
+
+// a glowing finger trail on the pad
+const cvs = document.getElementById("trail"), cx2 = cvs.getContext("2d");
+let trail = [];
+function sizeTrail() {
+  const k = Math.min(3, (devicePixelRatio || 1) * SC);
+  cvs.width = Math.round(498 * k); cvs.height = Math.round(96 * k);
+  cx2.setTransform(k, 0, 0, k, -296 * k, -328 * k);
+}
+function trailAdd(x, y, fresh) { if (fresh) trail.push(null); trail.push({ x, y, t: performance.now() }); if (trail.length > 80) trail.splice(0, trail.length - 80); }
+function trailDraw() {
+  const now = performance.now();
+  trail = trail.filter((p) => !p || now - p.t < 420);
+  while (trail.length && !trail[0]) trail.shift();
+  cx2.clearRect(296, 328, 498, 96);
+  if (!trail.length) return;
+  cx2.lineCap = "round"; cx2.lineJoin = "round";
+  for (let i = 1; i < trail.length; i++) {
+    const a = trail[i - 1], b = trail[i];
+    if (!a || !b) continue;
+    const k = 1 - (now - b.t) / 420;
+    cx2.strokeStyle = `rgba(79,216,255,${.75 * k})`; cx2.lineWidth = 1 + 2.4 * k;
+    cx2.shadowColor = "#4fd8ff"; cx2.shadowBlur = 10 * k;
+    cx2.beginPath(); cx2.moveTo(a.x, a.y); cx2.lineTo(b.x, b.y); cx2.stroke();
+  }
+  const last = trail[trail.length - 1];
+  if (last && gest && now - last.t < 420) {
+    cx2.shadowBlur = 14; cx2.shadowColor = "#4fd8ff";
+    cx2.fillStyle = "rgba(79,216,255,.14)"; cx2.strokeStyle = "#bff4ff"; cx2.lineWidth = 2;
+    cx2.beginPath(); cx2.arc(last.x, last.y, 13, 0, 7); cx2.fill(); cx2.stroke();
+    cx2.fillStyle = "#fff"; cx2.beginPath(); cx2.arc(last.x, last.y, 3.5, 0, 7); cx2.fill();
+  }
+  cx2.shadowBlur = 0;
+}
+
+// ================================================================ settings
+const shade = document.getElementById("shade");
+function openSettings() {
+  document.getElementById("o-speed").value = OPT.speed;
+  document.getElementById("o-scroll").value = OPT.scroll;
+  document.getElementById("o-buzz").classList.toggle("on", OPT.buzz);
+  shade.classList.add("show");
+}
+document.getElementById("gear").onclick = () => { buzz(); openSettings(); };
+document.getElementById("chip").onclick = () => { buzz(); if (!wsOk) recheck(); toast(wsOk ? `${cur.name || cur.host} · ${cur.host}` : "Переподключаюсь…", !wsOk); };
+document.getElementById("o-speed").oninput = (e) => { OPT.speed = +e.target.value; pput("opt", OPT); };
+document.getElementById("o-scroll").oninput = (e) => { OPT.scroll = +e.target.value; pput("opt", OPT); };
+document.getElementById("o-buzz").onclick = (e) => { OPT.buzz = !OPT.buzz; e.currentTarget.classList.toggle("on", OPT.buzz); pput("opt", OPT); buzz(20); };
+document.getElementById("o-done").onclick = () => shade.classList.remove("show");
+document.getElementById("o-pc").onclick = () => { shade.classList.remove("show"); showConnect(null); };
+shade.addEventListener("pointerdown", (e) => { if (e.target === shade) shade.classList.remove("show"); });
+window.onBack = () => {           // the Android back button
+  if (shade.classList.contains("show")) { shade.classList.remove("show"); return true; }
+  if (cmd !== null) { cmdMode(false); return true; }
+  if (screen === "connect" && adding) { adding = false; renderConnect(); return true; }
+  return false;
+};
+
+// ================================================================ start
+fit();
+function start() {
+  drawAll();
+  flush();
+  const last = pget("cur", ""), pc = savedPcs().find((p) => p.host + ":" + p.port === last && p.token);
+  if (P0.get("demo")) { cur = { host: "192.168.1.5", port: 8790, name: "ПК Клима" }; screen = "main"; document.body.className = ""; wsOk = true; ping = 12; chipState(); }
+  else if (pc) useMain(pc);
+  else showConnect(null);
+}
+let started = false;
+const go = () => { if (!started) { started = true; start(); } };
+Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 1500))]).then(go);
+document.fonts.addEventListener && document.fonts.addEventListener("loadingdone", () => { if (started) { drawAll(); } });
+</script>
+</body>
+</html>

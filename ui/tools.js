@@ -89,7 +89,7 @@ async function fsearchPanel() {
   if (dl || p.state === "index" || p.state === "smart") { clearTimeout(TL.fsT); TL.fsT = setTimeout(() => { if (S.tab === "settings") fsearchPanel(); }, 2500); }
 }
 
-function toolsPanels() { transPanel(); audiomemPanel(); fsearchPanel(); vkPanel(); standinPanel(); }
+function toolsPanels() { transPanel(); audiomemPanel(); fsearchPanel(); vkPanel(); standinPanel(); remotePanel(); }
 
 // ---------------------------------------------------------------- «Сегодня»: the search box
 function hubFiles() {
@@ -183,4 +183,29 @@ async function standinPanel() {
     <div class="row">${r.cable ? `<button class="btn" id="si-toggle">${r.on ? "Выключить подмену" : "Включить подмену"}</button><span class="dim">${esc(r.cable)}</span>` : ""}</div>`;
   $("#si-voice").onchange = (e) => rpc("standin_set", { voice: e.target.value });
   if ($("#si-toggle")) $("#si-toggle").onclick = () => rpc("standin_set", { on: !r.on }).then(standinPanel);
+}
+
+// ---------------------------------------------------------------- Пульт с телефона, только Android (jarvis/remote.py, android/)
+async function remotePanel() {
+  const box = $("#remote-panel");
+  if (!box) return;
+  let r;
+  try { r = await rpc("remote_state"); } catch (e) { return; }
+  const ago = (t) => { if (!t) return ""; const m = Math.round((Date.now() / 1000 - t) / 60); return m < 2 ? "только что" : m < 60 ? `${m} мин назад` : m < 1440 ? `${Math.round(m / 60)} ч назад` : `${Math.round(m / 1440)} дн назад`; };
+  const meta = !r.enabled ? "выключен" : r.error ? "ошибка" : r.clients ? `● подключено: ${r.clients}` : "● ждёт телефон";
+  box.innerHTML = `<h3><span>${I("wifi", "lead")}Пульт с телефона</span><span class="h3-meta ${r.enabled && !r.error ? "ok-t" : ""}">${meta}</span></h3>
+    <p class="hint"><b>Только для Android.</b> Приложение J.A.R.V.I.S. Remote превращает телефон в голографический пульт: тачпад, клавиатура, кнопки «копировать», «свернуть», «диспетчер» и голосовые команды. Работает только в вашей домашней Wi-Fi.</p>
+    <div class="row"><button class="btn" id="rm-toggle">${r.enabled ? "Выключить пульт" : "Включить пульт"}</button>${featChip("remote")}</div>
+    ${r.error ? `<p class="hint" style="color:var(--warn,#ffb347)">${esc(r.error)}</p>` : ""}
+    ${r.enabled ? `<ol class="ph-steps">
+      <li>Установите приложение на телефон: ${r.kde ? `<button class="btn ghost" id="rm-send">${I("download", "lead")}Отправить на телефон</button> (через KDE Connect) или ` : ""}откройте в браузере телефона <b>${esc(r.link || "—")}</b> и скачайте APK${r.apk ? ` (${Math.round(r.apk_size / 1024)} КБ)` : " — пока не собран"}.</li>
+      <li>Откройте «JARVIS Пульт», выберите <b>${esc(r.name)}</b> и введите код, который появится здесь и прозвучит вслух.</li>
+      <li>Если Windows спросит про брандмауэр — нажмите «Разрешить» для частных сетей.</li></ol>
+      ${r.code ? `<div class="row"><span class="dim">Код для телефона:</span><b style="font:800 28px var(--head);letter-spacing:8px">${esc(r.code)}</b></div>` : ""}
+      <div class="sgrid"><label>Адрес ПК</label><span>${esc((r.ips || []).join(", ") || "—")} · порт ${r.port}</span></div>` : ""}
+    ${r.devices.length ? `<div class="s-sub">Привязанные телефоны</div>${r.devices.map((d) => `<div class="row"><span>${I("user", "lead")}${esc(d.name)}</span><span class="dim">${ago(d.last)}</span><button class="btn ghost" data-forget="${esc(d.id)}">${I("trash", "lead")}Забыть</button></div>`).join("")}` : ""}`;
+  $("#rm-toggle").onclick = async () => { $("#rm-toggle").disabled = true; await rpc("remote_set", { enabled: !r.enabled }); remotePanel(); if (window.featuresPanel) featuresPanel(); };
+  if ($("#rm-send")) $("#rm-send").onclick = async () => { const x = await rpc("remote_send_apk"); toast(x.ok ? "Файл отправлен — откройте его на телефоне в «Загрузках»" : x.error, "Пульт"); };
+  box.querySelectorAll("[data-forget]").forEach((b) => b.onclick = () => rpc("remote_forget", { id: b.dataset.forget }).then(remotePanel));
+  if (window.featChipsFill) featChipsFill();
 }

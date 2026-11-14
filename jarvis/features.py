@@ -53,6 +53,9 @@ ROWS = [
     ("phonelink", "iPhone через «Связь с телефоном»", "Читает уведомления приложения Windows «Связь с телефоном».",
      "Уведомления и звонки iPhone, как у Android через KDE Connect.", "Только уведомления этого приложения, на этом ПК; другие программы не читаются.",
      "phone.phonelink", True, False, True, "Когда Android подключён через KDE Connect, не работает: иначе были бы дубли."),
+    ("remote", "Пульт с телефона (Android)", "Ждёт приложение J.A.R.V.I.S. Remote в домашней Wi-Fi: тачпад, клавиатура, кнопки, голос.",
+     "Управлять ПК с дивана, не вставая.", "Только в домашней сети; подключаются лишь телефоны, введённые по коду с экрана ПК. Голос распознаётся на этом ПК.",
+     "remote.enabled", True, False, False, "Только для Android. Настраивается в разделе «Телефон»."),
     ("away", "«Ушёл — вернулся»", "Если телефон пропал из Wi-Fi больше чем на 3 минуты — пауза музыки.",
      "Встретить сводкой, что пришло, пока вас не было.", "Проверка связи с телефоном в домашней сети.",
      "phone.presence", True, False, True, ""),
@@ -176,6 +179,8 @@ class Features:
                 self.core.gamevoice._act = (0.0, False, "")
             except Exception:
                 pass
+        elif key == "remote.enabled":
+            self.core.remote.rpc_remote_set(enabled=bool(on))     # starts or stops the server as well
         else:
             self.cfg.set(key, val)
         self.core.log(f"«{row[1]}»: {'включено' if on else 'выключено'} (Настройки → Что делает Джарвис)")

@@ -99,6 +99,7 @@ function onEvent(ev) {
     case "school": if (S.tab === "school") schoolLoad(); else schBadge(); break;
     case "memory": if (S.tab === "settings" && window.renderNotes) renderNotes(); break;
     case "standin": if (window.standinPanel && $("#standin-panel")) standinPanel(); break;
+    case "remote_code": case "remote_clients": if (window.remotePanel && $("#remote-panel")) remotePanel(); break;
     case "screentrans": if (window.transPanel && $("#trans-panel")) transPanel(); break;
     case "files_found":
       if (ev.rich && window.hubFilesShow) { hubFiles(); hubFilesShow(ev.rich); }

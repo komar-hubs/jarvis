@@ -292,6 +292,8 @@ class Core:
         self.filesearch = FileSearch(self)  # "найди файл про …": documents indexed by their words and meaning
         from .standin import StandIn
         self.standin = StandIn(self)       # «подмени меня»: the user's phrases spoken into a Discord call
+        from .remote import Remote
+        self.remote = Remote(self)         # J.A.R.V.I.S. Remote: the Android app as a touchpad and keyboard
         from .vk import VK
         self.vk = VK(self)                 # ВКонтакте API: groups' posts, conversations, sending (key in vk.token)
         from .insights import Insights
@@ -450,6 +452,7 @@ class Core:
         self.filesearch.start()
         self.winnotify.start()
         self.vk.start()
+        self.remote.start()
         if self.cfg.get("ai.provider") == "ollama":      # the local AI must be awake when the first question comes
             threading.Thread(target=lambda: self.background.ollama_state(start=True, wait=0), daemon=True, name="ollama-wake").start()
         threading.Thread(target=lambda: nlu.morph(), daemon=True).start()  # word-form dictionary: load ahead
@@ -2095,7 +2098,7 @@ class Core:
                                                           self.gamevoice, self.features, self.diag, self.gamefx,
                                                           self.voiceid, self.stress, self.school, self.screentrans,
                                                           self.audiomem, self.filesearch, self.winnotify, self.goals,
-                                                          self.insights, self.vk, self.standin)
+                                                          self.insights, self.vk, self.standin, self.remote)
                    if hasattr(o, "rpc_" + method)), None)
         if not fn:
             raise ValueError(f"unknown method {method}")

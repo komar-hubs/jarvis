@@ -238,6 +238,8 @@ class Config:
         for a in (d.get("mail") or {}).get("accounts") or []:
             a["password_set"] = bool(a.pop("password", None))
         d.pop("token", None)
+        for dev in (d.get("remote") or {}).get("devices") or []:
+            dev.pop("hash", None)
         return d
 
 
