@@ -49,6 +49,8 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 
 from . import system as S
+from pathlib import Path
+
 from .config import ROOT
 
 APK = ROOT / "android" / "jarvis-remote.apk"
@@ -852,6 +854,9 @@ class Remote:
         if body.get("mode") == "tr":         # one line picked in the live mode: translate the text itself
             q = str(body.get("q") or "").strip()[:2000]
             return web.json_response(await asyncio.get_running_loop().run_in_executor(None, self._translate, q))
+        if body.get("mode") == "hw":         # «В домашку»: recognised text becomes a homework task
+            q = str(body.get("q") or "").strip()[:1000]
+            return web.json_response(await asyncio.get_running_loop().run_in_executor(None, self._homework, q))
         import base64
         try:
             jpg = base64.b64decode(str(body.get("img") or "").split(",")[-1])
@@ -859,10 +864,10 @@ class Remote:
             jpg = b""
         if len(jpg) < 500:
             return web.json_response({"ok": False, "error": "нет снимка"}, status=400)
-        mode = body.get("mode") if body.get("mode") in ("what", "text", "translate", "ask", "boxes") else "what"
+        mode = body.get("mode") if body.get("mode") in ("what", "text", "translate", "ask", "boxes", "photo", "scan") else "what"
         q = str(body.get("q") or "").strip()[:300]
         if mode != "boxes":                  # the live text mode asks every second or two: not worth a log line
-            self.core.log(f"Пульт: E.D.I.T.H. — {({'what': 'что это', 'text': 'текст', 'translate': 'перевод', 'ask': 'вопрос'})[mode]}"
+            self.core.log(f"Пульт: E.D.I.T.H. — {({'what': 'что это', 'text': 'текст', 'translate': 'перевод', 'ask': 'вопрос', 'photo': 'фото на ПК', 'scan': 'скан'})[mode]}"
                       + (f": «{q}»" if q else ""))
         try:
             res = await asyncio.get_running_loop().run_in_executor(None, self.see, jpg, mode, q)
@@ -892,6 +897,32 @@ class Remote:
     def _ocr(self, img):
         return self._ocr_lines(img)[1]
 
+    @staticmethod
+    def _clip_image(img):
+        """A picture into the Windows clipboard (CF_DIB): Ctrl+V pastes it into Telegram, Discord, Word, Paint."""
+        import io
+        import win32clipboard
+        buf = io.BytesIO()
+        img.convert("RGB").save(buf, "BMP")
+        win32clipboard.OpenClipboard()
+        try:
+            win32clipboard.EmptyClipboard()
+            win32clipboard.SetClipboardData(win32clipboard.CF_DIB, buf.getvalue()[14:])
+        finally:
+            win32clipboard.CloseClipboard()
+
+    def _homework(self, text):
+        sch = getattr(self.core, "school", None)
+        if not text or not sch:
+            return {"ok": False, "error": "нет текста"}
+        subject = sch.canon(text)
+        t, new = sch.add_hw(subject, text, src="E.D.I.T.H.")
+        due = (t.get("due") or "")[:10]
+        what = t["text"].split(": ", 1)[0]
+        return {"ok": True, "title": "ДОМАШКА", "copy": False,
+                "text": (f"Записал: {what}" if new else f"Уже было: {what}") + (f", сдать {due[8:10]}.{due[5:7]}" if due else "")
+                + ". Смотрите вкладку «Учёба»."}
+
     def _translate(self, text):
         if not text:
             return {"ok": False, "error": "нет текста"}
@@ -903,11 +934,61 @@ class Remote:
             tr = (self.core.ask_ai_once("Переведи на русский, ответь только переводом:\n" + text) or "").strip()
         return {"ok": True, "title": "ПЕРЕВОД", "text": tr or text, "copy": True, "orig": text}
 
+    def _keep(self, img, mode):
+        """«Фото на ПК»: the photo as it is -> Pictures\\JARVIS + the clipboard. «Скан»: a clean black-and-white page
+        -> Documents\\Сканы, its text next to it (.txt, so «найди файл про…» finds it), the page in the clipboard."""
+        import datetime as dt
+        from PIL import Image, ImageFilter
+        stamp = dt.datetime.now().strftime("%Y-%m-%d %H-%M-%S")
+        if mode == "photo":
+            folder = Path.home() / "Pictures" / "JARVIS"
+            folder.mkdir(parents=True, exist_ok=True)
+            path = folder / f"Фото {stamp}.jpg"
+            img.save(path, "JPEG", quality=92)
+            try:
+                self._clip_image(img)
+                clip = " и в буфере обмена — Ctrl+V вставит его в Telegram, Discord, документ"
+            except Exception as e:
+                self.core.log(f"Пульт: картинка в буфер: {e}")
+                clip = ""
+            self.core.emit("toast", title="E.D.I.T.H.", text="Фото с телефона на ПК" + (" и в буфере обмена" if clip else ""))
+            return {"ok": True, "title": "ФОТО НА ПК", "text": f"Сохранил в «Изображения\\JARVIS»{clip}.", "copy": False, "path": str(path)}
+        # scan: grey, even light (a big blur divides out shadows and the paper's tone), strong contrast, a little sharpness
+        g = img.convert("L")
+        if max(g.size) > 2400:
+            g.thumbnail((2400, 2400))
+        bg = g.filter(ImageFilter.GaussianBlur(max(8, max(g.size) // 40)))
+        import numpy as _np
+        a = _np.asarray(g, _np.float32) / _np.maximum(_np.asarray(bg, _np.float32), 1) * 235   # paper ~235 everywhere
+        lo = min(float(_np.percentile(a, 0.5)), 150.0)                                          # the ink
+        a = (a - lo) / max(1.0, 222 - lo) * 255                                                  # paper -> white, ink -> black
+        page = Image.fromarray(_np.clip(a, 0, 255).astype("uint8")).filter(ImageFilter.UnsharpMask(1.5, 60, 2))
+        folder = Path.home() / "Documents" / "Сканы"
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / f"Скан {stamp}.jpg"
+        page.save(path, "JPEG", quality=90)
+        small = img.copy()
+        small.thumbnail((1600, 1600))
+        text = self._ocr(small)
+        if text:
+            path.with_suffix(".txt").write_text(text, encoding="utf-8")
+        try:
+            self._clip_image(page)
+        except Exception:
+            pass
+        self.core.emit("toast", title="E.D.I.T.H.", text=f"Скан сохранён: Документы\\Сканы\\{path.name}")
+        lines = len(text.splitlines()) if text else 0
+        return {"ok": True, "title": "СКАН", "copy": bool(text), "path": str(path),
+                "text": f"Сохранил в «Документы\\Сканы» ({path.name}) и в буфер обмена."
+                        + (f" Текст ({lines} стр.) — рядом в .txt:\n\n{text}" if text else " Текста на нём не нашёл.")}
+
     def see(self, jpg, mode, q=""):
         """{ok, title, text, [copy]} for the phone. Vision goes to the user's AI only when it can take pictures."""
         import io
         from PIL import Image, ImageOps
         img = ImageOps.exif_transpose(Image.open(io.BytesIO(jpg))).convert("RGB")
+        if mode in ("photo", "scan"):
+            return self._keep(img, mode)
         img.thumbnail((1600, 1600))
         if mode == "boxes":                  # live AR text: where the lines are, in 0..1 of the frame
             lines, _ = self._ocr_lines(img)

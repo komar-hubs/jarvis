@@ -139,7 +139,7 @@ svg{position:absolute;left:0;top:0;overflow:visible}
   background:linear-gradient(180deg,transparent,rgba(127,227,255,.28),transparent);box-shadow:0 0 30px rgba(var(--rgb),.25)}
 .edith.busy .ed-scan{display:block;animation:edscan 1.4s linear infinite}
 @keyframes edscan{to{top:110%}}
-.ed-card{position:absolute;left:18px;bottom:16px;width:560px;max-height:220px;display:none;flex-direction:column;padding:12px 16px;border-radius:14px;
+.ed-card{position:absolute;left:96px;bottom:14px;width:560px;max-height:220px;display:none;flex-direction:column;padding:12px 16px;border-radius:14px;
   background:rgba(2,12,20,.86);border:1px solid rgba(var(--rgb),.55);box-shadow:0 0 26px rgba(var(--rgb),.25);backdrop-filter:blur(6px)}
 .ed-card.show{display:flex;animation:rise .25s ease-out}
 .ed-card small{font:700 10px "Orbitron","Exo 2";letter-spacing:3px;color:var(--acc);margin-bottom:5px}
@@ -147,6 +147,21 @@ svg{position:absolute;left:0;top:0;overflow:visible}
 .ed-act{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
 .ed-act .btn{height:32px;padding:0 14px;font-size:12px}
 #ed-ov{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.ed-tools{position:absolute;left:12px;top:48px;bottom:12px;width:74px;display:flex;flex-direction:column;justify-content:center;gap:8px}
+.ed-tools .vbtn{flex:none;height:54px;font-size:10.5px;background:rgba(2,14,22,.62);backdrop-filter:blur(4px)}
+.ed-tools .vbtn.live{border-color:var(--hot);background:rgba(var(--hot-rgb),.28);box-shadow:0 0 14px rgba(var(--hot-rgb),.35)}
+.edith.frozen .ed-tools{opacity:.35;pointer-events:none}
+.ed-log{position:absolute;left:96px;right:142px;top:44px;bottom:12px;display:none;flex-direction:column;padding:10px 12px;border-radius:14px;
+  background:rgba(2,12,20,.92);border:1px solid rgba(var(--rgb),.5);backdrop-filter:blur(6px)}
+.ed-log.show{display:flex;animation:rise .25s ease-out}
+.ed-log .hd{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.ed-log .hd b{font:800 11px "Orbitron","Exo 2";letter-spacing:3px;color:#fff;margin-right:auto}
+.ed-log .ls{flex:1;overflow-y:auto;touch-action:pan-y;display:flex;flex-direction:column;gap:6px}
+.ed-log .it{display:flex;gap:10px;align-items:center;padding:6px;border-radius:10px;border:1px solid rgba(var(--rgb),.25);background:rgba(var(--rgb),.06)}
+.ed-log .it img{width:64px;height:40px;object-fit:cover;border-radius:6px;flex:none;background:#000}
+.ed-log .it .t{min-width:0}.ed-log .it small{display:block;font:700 9px "Orbitron","Exo 2";letter-spacing:2px;color:var(--acc)}
+.ed-log .it span{display:block;font:600 13px "Exo 2";color:#dff8ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ed-log .it i{margin-left:auto;font:500 10.5px "JetBrains Mono";color:#7fbcd2;font-style:normal;flex:none}
 .ed-tb{pointer-events:auto;height:24px;padding:0 10px;display:none;align-items:center;border-radius:9px;font:600 11.5px "Exo 2";color:#dff8ff;
   border:1px solid rgba(var(--rgb),.45);background:rgba(2,10,16,.55)}
 .ed-tb.has{display:flex}.ed-tb.on{background:rgba(var(--hot-rgb),.4);border-color:var(--hot);color:#fff}
@@ -304,6 +319,13 @@ input.addr{width:100%;height:44px;margin:10px 0 4px;border-radius:12px;border:1.
     <div class="vbtn" id="ed-ask"><svg width="18" height="18" viewBox="0 0 24 24"><path class="ico" d="M9 3h6v10a3 3 0 0 1-6 0z M5 11a7 7 0 0 0 14 0 M12 18v3"/></svg><span>Спросить (держать)</span></div>
     <div class="vbtn x" id="ed-x"><svg width="18" height="18" viewBox="0 0 24 24"><path class="ico" d="M6 6l12 12M18 6L6 18"/></svg><span>Закрыть</span></div>
   </div>
+  <div class="ed-tools">
+    <div class="vbtn" id="ed-photo"><svg width="18" height="18" viewBox="0 0 24 24"><path class="ico" d="M4 8h3l2-3h6l2 3h3v11H4z M12 10.5a3 3 0 1 1 0 6 3 3 0 0 1 0-6"/></svg><span>Фото → ПК</span></div>
+    <div class="vbtn" id="ed-scan"><svg width="18" height="18" viewBox="0 0 24 24"><path class="ico" d="M6 3h9l4 4v14H6z M9 11h7 M9 14h7 M9 17h5 M3 9h18"/></svg><span>Скан</span></div>
+    <div class="vbtn" id="ed-color"><svg width="18" height="18" viewBox="0 0 24 24"><path class="ico" d="M12 3c3 4 6 7.5 6 11a6 6 0 0 1-12 0c0-3.5 3-7 6-11z M9.5 14.5a2.5 2.5 0 0 0 2.5 2.5"/></svg><span>Цвет</span></div>
+    <div class="vbtn" id="ed-logbtn"><svg width="18" height="18" viewBox="0 0 24 24"><path class="ico" d="M5 4h14v16H5z M8 8h8 M8 12h8 M8 16h5"/></svg><span>Журнал</span></div>
+  </div>
+  <div class="ed-log" id="ed-log"><div class="hd"><b>ЖУРНАЛ E.D.I.T.H.</b><div class="sbtn" id="ed-log-clr">Очистить</div><div class="sbtn" id="ed-log-x">✕</div></div><div class="ls" id="ed-log-ls"></div></div>
   <div class="ed-card" id="ed-card"><small id="ed-ct">ЧТО ЭТО</small><div class="tx" id="ed-cx"></div>
     <div class="ed-act" id="ed-act"></div></div>
 </div>
@@ -1318,6 +1340,7 @@ async function edithOpen(on) {
   if (!on) {
     if (edLiveOn) edLiveSet(false);
     edDrawOn = false; edTorch = false; document.getElementById("ed-torch").classList.remove("on");
+    edSensors(false); edColor = false; document.getElementById("ed-color").classList.remove("live"); edLogShow(false);
     edBox.classList.remove("show", "frozen", "busy"); document.getElementById("ed-card").classList.remove("show");
     if (edStream) edStream.getTracks().forEach((t) => t.stop());
     edStream = null; edV.srcObject = null; if (HAS && Native.speakStop) Native.speakStop();
@@ -1331,6 +1354,7 @@ async function edithOpen(on) {
       video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } } });
     edV.srcObject = edStream; await edV.play().catch(() => {});
     edSub("наведите камеру и нажмите кнопку"); edTools();
+    edSizeOv(); edSensors(true); if (!edDrawOn) { edDrawOn = true; edDraw(); }
   } catch (e) {
     edSub("нет камеры");
     edCard("НЕТ ДОСТУПА К КАМЕРЕ", (e && e.name === "NotAllowedError") ? "Разрешите пульту камеру: Настройки телефона → Приложения → JARVIS Пульт → Разрешения." : String(e && e.message || e), false, { search: false });
@@ -1370,6 +1394,7 @@ function edCard(title, text, copy, opt = {}) {
   if (copy) acts.push(["Скопировать на ПК", () => { if (send({ t: "clip", s: edText })) toast("Текст в буфере обмена ПК"); }]);
   if (copy) acts.push(["Напечатать на ПК", () => { if (send({ t: "text", s: edText })) toast("Печатаю на ПК"); }]);
   if (opt.translate) acts.push(["Перевести", () => edTr(edText)]);
+  if (opt.hw && edText) acts.push(["В домашку", () => edHw(edText)]);
   if (opt.search !== false && edText) acts.push(["Найти в интернете", () => { if (send({ t: "search", q: (opt.query || edText).slice(0, 200) })) toast("Ищу на ПК"); }]);
   if (HAS && Native.speak && edText) acts.push(["Озвучить", () => Native.speak(edText)]);
   acts.push(["Дальше", () => edLive(), true]);
@@ -1377,7 +1402,66 @@ function edCard(title, text, copy, opt = {}) {
   box.innerHTML = acts.map(([t, , main], i) => `<div class="btn ${main ? "" : "ghost"}" data-i="${i}">${t}</div>`).join("");
   box.querySelectorAll("[data-i]").forEach((b) => b.onclick = () => { buzz(); acts[+b.dataset.i][1](); });
   document.getElementById("ed-card").classList.add("show");
+  if (!opt.nolog && edText && !/^(НЕ ВЫШЛО|НЕТ ДОСТУПА)/.test(title)) edLogAdd(title, edText, opt);
 }
+// ---------------------------------------------------------------- the journal: the last 20 answers, kept on the phone
+function edThumb() {
+  const st = document.getElementById("ed-still"), src = edBox.classList.contains("frozen") && st.width ? st : edV;
+  const w = src.videoWidth || src.width, h = src.videoHeight || src.height;
+  if (!w || !h) return "";
+  const c = document.createElement("canvas"); c.width = 160; c.height = Math.round(160 * h / w);
+  c.getContext("2d").drawImage(src, 0, 0, c.width, c.height);
+  return c.toDataURL("image/jpeg", .6);
+}
+function edLogAdd(title, text, opt) {
+  const log = pget("edlog", []);
+  if (log[0] && log[0].text === text) return;
+  log.unshift({ t: Date.now(), title, text, img: edThumb(), url: opt.url || "", hw: !!opt.hw, translate: !!opt.translate });
+  pput("edlog", log.slice(0, 20));
+}
+function edLogShow(on) {
+  const box = document.getElementById("ed-log");
+  box.classList.toggle("show", on);
+  document.getElementById("ed-logbtn").classList.toggle("live", on);
+  if (!on) return;
+  const log = pget("edlog", []), ls = document.getElementById("ed-log-ls");
+  const hm = (t) => { const d = new Date(t); return d.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" }) + " " + d.toTimeString().slice(0, 5); };
+  ls.innerHTML = log.length ? log.map((x, i) => `<div class="it" data-i="${i}">${x.img ? `<img src="${x.img}">` : ""}<div class="t"><small>${esc(x.title)}</small><span>${esc(x.text.split("\n")[0])}</span></div><i>${hm(x.t)}</i></div>`).join("")
+    : `<div class="empty">Здесь будут ответы E.D.I.T.H.: что это, тексты, переводы, сканы.</div>`;
+  ls.querySelectorAll(".it").forEach((el) => el.onclick = () => {
+    const x = log[+el.dataset.i]; buzz(); edLogShow(false);
+    edCard(x.title, x.text, true, { url: x.url, hw: x.hw, translate: x.translate, nolog: true });
+  });
+}
+document.getElementById("ed-logbtn").onclick = () => { buzz(); edLogShow(!document.getElementById("ed-log").classList.contains("show")); };
+document.getElementById("ed-log-x").onclick = () => edLogShow(false);
+document.getElementById("ed-log-clr").onclick = () => { pput("edlog", []); buzz(); edLogShow(true); };
+async function edHw(text) {
+  edBusy = true; edBox.classList.add("busy"); edSub("записываю в домашку…");
+  const r = await http("POST", base() + "/see", { mode: "hw", q: text }, cur.token, 15000);
+  edBusy = false; edBox.classList.remove("busy");
+  if (r.json && r.json.ok) { edCard(r.json.title, r.json.text, false, { search: false, nolog: true }); buzz(30); edSub("готово"); }
+  else edCard("НЕ ВЫШЛО", (r.json && r.json.error) || "ПК не ответил", false, { search: false });
+}
+// «Фото → ПК» and «Скан»: the full-size frame goes to the PC
+async function edKeep(mode) {
+  if (edBusy) return;
+  const w = edV.videoWidth, h = edV.videoHeight;
+  if (!w || !h) { toast("Камера ещё не готова", true); return; }
+  const k = Math.min(1, 2600 / Math.max(w, h)), c = document.getElementById("ed-still");
+  c.width = Math.round(w * k); c.height = Math.round(h * k);
+  c.getContext("2d").drawImage(edV, 0, 0, c.width, c.height);
+  edBox.classList.add("frozen"); edLock();
+  const img = c.toDataURL("image/jpeg", .9);
+  edBusy = true; edBox.classList.add("busy"); document.getElementById("ed-card").classList.remove("show");
+  edSub(mode === "scan" ? "сканирую страницу…" : "отправляю фото на ПК…");
+  const r = await http("POST", base() + "/see", { img, mode }, cur.token, 45000);
+  edBusy = false; edBox.classList.remove("busy");
+  if (r.json && r.json.ok) { edCard(r.json.title, r.json.text, !!r.json.copy, { search: false, hw: mode === "scan" && !!r.json.copy }); buzz(30); edSub("готово · «Дальше» — снова камера"); }
+  else edCard("НЕ ВЫШЛО", (r.json && r.json.error) || "ПК не ответил", false, { search: false });
+}
+document.getElementById("ed-photo").onclick = () => { buzz(); edKeep("photo"); };
+document.getElementById("ed-scan").onclick = () => { buzz(); edKeep("scan"); };
 function edLock() { edBox.classList.remove("lock"); void edBox.offsetWidth; edBox.classList.add("lock"); setTimeout(() => edBox.classList.remove("lock"), 750); }
 async function edTr(text) {
   edBusy = true; edBox.classList.add("busy"); edSub("перевожу…");
@@ -1397,7 +1481,7 @@ async function edSee(mode, q, shot) {
   const r = await http("POST", base() + "/see", { img, mode, q: q || "" }, cur.token, 45000);
   edBusy = false; edBox.classList.remove("busy");
   if (r.status === 200 && r.json && r.json.ok) {
-    edCard(r.json.title || "ОТВЕТ", r.json.text || "", !!r.json.copy, { translate: mode === "text" && !!r.json.copy, query: mode === "what" || mode === "ask" ? r.json.text : "" }); buzz(30);
+    edCard(r.json.title || "ОТВЕТ", r.json.text || "", !!r.json.copy, { translate: mode === "text" && !!r.json.copy, hw: mode === "text" && !!r.json.copy, query: mode === "what" || mode === "ask" ? r.json.text : "" }); buzz(30);
     edSub("готово · «Дальше» — снова камера");
     if (OPT.edVoice !== false && HAS && Native.speak && mode !== "text") Native.speak(r.json.text || "");
   } else {
@@ -1454,10 +1538,92 @@ function edBracket(x, y, w, h, col) {
   edOx.moveTo(x + w, y + h - c); edOx.lineTo(x + w, y + h); edOx.lineTo(x + w - c, y + h); edOx.moveTo(x + c, y + h); edOx.lineTo(x, y + h); edOx.lineTo(x, y + h - c);
   edOx.stroke();
 }
+// the phone's tilt and heading (no permission needed on Android): a horizon that doubles as a level, a compass tape
+let edTilt = null, edPitch = 0, edHead = null, edColor = false, edCol = null;
+function edMotion(e) {
+  const g = e.accelerationIncludingGravity; if (!g || g.x == null) return;
+  const a = ((screen.orientation && screen.orientation.angle) || window.orientation || 0) * Math.PI / 180;
+  const sx = g.x * Math.cos(a) - g.y * Math.sin(a), sy = g.x * Math.sin(a) + g.y * Math.cos(a);
+  const t = Math.atan2(sx, sy) * 180 / Math.PI, p = Math.atan2(g.z, Math.hypot(sx, sy)) * 180 / Math.PI;
+  edTilt = edTilt == null ? t : edTilt + (t - edTilt) * .25; edPitch += (p - edPitch) * .2;
+}
+function edOrient(e) {
+  if (e.alpha == null || (!e.absolute && e.type !== "deviceorientationabsolute")) return;
+  const a = (screen.orientation && screen.orientation.angle) || 0, h = (360 - e.alpha + a) % 360;
+  edHead = edHead == null ? h : edHead + (((h - edHead + 540) % 360) - 180) * .2;
+}
+function edSensors(on) {
+  const f = on ? addEventListener : removeEventListener;
+  f("devicemotion", edMotion); f("deviceorientationabsolute", edOrient);
+  if (!on) { edTilt = null; edHead = null; }
+}
+const COLORS = [["чёрный", 20, 20, 20], ["белый", 245, 245, 245], ["серый", 128, 128, 128], ["светло-серый", 200, 200, 200], ["тёмно-серый", 70, 70, 70],
+  ["красный", 220, 30, 35], ["бордовый", 120, 20, 35], ["розовый", 245, 150, 180], ["малиновый", 200, 30, 100], ["оранжевый", 245, 130, 30],
+  ["жёлтый", 245, 220, 40], ["бежевый", 225, 205, 165], ["коричневый", 120, 75, 40], ["золотистый", 210, 170, 60], ["оливковый", 120, 120, 40],
+  ["салатовый", 150, 220, 60], ["зелёный", 40, 160, 60], ["тёмно-зелёный", 20, 80, 40], ["бирюзовый", 50, 200, 190], ["голубой", 120, 200, 245],
+  ["синий", 30, 70, 200], ["тёмно-синий", 20, 30, 90], ["фиолетовый", 130, 60, 190], ["сиреневый", 190, 160, 230], ["пурпурный", 160, 40, 150]];
+function colorName(r, g, b) {
+  let best = null, bd = 1e9;
+  for (const [n, R, G, B] of COLORS) { const rm = (r + R) / 2, d = (2 + rm / 256) * (r - R) ** 2 + 4 * (g - G) ** 2 + (2 + (255 - rm) / 256) * (b - B) ** 2; if (d < bd) { bd = d; best = n; } }
+  return best;
+}
+const edPick = document.createElement("canvas"); edPick.width = edPick.height = 9;
+function edSample() {           // the colour under the reticle (an average of a small spot)
+  const m = edMap(); if (!edV.videoWidth) return null;
+  const fx = (396 - m.ox) / m.k, fy = (215 - m.oy) / m.k, x = edPick.getContext("2d", { willReadFrequently: true });
+  x.drawImage(edV, fx - 6, fy - 6, 12, 12, 0, 0, 9, 9);
+  const d = x.getImageData(0, 0, 9, 9).data; let r = 0, g = 0, b = 0;
+  for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i + 1]; b += d[i + 2]; }
+  const n = d.length / 4; return [Math.round(r / n), Math.round(g / n), Math.round(b / n)];
+}
+const hex2 = (v) => v.toString(16).padStart(2, "0").toUpperCase();
+function edInstruments(now) {
+  const X = edOx;
+  X.save(); X.lineCap = "round";
+  // horizon / level through the reticle
+  if (edTilt != null) {
+    const lvl = Math.abs(edTilt) < 1, col = lvl ? "rgba(93,255,176,.95)" : "rgba(191,244,255,.8)";
+    X.translate(396, 215 + Math.max(-60, Math.min(60, edPitch * 1.5))); X.rotate(-edTilt * Math.PI / 180);
+    X.strokeStyle = col; X.lineWidth = 2; X.shadowColor = lvl ? "#5dffb0" : "#4fd8ff"; X.shadowBlur = 6;
+    X.beginPath(); X.moveTo(-190, 0); X.lineTo(-92, 0); X.moveTo(92, 0); X.lineTo(190, 0);
+    X.moveTo(-190, 0); X.lineTo(-190, 8); X.moveTo(190, 0); X.lineTo(190, 8); X.stroke();
+    X.setTransform(1, 0, 0, 1, 0, 0); X.scale(edOv.width / 932, edOv.height / 430);
+    X.shadowBlur = 0; X.fillStyle = col; X.font = "700 12px 'JetBrains Mono'";
+    X.fillText((lvl ? "РОВНО " : "") + (edTilt > 0 ? "+" : "") + edTilt.toFixed(1) + "°", 470, 207);
+  }
+  // compass tape along the top
+  if (edHead != null) {
+    const cx = 396, y = 46, span = 70, px = 3.2, N = ["С", "СВ", "В", "ЮВ", "Ю", "ЮЗ", "З", "СЗ"];
+    X.strokeStyle = "rgba(191,244,255,.7)"; X.fillStyle = "rgba(191,244,255,.85)"; X.font = "700 11px 'JetBrains Mono'"; X.textAlign = "center"; X.lineWidth = 1.4;
+    for (let d = Math.ceil((edHead - span) / 5) * 5; d <= edHead + span; d += 5) {
+      const x = cx + (d - edHead) * px, dd = ((d % 360) + 360) % 360, big = dd % 45 === 0;
+      X.globalAlpha = 1 - Math.abs(d - edHead) / span;
+      X.beginPath(); X.moveTo(x, y); X.lineTo(x, y + (big ? 10 : 5)); X.stroke();
+      if (big) X.fillText(N[dd / 45], x, y + 22);
+    }
+    X.globalAlpha = 1; X.fillStyle = "#ffb347"; X.beginPath(); X.moveTo(cx - 5, y - 6); X.lineTo(cx + 5, y - 6); X.lineTo(cx, y); X.fill();
+    X.fillText(Math.round((edHead + 360) % 360) + "°", cx, y - 10); X.textAlign = "left";
+  }
+  // colour picker: a swatch by the reticle
+  if (edColor && !edBox.classList.contains("frozen")) {
+    if (!edCol || now - edCol.t > 140) { const c = edSample(); if (c) edCol = { c, t: now, name: colorName(...c), hex: "#" + c.map(hex2).join("") }; }
+    if (edCol) {
+      const [r, g, b] = edCol.c, x = 470, y = 228;
+      X.fillStyle = "rgba(2,12,20,.82)"; X.strokeStyle = "rgba(255,179,71,.8)"; X.lineWidth = 1.4;
+      X.beginPath(); X.roundRect ? X.roundRect(x, y, 196, 58, 10) : X.rect(x, y, 196, 58); X.fill(); X.stroke();
+      X.fillStyle = `rgb(${r},${g},${b})`; X.beginPath(); X.arc(x + 29, y + 29, 19, 0, 7); X.fill(); X.strokeStyle = "#fff"; X.stroke();
+      X.fillStyle = "#fff"; X.font = "700 14px 'Exo 2'"; X.fillText(edCol.name, x + 56, y + 24);
+      X.fillStyle = "#bff4ff"; X.font = "600 11px 'JetBrains Mono'"; X.fillText(`${edCol.hex}  ${r},${g},${b}`, x + 56, y + 43);
+      X.strokeStyle = "rgba(255,179,71,.9)"; X.lineWidth = 2; X.beginPath(); X.arc(396, 215, 9, 0, 7); X.stroke();
+    }
+  }
+  X.restore();
+}
 function edDraw() {
   if (!edDrawOn) return;
   requestAnimationFrame(edDraw);
   edOx.clearRect(0, 0, 932, 430);
+  edInstruments(Date.now());
   if (!edLiveOn || edBox.classList.contains("frozen")) return;
   const m = edMap(), now = Date.now(), pulse = .55 + .45 * Math.sin(now / 260);
   edOx.lineWidth = 2; edOx.shadowBlur = 8;
@@ -1481,10 +1647,22 @@ function edDraw() {
 function edLiveSet(on) {
   edLiveOn = on; edLines = []; edQR = [];
   document.getElementById("ed-livebtn").classList.toggle("live", on);
-  if (on) { edSizeOv(); if (!edDrawOn) { edDrawOn = true; edDraw(); } edSub("ищу текст…"); edLiveLoop(); }
-  else { clearTimeout(edLiveT); edOx.clearRect(0, 0, 932, 430); edSub("наведите камеру и нажмите кнопку"); }
+  if (on) { edSub("ищу текст…"); edLiveLoop(); }
+  else { clearTimeout(edLiveT); edSub("наведите камеру и нажмите кнопку"); }
 }
 document.getElementById("ed-livebtn").onclick = () => { buzz(12); edLiveSet(!edLiveOn); };
+document.getElementById("ed-color").onclick = () => {
+  buzz(12); edColor = !edColor; edCol = null;
+  document.getElementById("ed-color").classList.toggle("live", edColor);
+  edSub(edColor ? "наведите центр прицела на цвет · коснитесь образца — запомнить" : "наведите камеру и нажмите кнопку");
+};
+edBox.addEventListener("pointerdown", (e) => {
+  if (!edColor || !edCol || edBox.classList.contains("frozen")) return;
+  const p = loc(e);
+  if (p.x < 470 || p.x > 666 || p.y < 228 || p.y > 286) return;
+  buzz(18); edLock();
+  edCard("ЦВЕТ", `${edCol.name}\n${edCol.hex} · RGB ${edCol.c.join(", ")}`, true, { search: false });
+});
 // a tap on a frame: that line (or the QR code) in the card
 edBox.addEventListener("pointerdown", (e) => {
   if (!edLiveOn || edBox.classList.contains("frozen") || e.target.closest(".ed-side,.ed-card,.ed-top")) return;
@@ -1493,7 +1671,7 @@ edBox.addEventListener("pointerdown", (e) => {
   if (!q && !l) return;
   buzz(18); edLock();
   if (q) edCard("QR-КОД", q.text, true, { url: edLink(q.text), search: false });
-  else edCard("ТЕКСТ", l.text, true, { translate: true });
+  else edCard("ТЕКСТ", l.text, true, { translate: true, hw: true });
 });
 
 // ---------------------------------------------------------------- torch and pinch zoom (when the camera has them)
