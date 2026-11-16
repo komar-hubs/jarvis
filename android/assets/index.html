@@ -76,8 +76,8 @@ svg{position:absolute;left:0;top:0;overflow:visible}
 .p2-head{display:flex;align-items:center;gap:7px;height:26px;flex:none;margin-bottom:7px}
 .p2-title{font:800 11px "Orbitron","Exo 2";letter-spacing:3px;color:#fff;white-space:nowrap}
 .p2-info{font:600 11px "JetBrains Mono";color:#7fd6f2;margin-right:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
-.live{display:flex;align-items:center;gap:6px;font:800 10px "Orbitron","Exo 2";letter-spacing:2px;color:#ff8a7a}
-.live i{width:8px;height:8px;border-radius:50%;background:#ff5d4d;box-shadow:0 0 8px #ff5d4d;animation:blink 1.2s infinite}
+.lbadge{display:flex;align-items:center;gap:6px;font:800 10px "Orbitron","Exo 2";letter-spacing:2px;color:#ff8a7a}
+.lbadge i{width:8px;height:8px;border-radius:50%;background:#ff5d4d;box-shadow:0 0 8px #ff5d4d;animation:blink 1.2s infinite}
 .sbtn{flex:none;height:26px;padding:0 11px;border-radius:9px;display:flex;align-items:center;font:600 12px "Exo 2";color:#cfefff;border:1px solid rgba(var(--rgb),.4);background:rgba(var(--rgb),.08);white-space:nowrap}
 .sbtn:active,.sbtn.on{background:rgba(var(--rgb),.38);color:#fff}
 /* the live screen: a holo frame that hugs the picture, buttons in a column on the right */
@@ -166,8 +166,8 @@ svg{position:absolute;left:0;top:0;overflow:visible}
 .ed-tb.has{display:flex}.ed-tb.on{background:rgba(var(--hot-rgb),.45);border-color:var(--hot);color:#fff}
 .ed-zoom{font:700 11px "JetBrains Mono";color:var(--hot);text-shadow:0 0 8px rgba(var(--hot-rgb),.6)}
 /* rails of round buttons on both sides: the picture stays visible */
-.ed-rail{position:absolute;top:8px;bottom:8px;width:74px;display:flex;flex-direction:column;justify-content:center;gap:4px}
-.ed-rail::before{content:"";position:absolute;top:6%;bottom:6%;left:50%;width:1px;background:linear-gradient(transparent,rgba(var(--e),.4),transparent)}
+.ed-rail{position:absolute;top:8px;bottom:8px;width:74px;display:flex;flex-direction:column;justify-content:center;gap:4px;z-index:1}
+.ed-rail::before{content:"";position:absolute;z-index:-1;top:6%;bottom:6%;left:50%;width:1px;background:linear-gradient(transparent,rgba(var(--e),.4),transparent)}
 .ed-rail.l{left:10px}.ed-rail.r{right:10px}
 .edb{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;padding:2px 0}
 .edb i{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;
@@ -177,9 +177,10 @@ svg{position:absolute;left:0;top:0;overflow:visible}
 .edb span{font:700 9.5px "Exo 2";letter-spacing:.2px;color:#e4f9ff;text-shadow:0 1px 3px #000,0 0 6px #000;text-align:center;line-height:1.05;max-width:74px}
 .edb:active i{transform:scale(.9);border-color:#fff}
 .edb.main i{width:50px;height:50px;border-color:var(--acc2);box-shadow:0 0 20px rgba(var(--e),.5),inset 0 0 14px rgba(var(--e),.3)}
-.edb.live i{border-color:#b9ffdc;background:radial-gradient(circle at 50% 30%,rgba(var(--ok-rgb),.85),rgba(20,90,60,.85) 75%);box-shadow:0 0 20px rgba(var(--ok-rgb),.75)}
-.edb.live .ico{stroke:#fff}
-.ed-rail.l .edb.live i{border-color:#ffe2b0;background:radial-gradient(circle at 50% 30%,rgba(var(--hot-rgb),.9),rgba(110,60,10,.85) 75%);box-shadow:0 0 20px rgba(var(--hot-rgb),.75)}
+.edb.live i{border-color:#eafff4;background:radial-gradient(circle at 50% 35%,#c8ffe3,#3ddc8f 72%);box-shadow:0 0 22px rgba(var(--ok-rgb),.85)}
+.edb.live .ico{stroke:#03281a}
+.ed-rail.l .edb.live i{border-color:#fff1d6;background:radial-gradient(circle at 50% 35%,#ffe6bd,#ff9f2e 72%);box-shadow:0 0 22px rgba(var(--hot-rgb),.85)}
+.ed-rail.l .edb.live .ico{stroke:#2a1600}
 .edb.hold i{border-color:var(--hot);background:rgba(var(--hot-rgb),.5);box-shadow:0 0 24px rgba(var(--hot-rgb),.65)}
 .edb.x i{border-color:rgba(255,130,110,.65)}.edb.x .ico{stroke:#ffb8a8}
 .edith.frozen .ed-rail.l{opacity:.35;pointer-events:none}
@@ -203,6 +204,16 @@ svg{position:absolute;left:0;top:0;overflow:visible}
 .ed-act .btn{height:30px;padding:0 13px;font-size:11.5px;border-radius:0;clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px)}
 .ed-act .btn.ghost{background:rgba(var(--e),.1);border:1px solid rgba(var(--e),.55);color:#dff8ff}
 #ed-ov{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+/* zoom: a vertical scale by the right rail; drag the thumb or tap a mark */
+.ed-zbar{position:absolute;left:796px;top:108px;width:44px;height:216px;touch-action:none}
+.ed-zbar .tr{position:absolute;left:30px;top:8px;bottom:8px;width:2px;background:linear-gradient(rgba(var(--e),.15),rgba(var(--e),.6),rgba(var(--e),.15))}
+.ed-zbar .mk{position:absolute;right:0;width:44px;height:16px;margin-top:-8px;display:flex;align-items:center;justify-content:flex-end;gap:4px;
+  font:700 9.5px "JetBrains Mono";color:rgba(191,244,255,.75);text-shadow:0 0 4px #000}
+.ed-zbar .mk::after{content:"";width:10px;height:1.5px;background:rgba(191,244,255,.8);margin-right:7px}
+.ed-zbar .th{position:absolute;left:19px;width:24px;height:16px;margin-top:-8px;border-radius:8px;background:var(--hot);box-shadow:0 0 12px rgba(var(--hot-rgb),.8);
+  border:1.5px solid #ffe2b0;transition:top .08s}
+.ed-zbar .vl{position:absolute;right:30px;margin-top:-9px;font:800 11px "JetBrains Mono";color:var(--hot);text-shadow:0 0 6px rgba(0,0,0,.9);white-space:nowrap}
+.edith.frozen .ed-zbar{opacity:.3;pointer-events:none}
 /* the journal */
 .ed-log{position:absolute;left:92px;right:92px;top:52px;bottom:12px;display:none;flex-direction:column;padding:10px 14px;
   background:rgba(2,12,20,.93);border:1px solid rgba(var(--e),.5);backdrop-filter:blur(6px);
@@ -311,7 +322,7 @@ input.addr{width:100%;height:44px;margin:10px 0 4px;border-radius:12px;border:1.
     <div class="scr-stage" id="scr-view"><div class="scr-frame wait" id="scr-frame">
       <canvas id="scr-img" width="16" height="9"></canvas><div class="scr-scan"></div>
       <i class="cn tl"></i><i class="cn tr"></i><i class="cn bl"></i><i class="cn br"></i>
-      <div class="scr-badge"><span class="live"><i></i>LIVE</span></div><div class="scr-meta" id="scr-info">ЭКРАН ПК</div>
+      <div class="scr-badge"><span class="lbadge"><i></i>LIVE</span></div><div class="scr-meta" id="scr-info">ЭКРАН ПК</div>
       <div class="scr-wait"><div class="ring3"><i></i><i></i><i></i></div>ПОДКЛЮЧАЮСЬ К ЭКРАНУ</div>
       <div class="tapring" id="tapring"></div></div></div>
     <div class="scr-side">
@@ -360,6 +371,7 @@ input.addr{width:100%;height:44px;margin:10px 0 4px;border-radius:12px;border:1.
       <g class="bz"><g class="spin"><circle r="90" stroke="#ffb347" stroke-width="2.2" stroke-dasharray="46 95"/></g></g>
     </g></svg>
   <canvas id="ed-ov"></canvas>
+  <div class="ed-zbar" id="ed-zbar"><div class="tr"></div><div class="th" id="ed-zth"></div><div class="vl" id="ed-zvl">×1.0</div></div>
   <div class="ed-scan"></div>
   <div class="ed-top"><span class="ed-logo">E.D.I.T.H.</span><span class="ed-sub" id="ed-sub">наведите камеру</span></div>
   <div class="ed-ctl"><span class="ed-zoom" id="ed-zoom"></span><div class="ed-tb" id="ed-torch">Фонарик</div></div>
@@ -1393,6 +1405,7 @@ async function edithOpen(on) {
   if (!on) {
     if (edLiveOn) edLiveSet(false);
     edDrawOn = false; edTorch = false; document.getElementById("ed-torch").classList.remove("on");
+    edV.style.transform = ""; edZ = { hw: false, min: 1, max: 8, v: 1 };
     edSensors(false); edColor = false; document.getElementById("ed-color").classList.remove("live"); edLogShow(false);
     edBox.classList.remove("show", "frozen", "busy"); document.getElementById("ed-card").classList.remove("show");
     if (edStream) edStream.getTracks().forEach((t) => t.stop());
@@ -1414,15 +1427,82 @@ async function edithOpen(on) {
   }
 }
 // the current frame: frozen on screen while E.D.I.T.H. thinks, sent to the PC as JPEG
-function edFreeze() {
-  const w = edV.videoWidth, h = edV.videoHeight;
-  if (!w || !h) return "";
-  const k = Math.min(1, 1600 / Math.max(w, h)), c = document.getElementById("ed-still");
-  c.width = Math.round(w * k); c.height = Math.round(h * k);
-  c.getContext("2d").drawImage(edV, 0, 0, c.width, c.height);
-  edBox.classList.add("frozen");
-  return c.toDataURL("image/jpeg", .85);
+// ---------------------------------------------------------------- zoom and "what is on the screen"
+// The camera's own zoom when it has one, else a digital zoom around the reticle (up to x8). Everything sent to the PC is
+// the part of the frame that is visible right now, so a zoomed-in sign is read as you see it.
+const ZO = { x: 396, y: 215 };
+let edZ = { hw: false, min: 1, max: 8, v: 1 }, edZT = 0;
+function edMap() {           // frame px -> stage px for a video shown with object-fit: cover (before the digital zoom)
+  const vw = edV.videoWidth || 16, vh = edV.videoHeight || 9, k = Math.max(932 / vw, 430 / vh);
+  return { vw, vh, k, ox: (932 - vw * k) / 2, oy: (430 - vh * k) / 2 };
 }
+const edDZ = () => (edZ.hw ? 1 : edZ.v);
+function edToScreen(fx, fy) { const m = edMap(), d = edDZ(); return [ZO.x + (m.ox + fx * m.k - ZO.x) * d, ZO.y + (m.oy + fy * m.k - ZO.y) * d]; }
+function edVis() {           // the visible part of the frame, in frame px
+  const m = edMap(), d = edDZ();
+  const fx = (sx) => ((sx - ZO.x) / d + ZO.x - m.ox) / m.k, fy = (sy) => ((sy - ZO.y) / d + ZO.y - m.oy) / m.k;
+  const x0 = Math.max(0, fx(0)), x1 = Math.min(m.vw, fx(932)), y0 = Math.max(0, fy(0)), y1 = Math.min(m.vh, fy(430));
+  return { x: x0, y: y0, w: Math.max(0, x1 - x0), h: Math.max(0, y1 - y0) };
+}
+function edGrab(maxSide, q) {
+  const r = edVis();
+  if (!edV.videoWidth || !r.w || !r.h) return { img: "", r, c: null };
+  const k = Math.min(1, maxSide / Math.max(r.w, r.h)), c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(r.w * k)); c.height = Math.max(1, Math.round(r.h * k));
+  c.getContext("2d").drawImage(edV, r.x, r.y, r.w, r.h, 0, 0, c.width, c.height);
+  return { img: c.toDataURL("image/jpeg", q), r, c };
+}
+function edShow(c) {         // the still on screen = exactly what was taken
+  const st = document.getElementById("ed-still");
+  st.width = c.width; st.height = c.height; st.getContext("2d").drawImage(c, 0, 0);
+  edBox.classList.add("frozen");
+}
+function edFreeze() {
+  const g = edGrab(1600, .85);
+  if (!g.img) return "";
+  edShow(g.c);
+  return g.img;
+}
+const ZT = (v) => Math.log(v / edZ.min) / Math.log(edZ.max / edZ.min || 2);          // 0..1 on the bar (log scale)
+function edZoomUI() {
+  const bar = document.getElementById("ed-zbar"), top = 8, h = 216 - 16, t = edZ.max > edZ.min ? ZT(edZ.v) : 0;
+  bar.style.display = edZ.max > edZ.min ? "" : "none";
+  bar.querySelectorAll(".mk").forEach((m) => m.remove());
+  [1, 2, 4, 8].filter((v) => v >= edZ.min - 1e-6 && v <= edZ.max + 1e-6).forEach((v) => {
+    const m = document.createElement("div"); m.className = "mk"; m.textContent = "×" + v; m.dataset.v = v;
+    m.style.top = (top + h - ZT(v) * h) + "px"; bar.appendChild(m);
+  });
+  const y = top + h - t * h;
+  document.getElementById("ed-zth").style.top = y + "px";
+  const vl = document.getElementById("ed-zvl"); vl.style.top = y + "px"; vl.textContent = "×" + edZ.v.toFixed(1);
+  document.getElementById("ed-zoom").textContent = edZ.v > 1.05 ? "×" + edZ.v.toFixed(1) + (edZ.hw ? "" : " цифр.") : "";
+}
+function edSetZoom(v) {
+  edZ.v = Math.max(edZ.min, Math.min(edZ.max, v));
+  if (edZ.hw) {
+    edV.style.transform = "";
+    const now = Date.now();
+    if (now - edZT > 60 && edTrack) { edZT = now; edTrack.applyConstraints({ advanced: [{ zoom: edZ.v }] }).catch(() => {}); }
+  } else {
+    edV.style.transformOrigin = `${ZO.x}px ${ZO.y}px`;
+    edV.style.transform = edZ.v > 1.001 ? `scale(${edZ.v})` : "";
+  }
+  edLines = []; edQR = [];                        // the frames of text belong to the old zoom
+  edZoomUI();
+}
+(() => {                     // drag the thumb anywhere along the bar; a tap on a mark jumps to it
+  const bar = document.getElementById("ed-zbar");
+  const at = (e) => { const p = loc(e), r = bar.getBoundingClientRect(), top = (r.top - stage.getBoundingClientRect().top) / SC + 8, h = 216 - 16;
+    const t = Math.max(0, Math.min(1, (top + h - p.y) / h)); return edZ.min * Math.pow(edZ.max / edZ.min, t); };
+  let drag = false;
+  bar.addEventListener("pointerdown", (e) => {
+    e.preventDefault(); e.stopPropagation(); bar.setPointerCapture(e.pointerId); drag = true; buzz(6);
+    const mk = e.target.closest(".mk"); edSetZoom(mk ? +mk.dataset.v : at(e));
+  });
+  bar.addEventListener("pointermove", (e) => { if (drag) edSetZoom(at(e)); });
+  const up = () => { if (drag) { drag = false; buzz(4); } };
+  bar.addEventListener("pointerup", up); bar.addEventListener("pointercancel", up);
+})();
 // the answer types itself out like a HUD readout; a tap on the card shows it all at once
 let edTyping = null;
 function edLink(t) {
@@ -1499,13 +1579,10 @@ async function edHw(text) {
 // «Фото → ПК» and «Скан»: the full-size frame goes to the PC
 async function edKeep(mode) {
   if (edBusy) return;
-  const w = edV.videoWidth, h = edV.videoHeight;
-  if (!w || !h) { toast("Камера ещё не готова", true); return; }
-  const k = Math.min(1, 2600 / Math.max(w, h)), c = document.getElementById("ed-still");
-  c.width = Math.round(w * k); c.height = Math.round(h * k);
-  c.getContext("2d").drawImage(edV, 0, 0, c.width, c.height);
-  edBox.classList.add("frozen"); edLock();
-  const img = c.toDataURL("image/jpeg", .9);
+  const g = edGrab(2600, .9);
+  if (!g.img) { toast("Камера ещё не готова", true); return; }
+  edShow(g.c); edLock();
+  const img = g.img;
   edBusy = true; edBox.classList.add("busy"); document.getElementById("ed-card").classList.remove("show");
   edSub(mode === "scan" ? "сканирую страницу…" : "отправляю фото на ПК…");
   const r = await http("POST", base() + "/see", { img, mode }, cur.token, 45000);
@@ -1551,17 +1628,11 @@ document.getElementById("ed-x").onclick = () => { buzz(); edithOpen(false); };
 // ---------------------------------------------------------------- live text (AR): frames of text over the video
 let edLiveOn = false, edLines = [], edQR = [], edLiveT = null, edDet = null, edDrawOn = false;
 const edOv = document.getElementById("ed-ov"), edOx = edOv.getContext("2d");
-function edMap() {           // frame (0..1) -> stage px, for a video shown with object-fit: cover
-  const vw = edV.videoWidth || 16, vh = edV.videoHeight || 9, k = Math.max(932 / vw, 430 / vh);
-  return { vw, vh, k, ox: (932 - vw * k) / 2, oy: (430 - vh * k) / 2 };
-}
+let edLastR = null;
 function edSmall() {
-  const w = edV.videoWidth, h = edV.videoHeight;
-  if (!w || !h) return "";
-  const k = Math.min(1, 1100 / Math.max(w, h)), c = document.createElement("canvas");
-  c.width = Math.round(w * k); c.height = Math.round(h * k);
-  c.getContext("2d").drawImage(edV, 0, 0, c.width, c.height);
-  return c.toDataURL("image/jpeg", .72);
+  const g = edGrab(1100, .72);
+  edLastR = g.r;
+  return g.img;
 }
 async function edLiveLoop() {
   clearTimeout(edLiveT);
@@ -1576,7 +1647,8 @@ async function edLiveLoop() {
     if (img) {
       const r = await http("POST", base() + "/see", { img, mode: "boxes" }, cur.token, 8000);
       if (edLiveOn && r.json && r.json.ok) {
-        edLines = (r.json.lines || []).map((l) => ({ ...l, t: Date.now() }));
+        const rr = edLastR;
+        edLines = (r.json.lines || []).map((l) => ({ ...l, r: rr, t: Date.now() }));
         edSub(edLines.length || edQR.length ? `вижу текст: ${edLines.length}${edQR.length ? " · QR" : ""} — коснитесь рамки` : "ищу текст…");
       }
     }
@@ -1624,7 +1696,8 @@ const edPick = document.createElement("canvas"); edPick.width = edPick.height = 
 function edSample() {           // the colour under the reticle (an average of a small spot)
   const m = edMap(); if (!edV.videoWidth) return null;
   const fx = (396 - m.ox) / m.k, fy = (215 - m.oy) / m.k, x = edPick.getContext("2d", { willReadFrequently: true });
-  x.drawImage(edV, fx - 6, fy - 6, 12, 12, 0, 0, 9, 9);
+  const sp = Math.max(2, 12 / edDZ());
+  x.drawImage(edV, fx - sp / 2, fy - sp / 2, sp, sp, 0, 0, 9, 9);
   const d = x.getImageData(0, 0, 9, 9).data; let r = 0, g = 0, b = 0;
   for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i + 1]; b += d[i + 2]; }
   const n = d.length / 4; return [Math.round(r / n), Math.round(g / n), Math.round(b / n)];
@@ -1687,11 +1760,12 @@ function edDraw() {
   edOx.clearRect(0, 0, 932, 430);
   edInstruments(Date.now()); edData(Date.now());
   if (!edLiveOn || edBox.classList.contains("frozen")) return;
-  const m = edMap(), now = Date.now(), pulse = .55 + .45 * Math.sin(now / 260);
+  const now = Date.now(), pulse = .55 + .45 * Math.sin(now / 260);
   edOx.lineWidth = 2; edOx.shadowBlur = 8;
   for (const l of edLines) {
-    const age = (now - l.t) / 2500; if (age > 1) continue;
-    const x = m.ox + l.x * m.vw * m.k - 4, y = m.oy + l.y * m.vh * m.k - 3, w = l.w * m.vw * m.k + 8, h = l.h * m.vh * m.k + 6;
+    const age = (now - l.t) / 2500; if (age > 1 || !l.r) continue;
+    const [ax, ay] = edToScreen(l.r.x + l.x * l.r.w, l.r.y + l.y * l.r.h), [bx, by] = edToScreen(l.r.x + (l.x + l.w) * l.r.w, l.r.y + (l.y + l.h) * l.r.h);
+    const x = ax - 4, y = ay - 3, w = bx - ax + 8, h = by - ay + 6;
     l.box = [x, y, w, h];
     edOx.globalAlpha = 1 - age * .6;
     edOx.fillStyle = "rgba(79,216,255,.10)"; edOx.fillRect(x, y, w, h);
@@ -1699,7 +1773,7 @@ function edDraw() {
   }
   for (const q of edQR) {
     const age = (now - q.t) / 2500; if (age > 1) continue;
-    const s = m.k * (edV.videoWidth / (edV.videoWidth || 1)), x = m.ox + q.b.x * m.k, y = m.oy + q.b.y * m.k, w = q.b.width * m.k, h = q.b.height * m.k;
+    const [ax, ay] = edToScreen(q.b.x, q.b.y), [bx, by] = edToScreen(q.b.x + q.b.width, q.b.y + q.b.height), x = ax, y = ay, w = bx - ax, h = by - ay;
     q.box = [x, y, w, h];
     edOx.globalAlpha = 1 - age * .6; edOx.shadowColor = "#ffb347"; edBracket(x, y, w, h, "#ffb347");
     edOx.fillStyle = "#ffb347"; edOx.font = "700 11px 'JetBrains Mono'"; edOx.fillText("QR", x + 4, y - 6);
@@ -1727,7 +1801,7 @@ edBox.addEventListener("pointerdown", (e) => {
 });
 // a tap on a frame: that line (or the QR code) in the card
 edBox.addEventListener("pointerdown", (e) => {
-  if (!edLiveOn || edBox.classList.contains("frozen") || e.target.closest(".ed-rail,.ed-card,.ed-top,.ed-log,.ed-ctl")) return;
+  if (!edLiveOn || edBox.classList.contains("frozen") || e.target.closest(".ed-rail,.ed-card,.ed-top,.ed-log,.ed-ctl,.ed-zbar")) return;
   const p = loc(e), hit = (o) => o.box && p.x >= o.box[0] - 8 && p.x <= o.box[0] + o.box[2] + 8 && p.y >= o.box[1] - 8 && p.y <= o.box[1] + o.box[3] + 8;
   const q = edQR.find(hit), l = !q && edLines.find(hit);
   if (!q && !l) return;
@@ -1737,13 +1811,15 @@ edBox.addEventListener("pointerdown", (e) => {
 });
 
 // ---------------------------------------------------------------- torch and pinch zoom (when the camera has them)
-let edTrack = null, edTorch = false, edZ = { min: 1, max: 1, v: 1 }, edPinch = null;
+let edTrack = null, edTorch = false, edPinch = null;
 function edTools() {
   edTrack = edStream && edStream.getVideoTracks()[0];
   const caps = (edTrack && edTrack.getCapabilities && edTrack.getCapabilities()) || {};
   document.getElementById("ed-torch").classList.toggle("has", !!caps.torch);
-  edZ = caps.zoom ? { min: caps.zoom.min || 1, max: Math.min(caps.zoom.max || 1, 10), v: (edTrack.getSettings().zoom || caps.zoom.min || 1) } : { min: 1, max: 1, v: 1 };
-  document.getElementById("ed-zoom").textContent = "";
+  const hw = caps.zoom && (caps.zoom.max || 1) >= 2;
+  edZ = hw ? { hw: true, min: caps.zoom.min || 1, max: Math.min(caps.zoom.max, 10), v: (edTrack.getSettings().zoom || caps.zoom.min || 1) }
+           : { hw: false, min: 1, max: 8, v: 1 };
+  edSetZoom(edZ.v);
 }
 document.getElementById("ed-torch").onclick = async () => {
   buzz(); edTorch = !edTorch;
@@ -1751,15 +1827,15 @@ document.getElementById("ed-torch").onclick = async () => {
   document.getElementById("ed-torch").classList.toggle("on", edTorch);
 };
 const edPts = new Map();
-edBox.addEventListener("pointerdown", (e) => { if (edZ.max > edZ.min && !e.target.closest(".ed-rail,.ed-card,.ed-top,.ed-log,.ed-ctl")) edPts.set(e.pointerId, loc(e)); });
+edBox.addEventListener("pointerdown", (e) => { if (edZ.max > edZ.min && !e.target.closest(".ed-rail,.ed-card,.ed-top,.ed-log,.ed-ctl,.ed-zbar")) edPts.set(e.pointerId, loc(e)); });
 edBox.addEventListener("pointermove", (e) => {
   if (!edPts.has(e.pointerId)) return;
   edPts.set(e.pointerId, loc(e));
   if (edPts.size !== 2) { edPinch = null; return; }
   const [a, b] = [...edPts.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
   if (!edPinch) { edPinch = { d, z: edZ.v }; return; }
-  const z = Math.max(edZ.min, Math.min(edZ.max, edPinch.z * d / edPinch.d));
-  if (Math.abs(z - edZ.v) > .05) { edZ.v = z; edTrack.applyConstraints({ advanced: [{ zoom: z }] }).catch(() => {}); document.getElementById("ed-zoom").textContent = "×" + z.toFixed(1); }
+  const z = edPinch.z * d / edPinch.d;
+  if (Math.abs(z - edZ.v) > .03) edSetZoom(z);
 });
 const edPtUp = (e) => { edPts.delete(e.pointerId); if (edPts.size < 2) edPinch = null; };
 edBox.addEventListener("pointerup", edPtUp); edBox.addEventListener("pointercancel", edPtUp);
@@ -1835,6 +1911,8 @@ async function edDemo(mode) {
   if (mode === "color") document.getElementById("ed-color").click();
   if (mode === "card") { edFreeze(); edCard("ЧТО ЭТО", "Красная керамическая кружка, примерно 300 мл. Рядом лист с табличкой «Запасной выход».", false, { query: "красная кружка", nolog: true }); }
   if (mode === "busy") { edFreeze(); edBusy = true; edBox.classList.add("busy"); edSub("смотрю…"); }
+  if (mode === "zoom") { edSetZoom(2.6); edLiveOn = true; document.getElementById("ed-livebtn").classList.add("live");
+    const r = edVis(); edLines = [{ text: "www.example.com/help", r, x: (288 - r.x) / r.w, y: (318 - r.y) / r.h, w: 300 / r.w, h: 36 / r.h, t: Date.now() + 1e9 }]; }
 }
 let started = false;
 const go = () => { if (!started) { started = true; start(); } };
