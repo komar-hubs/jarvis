@@ -38,6 +38,7 @@ import hashlib
 import json
 import os
 import random
+import re
 import secrets
 import socket
 import threading
@@ -490,6 +491,17 @@ class Remote:
             elif t == "tap":                           # a tap on the live screen = a click at that point
                 self._tap(float(m.get("x", -1)), float(m.get("y", -1)), m.get("b") if m.get("b") in BTN else "left",
                           2 if m.get("n") == 2 else 1)
+            elif t == "open":                          # E.D.I.T.H.: a link from a sign or a QR code, in the PC's browser
+                url = str(m.get("url") or "").strip()
+                if re.match(r"(?i)^https?://[^\s]{3,2000}$", url):
+                    S.open_target(url)
+                    return {"t": "opened"}
+            elif t == "search":                        # E.D.I.T.H.: «Найти в интернете» on the PC
+                q = str(m.get("q") or "").strip()[:300]
+                if q:
+                    from urllib.parse import quote_plus
+                    S.open_target("https://www.google.com/search?q=" + quote_plus(q))
+                    return {"t": "opened"}
             elif t == "clip":                          # E.D.I.T.H.: recognised text into the PC's clipboard
                 s = str(m.get("s") or "")[:20000]
                 if s:
@@ -837,6 +849,9 @@ class Remote:
             body = await request.json()
         except Exception:
             return web.json_response({"ok": False, "error": "bad request"}, status=400)
+        if body.get("mode") == "tr":         # one line picked in the live mode: translate the text itself
+            q = str(body.get("q") or "").strip()[:2000]
+            return web.json_response(await asyncio.get_running_loop().run_in_executor(None, self._translate, q))
         import base64
         try:
             jpg = base64.b64decode(str(body.get("img") or "").split(",")[-1])
@@ -844,9 +859,10 @@ class Remote:
             jpg = b""
         if len(jpg) < 500:
             return web.json_response({"ok": False, "error": "нет снимка"}, status=400)
-        mode = body.get("mode") if body.get("mode") in ("what", "text", "translate", "ask") else "what"
+        mode = body.get("mode") if body.get("mode") in ("what", "text", "translate", "ask", "boxes") else "what"
         q = str(body.get("q") or "").strip()[:300]
-        self.core.log(f"Пульт: E.D.I.T.H. — {({'what': 'что это', 'text': 'текст', 'translate': 'перевод', 'ask': 'вопрос'})[mode]}"
+        if mode != "boxes":                  # the live text mode asks every second or two: not worth a log line
+            self.core.log(f"Пульт: E.D.I.T.H. — {({'what': 'что это', 'text': 'текст', 'translate': 'перевод', 'ask': 'вопрос'})[mode]}"
                       + (f": «{q}»" if q else ""))
         try:
             res = await asyncio.get_running_loop().run_in_executor(None, self.see, jpg, mode, q)
@@ -855,9 +871,9 @@ class Remote:
             res = {"ok": False, "error": str(e)[:200]}
         return web.json_response(res)
 
-    def _ocr(self, img):
-        """Text on a photo. Both engines read it; the Russian one turns Latin look-alikes into Cyrillic ("Кеер this"),
-        so Russian wins only when its text really is mostly Cyrillic."""
+    def _ocr_lines(self, img):
+        """Lines of text on a photo with their boxes. Both engines read it; the Russian one turns Latin look-alikes
+        into Cyrillic ("Кеер this"), so Russian wins only when its text really is mostly Cyrillic."""
         import re
         from .screentrans import ocr_image
         got = {}
@@ -867,12 +883,25 @@ class Remote:
             except Exception:
                 lines = []
             lines.sort(key=lambda x: (x["y"] // max(8, x["h"]), x["x"]))
-            got[lang] = "\n".join(x["text"] for x in lines).strip()
-        ru, en = got["ru"], got["en"]
-        cyr, lat = len(re.findall(r"[а-яё]", ru, re.I)), len(re.findall(r"[a-z]", ru, re.I))
-        if ru and cyr >= 0.6 * (cyr + lat):
-            return ru
-        return en or ru
+            got[lang] = lines
+        text = {k: "\n".join(x["text"] for x in v).strip() for k, v in got.items()}
+        cyr, lat = len(re.findall(r"[а-яё]", text["ru"], re.I)), len(re.findall(r"[a-z]", text["ru"], re.I))
+        lang = "ru" if text["ru"] and cyr >= 0.6 * (cyr + lat) else ("en" if text["en"] else "ru")
+        return got[lang], text[lang]
+
+    def _ocr(self, img):
+        return self._ocr_lines(img)[1]
+
+    def _translate(self, text):
+        if not text:
+            return {"ok": False, "error": "нет текста"}
+        try:
+            tr, src = self.core.screentrans.tr.google(text, "ru")
+            if src == "ru":
+                return {"ok": True, "title": "ПЕРЕВОД", "text": "Это уже по-русски:\n" + text, "copy": True}
+        except Exception:
+            tr = (self.core.ask_ai_once("Переведи на русский, ответь только переводом:\n" + text) or "").strip()
+        return {"ok": True, "title": "ПЕРЕВОД", "text": tr or text, "copy": True, "orig": text}
 
     def see(self, jpg, mode, q=""):
         """{ok, title, text, [copy]} for the phone. Vision goes to the user's AI only when it can take pictures."""
@@ -880,6 +909,12 @@ class Remote:
         from PIL import Image, ImageOps
         img = ImageOps.exif_transpose(Image.open(io.BytesIO(jpg))).convert("RGB")
         img.thumbnail((1600, 1600))
+        if mode == "boxes":                  # live AR text: where the lines are, in 0..1 of the frame
+            lines, _ = self._ocr_lines(img)
+            W, H = img.size
+            return {"ok": True, "lines": [{"text": x["text"], "x": round(x["x"] / W, 4), "y": round(x["y"] / H, 4),
+                                           "w": round(x["w"] / W, 4), "h": round(x["h"] / H, 4)}
+                                          for x in lines if len(x["text"].strip()) >= 2][:40]}
         if mode == "text":
             text = self._ocr(img)
             return {"ok": True, "title": "ТЕКСТ", "text": text or "Текста не вижу. Поднесите ближе и держите ровно.", "copy": bool(text)}
