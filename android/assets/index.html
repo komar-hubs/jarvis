@@ -123,56 +123,99 @@ svg{position:absolute;left:0;top:0;overflow:visible}
 .shotv img{flex:1;min-height:0;width:100%;object-fit:contain;border-radius:8px}
 .shot-bar{display:flex;align-items:center;gap:10px;margin-top:8px;flex:none}
 .shot-bar .p2-title{margin-right:auto}
-/* E.D.I.T.H.: the camera with a HUD over it */
-.edith{position:absolute;inset:0;z-index:9;display:none;background:#000;overflow:hidden}
-.edith.show{display:block;animation:rise .3s ease-out}
+/* E.D.I.T.H. — a cinematic HUD over the phone's camera */
+.edith{position:absolute;inset:0;z-index:9;display:none;background:#000;overflow:hidden;--e:79,216,255}
+.edith.show{display:block;animation:edon .5s ease-out}
+@keyframes edon{from{opacity:0;filter:brightness(2.2) saturate(0)}to{opacity:1;filter:none}}
 .edith video,.edith canvas.still{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .edith canvas.still{display:none}.edith.frozen canvas.still{display:block}
+/* colour grade: a cool tint, dark edges, shade under the HUD text, faint scan lines */
+.ed-grade{position:absolute;inset:0;pointer-events:none;background:
+  radial-gradient(115% 100% at 50% 50%,transparent 52%,rgba(0,8,14,.75)),
+  linear-gradient(180deg,rgba(0,10,18,.6),transparent 20%,transparent 76%,rgba(0,10,18,.7)),
+  repeating-linear-gradient(0deg,rgba(var(--e),.04) 0 1px,transparent 1px 3px)}
+.ed-grade::after{content:"";position:absolute;inset:0;background:rgba(30,140,185,.07);mix-blend-mode:color}
+.edith.frozen .ed-grade::after{background:rgba(30,140,185,.18)}
 .edith .hud{position:absolute;inset:0;pointer-events:none}
-.ed-top{position:absolute;left:18px;top:12px;right:150px;display:flex;align-items:center;gap:10px;pointer-events:none}
-.ed-logo{font:800 13px "Orbitron","Exo 2";letter-spacing:4px;color:#fff;text-shadow:0 0 12px rgba(var(--rgb),.9)}
-.ed-sub{font:600 11px "JetBrains Mono";color:#bff4ff;background:rgba(2,10,16,.55);padding:3px 9px;border-radius:9px;border:1px solid rgba(var(--rgb),.35);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ed-side{position:absolute;right:12px;top:12px;bottom:12px;width:118px;display:flex;flex-direction:column;justify-content:center;gap:8px}
-.ed-side .vbtn{flex:none;height:52px;background:rgba(2,14,22,.62);backdrop-filter:blur(4px)}
-.ed-side .vbtn.hold{border-color:var(--hot);background:rgba(var(--hot-rgb),.3)}
-.ed-scan{position:absolute;left:0;right:142px;height:90px;top:-100px;pointer-events:none;display:none;
-  background:linear-gradient(180deg,transparent,rgba(127,227,255,.28),transparent);box-shadow:0 0 30px rgba(var(--rgb),.25)}
-.edith.busy .ed-scan{display:block;animation:edscan 1.4s linear infinite}
+/* the reticle */
+.edr{position:absolute;left:286px;top:105px;width:220px;height:220px;pointer-events:none;overflow:visible}
+.edr .spin{transform-box:fill-box;transform-origin:50% 50%;animation:edspin 12s linear infinite}
+.edr .spin2{transform-box:fill-box;transform-origin:50% 50%;animation:edspin 7s linear infinite reverse}
+@keyframes edspin{to{transform:rotate(360deg)}}
+.edr .bz{display:none}.edith.busy .edr .bz{display:inline}
+.edith.busy .edr .spin{animation-duration:2s}
+.ret{transform-box:fill-box;transform-origin:50% 50%}
+.edith.lock .ret{animation:lockon .7s ease-out}
+@keyframes lockon{0%{transform:scale(1.8);opacity:.2}40%{transform:scale(.9);opacity:1}100%{transform:scale(1)}}
+.edith.lock .ret *{stroke:var(--hot)}
+/* corner readouts */
+.ed-data{position:absolute;font:600 9.5px "JetBrains Mono";letter-spacing:1px;color:rgba(191,244,255,.72);white-space:nowrap;pointer-events:none;
+  text-shadow:0 0 6px #000,0 0 2px #000;transition:opacity .25s}
+.ed-data b{color:#fff;font-weight:700}
+#ed-bl{left:96px;bottom:16px}#ed-br{right:96px;bottom:16px;text-align:right}#ed-rd{right:96px;top:40px;text-align:right}
+.edith:has(.ed-card.show) .ed-data.lo,.edith:has(.ed-log.show) .ed-data.lo{opacity:0}
+.ed-top{position:absolute;left:96px;top:14px;display:flex;flex-direction:column;gap:4px;pointer-events:none;max-width:205px}
+.ed-logo{font:800 14px "Orbitron","Exo 2";letter-spacing:5px;color:#fff;text-shadow:0 0 14px rgba(var(--e),.9);white-space:nowrap}
+.ed-logo i{font:600 8.5px "JetBrains Mono";letter-spacing:2px;color:rgba(191,244,255,.6);font-style:normal;margin-left:8px}
+.ed-sub{font:600 11px "JetBrains Mono";color:#bff4ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 0 6px #000}
+.ed-sub::before{content:"▸ ";color:var(--acc)}
+.edith.busy .ed-sub{color:var(--hot)}.edith.busy .ed-sub::before{color:var(--hot)}
+.ed-ctl{position:absolute;right:96px;top:12px;display:flex;align-items:center;gap:8px}
+.ed-tb{pointer-events:auto;height:22px;padding:0 10px;display:none;align-items:center;font:700 10.5px "Exo 2";color:#dff8ff;letter-spacing:.3px;
+  border:1px solid rgba(var(--e),.5);background:rgba(2,12,20,.6);clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px)}
+.ed-tb.has{display:flex}.ed-tb.on{background:rgba(var(--hot-rgb),.45);border-color:var(--hot);color:#fff}
+.ed-zoom{font:700 11px "JetBrains Mono";color:var(--hot);text-shadow:0 0 8px rgba(var(--hot-rgb),.6)}
+/* rails of round buttons on both sides: the picture stays visible */
+.ed-rail{position:absolute;top:8px;bottom:8px;width:74px;display:flex;flex-direction:column;justify-content:center;gap:4px}
+.ed-rail::before{content:"";position:absolute;top:6%;bottom:6%;left:50%;width:1px;background:linear-gradient(transparent,rgba(var(--e),.4),transparent)}
+.ed-rail.l{left:10px}.ed-rail.r{right:10px}
+.edb{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;padding:2px 0}
+.edb i{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(circle at 50% 30%,rgba(var(--e),.24),rgba(2,12,20,.82) 72%);border:1px solid rgba(var(--e),.6);
+  box-shadow:0 0 12px rgba(var(--e),.2),inset 0 0 10px rgba(var(--e),.16);transition:transform .12s}
+.edb i svg{position:static}
+.edb span{font:700 9.5px "Exo 2";letter-spacing:.2px;color:#e4f9ff;text-shadow:0 1px 3px #000,0 0 6px #000;text-align:center;line-height:1.05;max-width:74px}
+.edb:active i{transform:scale(.9);border-color:#fff}
+.edb.main i{width:50px;height:50px;border-color:var(--acc2);box-shadow:0 0 20px rgba(var(--e),.5),inset 0 0 14px rgba(var(--e),.3)}
+.edb.live i{border-color:#b9ffdc;background:radial-gradient(circle at 50% 30%,rgba(var(--ok-rgb),.85),rgba(20,90,60,.85) 75%);box-shadow:0 0 20px rgba(var(--ok-rgb),.75)}
+.edb.live .ico{stroke:#fff}
+.ed-rail.l .edb.live i{border-color:#ffe2b0;background:radial-gradient(circle at 50% 30%,rgba(var(--hot-rgb),.9),rgba(110,60,10,.85) 75%);box-shadow:0 0 20px rgba(var(--hot-rgb),.75)}
+.edb.hold i{border-color:var(--hot);background:rgba(var(--hot-rgb),.5);box-shadow:0 0 24px rgba(var(--hot-rgb),.65)}
+.edb.x i{border-color:rgba(255,130,110,.65)}.edb.x .ico{stroke:#ffb8a8}
+.edith.frozen .ed-rail.l{opacity:.35;pointer-events:none}
+/* the scan sweep while E.D.I.T.H. thinks */
+.ed-scan{position:absolute;left:86px;right:86px;height:110px;top:-120px;pointer-events:none;display:none;
+  background:linear-gradient(180deg,transparent,rgba(255,179,71,.10) 70%,rgba(255,210,140,.5) 98%,transparent);border-bottom:1px solid rgba(255,200,120,.7)}
+.edith.busy .ed-scan{display:block;animation:edscan 1.5s cubic-bezier(.4,0,.6,1) infinite}
 @keyframes edscan{to{top:110%}}
-.ed-card{position:absolute;left:96px;bottom:14px;width:560px;max-height:220px;display:none;flex-direction:column;padding:12px 16px;border-radius:14px;
-  background:rgba(2,12,20,.86);border:1px solid rgba(var(--rgb),.55);box-shadow:0 0 26px rgba(var(--rgb),.25);backdrop-filter:blur(6px)}
-.ed-card.show{display:flex;animation:rise .25s ease-out}
-.ed-card small{font:700 10px "Orbitron","Exo 2";letter-spacing:3px;color:var(--acc);margin-bottom:5px}
-.ed-card .tx{font:600 16px/1.38 "Exo 2";color:#eafaff;overflow-y:auto;touch-action:pan-y;white-space:pre-wrap;user-select:text;-webkit-user-select:text}
-.ed-act{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
-.ed-act .btn{height:32px;padding:0 14px;font-size:12px}
+/* the answer panel */
+.ed-card{position:absolute;left:92px;bottom:12px;width:604px;max-height:232px;display:none;flex-direction:column;padding:11px 16px 12px 22px;
+  background:linear-gradient(90deg,rgba(4,24,36,.94),rgba(2,12,20,.88));border:1px solid rgba(var(--e),.55);
+  clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);box-shadow:inset 0 0 30px rgba(var(--e),.08);backdrop-filter:blur(6px)}
+.ed-card::before{content:"";position:absolute;left:0;top:16px;bottom:16px;width:3px;background:linear-gradient(var(--acc2),var(--acc));box-shadow:0 0 10px var(--acc)}
+.ed-card.show{display:flex;animation:edcard .32s cubic-bezier(.2,.8,.2,1)}
+@keyframes edcard{from{opacity:0;transform:translateY(16px) scaleY(.92)}}
+.ed-card small{font:800 10px "Orbitron","Exo 2";letter-spacing:3.5px;color:var(--acc);margin-bottom:6px;display:flex;align-items:center;gap:9px}
+.ed-card small::before{content:"";width:7px;height:7px;background:var(--acc);box-shadow:0 0 8px var(--acc);transform:rotate(45deg)}
+.ed-card .tx{font:600 16px/1.4 "Exo 2";color:#eefbff;overflow-y:auto;touch-action:pan-y;white-space:pre-wrap;user-select:text;-webkit-user-select:text}
+.ed-card .tx .caret{display:inline-block;width:7px;height:.95em;background:var(--acc);vertical-align:-2px;margin-left:2px;animation:blink .7s steps(1) infinite}
+.ed-act{display:flex;gap:7px;margin-top:10px;flex-wrap:wrap}
+.ed-act .btn{height:30px;padding:0 13px;font-size:11.5px;border-radius:0;clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px)}
+.ed-act .btn.ghost{background:rgba(var(--e),.1);border:1px solid rgba(var(--e),.55);color:#dff8ff}
 #ed-ov{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-.ed-tools{position:absolute;left:12px;top:48px;bottom:12px;width:74px;display:flex;flex-direction:column;justify-content:center;gap:8px}
-.ed-tools .vbtn{flex:none;height:54px;font-size:10.5px;background:rgba(2,14,22,.62);backdrop-filter:blur(4px)}
-.ed-tools .vbtn.live{border-color:var(--hot);background:rgba(var(--hot-rgb),.28);box-shadow:0 0 14px rgba(var(--hot-rgb),.35)}
-.edith.frozen .ed-tools{opacity:.35;pointer-events:none}
-.ed-log{position:absolute;left:96px;right:142px;top:44px;bottom:12px;display:none;flex-direction:column;padding:10px 12px;border-radius:14px;
-  background:rgba(2,12,20,.92);border:1px solid rgba(var(--rgb),.5);backdrop-filter:blur(6px)}
-.ed-log.show{display:flex;animation:rise .25s ease-out}
+/* the journal */
+.ed-log{position:absolute;left:92px;right:92px;top:52px;bottom:12px;display:none;flex-direction:column;padding:10px 14px;
+  background:rgba(2,12,20,.93);border:1px solid rgba(var(--e),.5);backdrop-filter:blur(6px);
+  clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px)}
+.ed-log.show{display:flex;animation:edcard .3s ease-out}
 .ed-log .hd{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .ed-log .hd b{font:800 11px "Orbitron","Exo 2";letter-spacing:3px;color:#fff;margin-right:auto}
 .ed-log .ls{flex:1;overflow-y:auto;touch-action:pan-y;display:flex;flex-direction:column;gap:6px}
-.ed-log .it{display:flex;gap:10px;align-items:center;padding:6px;border-radius:10px;border:1px solid rgba(var(--rgb),.25);background:rgba(var(--rgb),.06)}
-.ed-log .it img{width:64px;height:40px;object-fit:cover;border-radius:6px;flex:none;background:#000}
+.ed-log .it{display:flex;gap:10px;align-items:center;padding:6px 8px;border-left:2px solid rgba(var(--e),.6);background:linear-gradient(90deg,rgba(var(--e),.1),transparent)}
+.ed-log .it img{width:64px;height:40px;object-fit:cover;flex:none;background:#000;border:1px solid rgba(var(--e),.3)}
 .ed-log .it .t{min-width:0}.ed-log .it small{display:block;font:700 9px "Orbitron","Exo 2";letter-spacing:2px;color:var(--acc)}
 .ed-log .it span{display:block;font:600 13px "Exo 2";color:#dff8ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ed-log .it i{margin-left:auto;font:500 10.5px "JetBrains Mono";color:#7fbcd2;font-style:normal;flex:none}
-.ed-tb{pointer-events:auto;height:24px;padding:0 10px;display:none;align-items:center;border-radius:9px;font:600 11.5px "Exo 2";color:#dff8ff;
-  border:1px solid rgba(var(--rgb),.45);background:rgba(2,10,16,.55)}
-.ed-tb.has{display:flex}.ed-tb.on{background:rgba(var(--hot-rgb),.4);border-color:var(--hot);color:#fff}
-.ed-zoom{font:700 11px "JetBrains Mono";color:var(--hot);text-shadow:0 0 8px rgba(var(--hot-rgb),.6)}
-.ed-side .vbtn.live{border-color:var(--ok);background:rgba(var(--ok-rgb),.22);box-shadow:0 0 14px rgba(var(--ok-rgb),.35)}
-/* lock-on: the reticle snaps in and flashes amber when a frame is taken */
-.ret{transform-box:fill-box;transform-origin:center;transition:transform .25s}
-.edith.lock .ret{animation:lockon .7s ease-out}
-@keyframes lockon{0%{transform:scale(1.9);opacity:.2}40%{transform:scale(.92);opacity:1}100%{transform:scale(1)}}
-.edith.lock .ret *{stroke:var(--hot)}
-.ed-card .tx .caret{display:inline-block;width:7px;height:.95em;background:var(--acc);vertical-align:-2px;margin-left:2px;animation:blink .7s steps(1) infinite}
 /* connect screen */
 .conn{position:absolute;inset:0;display:none;padding:22px 26px;background:radial-gradient(120% 95% at 62% 0%,#0d2c46,#04131f 55%,#01060a)}
 .connect .conn{display:block}
@@ -300,30 +343,40 @@ input.addr{width:100%;height:44px;margin:10px 0 4px;border-radius:12px;border:1.
 
 <div class="edith" id="edith">
   <video id="ed-v" autoplay playsinline muted></video><canvas class="still" id="ed-still"></canvas>
+  <div class="ed-grade"></div>
   <svg class="hud" id="ed-hud" viewBox="0 0 932 430" preserveAspectRatio="none">
-    <g fill="none" stroke="#bff4ff" stroke-width="2" stroke-linecap="round" style="filter:drop-shadow(0 0 4px #4fd8ff)">
-      <path d="M14 46V14H46"/><path d="M746 14H778V46"/><path d="M14 384V416H46"/><path d="M746 416H778V384"/></g>
-    <g transform="translate(396 215)"><g class="ret" fill="none" stroke="#4fd8ff" stroke-linecap="round" style="filter:drop-shadow(0 0 3px #4fd8ff)">
-      <circle r="58" stroke-opacity=".55" stroke-dasharray="6 7"/><circle r="4" fill="#bff4ff" stroke="none"/>
-      <path d="M-84 0H-66M66 0H84M0 -84V-66M0 66V84" stroke-width="2"/>
-      <path d="M-40 -58A70 70 0 0 1 40 -58" stroke="#bff4ff" stroke-width="2.4"/></g></g></svg>
+    <g fill="none" stroke="#bff4ff" stroke-linecap="round" style="filter:drop-shadow(0 0 3px #4fd8ff)">
+      <path d="M88 30V9H109 M823 9H844V30 M88 400V421H109 M823 421H844V400" stroke-width="1.8"/>
+      <path d="M115 9H300 M632 9H817 M115 421H300 M632 421H817" stroke-opacity=".28" stroke-dasharray="1 5"/>
+      <path d="M88 200V230 M844 200V230" stroke-opacity=".5"/>
+      <rect x="85.5" y="6.5" width="5" height="5" fill="#bff4ff" stroke="none"/><rect x="841.5" y="418.5" width="5" height="5" fill="#bff4ff" stroke="none"/></g></svg>
+  <svg class="edr" viewBox="-110 -110 220 220">
+    <g class="ret" fill="none" stroke="#bff4ff" stroke-linecap="round" style="filter:drop-shadow(0 0 3px #4fd8ff)">
+      <g class="spin"><path d="M-32.4 -66.5A74 74 0 0 1 32.4 -66.5M66.5 -32.4A74 74 0 0 1 66.5 32.4M32.4 66.5A74 74 0 0 1 -32.4 66.5M-66.5 32.4A74 74 0 0 1 -66.5 -32.4" stroke-width="1.8" stroke-opacity=".8"/></g>
+      <g class="spin2"><circle r="61" stroke-dasharray="1.5 5.5" stroke-opacity=".55"/></g>
+      <path d="M-30 -19V-30H-19 M19 -30H30V-19 M30 19V30H19 M-19 30H-30V19" stroke-width="2"/>
+      <path d="M-100 0H-86 M86 0H100 M0 -100V-86 M0 86V100" stroke-width="2" stroke-opacity=".9"/>
+      <circle r="2.6" fill="#fff" stroke="none"/>
+      <g class="bz"><g class="spin"><circle r="90" stroke="#ffb347" stroke-width="2.2" stroke-dasharray="46 95"/></g></g>
+    </g></svg>
   <canvas id="ed-ov"></canvas>
   <div class="ed-scan"></div>
-  <div class="ed-top"><span class="ed-logo">E.D.I.T.H.</span><span class="ed-sub" id="ed-sub">наведите камеру и нажмите кнопку</span>
-    <div class="ed-tb" id="ed-torch">Фонарик</div><span class="ed-zoom" id="ed-zoom"></span></div>
-  <div class="ed-side">
-    <div class="vbtn" id="ed-what"><svg width="18" height="18" viewBox="0 0 24 24"><path class="ico" d="M12 4a8 8 0 1 1 0 16 8 8 0 0 1 0-16 M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7 M12 16.8v.2"/></svg><span>Что это?</span></div>
-    <div class="vbtn" id="ed-text"><svg width="18" height="18" viewBox="0 0 24 24"><path class="ico" d="M5 6h14 M12 6v13 M8 19h8"/></svg><span>Текст</span></div>
-    <div class="vbtn" id="ed-tr"><svg width="18" height="18" viewBox="0 0 24 24"><path class="ico" d="M4 6h9 M8.5 4v2 M6 6c.5 3 2.5 5.5 5 7 M11 6c-.5 3-2.5 5.5-5.5 7 M13 20l4-9 4 9 M14.3 17h5.4"/></svg><span>Перевод</span></div>
-    <div class="vbtn" id="ed-livebtn"><svg width="18" height="18" viewBox="0 0 24 24"><path class="ico" d="M3 7V4h3 M18 4h3v3 M21 17v3h-3 M6 20H3v-3 M7 9h10 M7 12h7 M7 15h9"/></svg><span>Живой текст</span></div>
-    <div class="vbtn" id="ed-ask"><svg width="18" height="18" viewBox="0 0 24 24"><path class="ico" d="M9 3h6v10a3 3 0 0 1-6 0z M5 11a7 7 0 0 0 14 0 M12 18v3"/></svg><span>Спросить (держать)</span></div>
-    <div class="vbtn x" id="ed-x"><svg width="18" height="18" viewBox="0 0 24 24"><path class="ico" d="M6 6l12 12M18 6L6 18"/></svg><span>Закрыть</span></div>
+  <div class="ed-top"><span class="ed-logo">E.D.I.T.H.</span><span class="ed-sub" id="ed-sub">наведите камеру</span></div>
+  <div class="ed-ctl"><span class="ed-zoom" id="ed-zoom"></span><div class="ed-tb" id="ed-torch">Фонарик</div></div>
+  <div class="ed-data" id="ed-rd"></div><div class="ed-data lo" id="ed-bl"></div><div class="ed-data lo" id="ed-br"></div>
+  <div class="ed-rail r">
+    <div class="edb main" id="ed-what"><i><svg width="24" height="24" viewBox="0 0 24 24"><path class="ico" d="M12 4a8 8 0 1 1 0 16 8 8 0 0 1 0-16 M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7 M12 16.8v.2"/></svg></i><span>Что это?</span></div>
+    <div class="edb" id="ed-text"><i><svg width="20" height="20" viewBox="0 0 24 24"><path class="ico" d="M5 6h14 M12 6v13 M8 19h8"/></svg></i><span>Текст</span></div>
+    <div class="edb" id="ed-tr"><i><svg width="20" height="20" viewBox="0 0 24 24"><path class="ico" d="M4 6h9 M8.5 4v2 M6 6c.5 3 2.5 5.5 5 7 M11 6c-.5 3-2.5 5.5-5.5 7 M13 20l4-9 4 9 M14.3 17h5.4"/></svg></i><span>Перевод</span></div>
+    <div class="edb" id="ed-livebtn"><i><svg width="20" height="20" viewBox="0 0 24 24"><path class="ico" d="M3 7V4h3 M18 4h3v3 M21 17v3h-3 M6 20H3v-3 M7 9h10 M7 12h7 M7 15h9"/></svg></i><span>Живой текст</span></div>
+    <div class="edb" id="ed-ask"><i><svg width="20" height="20" viewBox="0 0 24 24"><path class="ico" d="M9 3h6v10a3 3 0 0 1-6 0z M5 11a7 7 0 0 0 14 0 M12 18v3"/></svg></i><span>Спросить</span></div>
+    <div class="edb x" id="ed-x"><i><svg width="20" height="20" viewBox="0 0 24 24"><path class="ico" d="M6 6l12 12M18 6L6 18"/></svg></i><span>Закрыть</span></div>
   </div>
-  <div class="ed-tools">
-    <div class="vbtn" id="ed-photo"><svg width="18" height="18" viewBox="0 0 24 24"><path class="ico" d="M4 8h3l2-3h6l2 3h3v11H4z M12 10.5a3 3 0 1 1 0 6 3 3 0 0 1 0-6"/></svg><span>Фото → ПК</span></div>
-    <div class="vbtn" id="ed-scan"><svg width="18" height="18" viewBox="0 0 24 24"><path class="ico" d="M6 3h9l4 4v14H6z M9 11h7 M9 14h7 M9 17h5 M3 9h18"/></svg><span>Скан</span></div>
-    <div class="vbtn" id="ed-color"><svg width="18" height="18" viewBox="0 0 24 24"><path class="ico" d="M12 3c3 4 6 7.5 6 11a6 6 0 0 1-12 0c0-3.5 3-7 6-11z M9.5 14.5a2.5 2.5 0 0 0 2.5 2.5"/></svg><span>Цвет</span></div>
-    <div class="vbtn" id="ed-logbtn"><svg width="18" height="18" viewBox="0 0 24 24"><path class="ico" d="M5 4h14v16H5z M8 8h8 M8 12h8 M8 16h5"/></svg><span>Журнал</span></div>
+  <div class="ed-rail l">
+    <div class="edb" id="ed-photo"><i><svg width="20" height="20" viewBox="0 0 24 24"><path class="ico" d="M4 8h3l2-3h6l2 3h3v11H4z M12 10.5a3 3 0 1 1 0 6 3 3 0 0 1 0-6"/></svg></i><span>Фото → ПК</span></div>
+    <div class="edb" id="ed-scan"><i><svg width="20" height="20" viewBox="0 0 24 24"><path class="ico" d="M6 3h9l4 4v14H6z M9 11h7 M9 14h7 M9 17h5 M3 9h18"/></svg></i><span>Скан</span></div>
+    <div class="edb" id="ed-color"><i><svg width="20" height="20" viewBox="0 0 24 24"><path class="ico" d="M12 3c3 4 6 7.5 6 11a6 6 0 0 1-12 0c0-3.5 3-7 6-11z M9.5 14.5a2.5 2.5 0 0 0 2.5 2.5"/></svg></i><span>Цвет</span></div>
+    <div class="edb" id="ed-logbtn"><i><svg width="20" height="20" viewBox="0 0 24 24"><path class="ico" d="M5 4h14v16H5z M8 8h8 M8 12h8 M8 16h5"/></svg></i><span>Журнал</span></div>
   </div>
   <div class="ed-log" id="ed-log"><div class="hd"><b>ЖУРНАЛ E.D.I.T.H.</b><div class="sbtn" id="ed-log-clr">Очистить</div><div class="sbtn" id="ed-log-x">✕</div></div><div class="ls" id="ed-log-ls"></div></div>
   <div class="ed-card" id="ed-card"><small id="ed-ct">ЧТО ЭТО</small><div class="tx" id="ed-cx"></div>
@@ -1353,7 +1406,7 @@ async function edithOpen(on) {
     edStream = await navigator.mediaDevices.getUserMedia({ audio: false,
       video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } } });
     edV.srcObject = edStream; await edV.play().catch(() => {});
-    edSub("наведите камеру и нажмите кнопку"); edTools();
+    edSub("наведите камеру"); edTools();
     edSizeOv(); edSensors(true); if (!edDrawOn) { edDrawOn = true; edDraw(); }
   } catch (e) {
     edSub("нет камеры");
@@ -1490,7 +1543,7 @@ async function edSee(mode, q, shot) {
   }
 }
 function edLive() { edBox.classList.remove("frozen"); document.getElementById("ed-card").classList.remove("show"); clearInterval(edTyping);
-  edSub(edLiveOn ? "ищу текст…" : "наведите камеру и нажмите кнопку"); if (HAS && Native.speakStop) Native.speakStop(); }
+  edSub(edLiveOn ? "ищу текст…" : "наведите камеру"); if (HAS && Native.speakStop) Native.speakStop(); }
 document.getElementById("ed-what").onclick = () => edSee("what");
 document.getElementById("ed-text").onclick = () => edSee("text");
 document.getElementById("ed-tr").onclick = () => edSee("translate");
@@ -1585,30 +1638,30 @@ function edInstruments(now) {
     const lvl = Math.abs(edTilt) < 1, col = lvl ? "rgba(93,255,176,.95)" : "rgba(191,244,255,.8)";
     X.translate(396, 215 + Math.max(-60, Math.min(60, edPitch * 1.5))); X.rotate(-edTilt * Math.PI / 180);
     X.strokeStyle = col; X.lineWidth = 2; X.shadowColor = lvl ? "#5dffb0" : "#4fd8ff"; X.shadowBlur = 6;
-    X.beginPath(); X.moveTo(-190, 0); X.lineTo(-92, 0); X.moveTo(92, 0); X.lineTo(190, 0);
-    X.moveTo(-190, 0); X.lineTo(-190, 8); X.moveTo(190, 0); X.lineTo(190, 8); X.stroke();
+    // two short "wings" either side of the reticle, with a small drop at the tips
+    X.beginPath(); X.moveTo(-160, 0); X.lineTo(-108, 0); X.lineTo(-104, 5); X.moveTo(160, 0); X.lineTo(108, 0); X.lineTo(104, 5); X.stroke();
     X.setTransform(1, 0, 0, 1, 0, 0); X.scale(edOv.width / 932, edOv.height / 430);
     X.shadowBlur = 0; X.fillStyle = col; X.font = "700 12px 'JetBrains Mono'";
-    X.fillText((lvl ? "РОВНО " : "") + (edTilt > 0 ? "+" : "") + edTilt.toFixed(1) + "°", 470, 207);
+    if (lvl) { X.font = "800 10px 'Exo 2'"; X.textAlign = "center"; X.fillText("РОВНО", 396, 336); X.textAlign = "left"; }
   }
   // compass tape along the top
   if (edHead != null) {
-    const cx = 396, y = 46, span = 70, px = 3.2, N = ["С", "СВ", "В", "ЮВ", "Ю", "ЮЗ", "З", "СЗ"];
-    X.strokeStyle = "rgba(191,244,255,.7)"; X.fillStyle = "rgba(191,244,255,.85)"; X.font = "700 11px 'JetBrains Mono'"; X.textAlign = "center"; X.lineWidth = 1.4;
+    const cx = 396, y = 12, span = 28, px = 2.6, N = ["С", "СВ", "В", "ЮВ", "Ю", "ЮЗ", "З", "СЗ"];
+    X.strokeStyle = "rgba(191,244,255,.7)"; X.fillStyle = "rgba(191,244,255,.85)"; X.font = "800 11px 'Exo 2'"; X.textAlign = "center"; X.lineWidth = 1.4;
     for (let d = Math.ceil((edHead - span) / 5) * 5; d <= edHead + span; d += 5) {
       const x = cx + (d - edHead) * px, dd = ((d % 360) + 360) % 360, big = dd % 45 === 0;
       X.globalAlpha = 1 - Math.abs(d - edHead) / span;
       X.beginPath(); X.moveTo(x, y); X.lineTo(x, y + (big ? 10 : 5)); X.stroke();
       if (big) X.fillText(N[dd / 45], x, y + 22);
     }
-    X.globalAlpha = 1; X.fillStyle = "#ffb347"; X.beginPath(); X.moveTo(cx - 5, y - 6); X.lineTo(cx + 5, y - 6); X.lineTo(cx, y); X.fill();
-    X.fillText(Math.round((edHead + 360) % 360) + "°", cx, y - 10); X.textAlign = "left";
+    X.globalAlpha = 1; X.fillStyle = "#ffb347"; X.beginPath(); X.moveTo(cx - 5, y + 30); X.lineTo(cx + 5, y + 30); X.lineTo(cx, y + 24); X.fill();
+    X.font = "700 10px 'JetBrains Mono'"; X.fillText(Math.round((edHead + 360) % 360) + "°", cx, y + 42); X.textAlign = "left";
   }
   // colour picker: a swatch by the reticle
   if (edColor && !edBox.classList.contains("frozen")) {
     if (!edCol || now - edCol.t > 140) { const c = edSample(); if (c) edCol = { c, t: now, name: colorName(...c), hex: "#" + c.map(hex2).join("") }; }
     if (edCol) {
-      const [r, g, b] = edCol.c, x = 470, y = 228;
+      const [r, g, b] = edCol.c, x = 430, y = 262;
       X.fillStyle = "rgba(2,12,20,.82)"; X.strokeStyle = "rgba(255,179,71,.8)"; X.lineWidth = 1.4;
       X.beginPath(); X.roundRect ? X.roundRect(x, y, 196, 58, 10) : X.rect(x, y, 196, 58); X.fill(); X.stroke();
       X.fillStyle = `rgb(${r},${g},${b})`; X.beginPath(); X.arc(x + 29, y + 29, 19, 0, 7); X.fill(); X.strokeStyle = "#fff"; X.stroke();
@@ -1619,11 +1672,20 @@ function edInstruments(now) {
   }
   X.restore();
 }
+let edDataT = 0;
+function edData(now) {           // the corner readouts, twice a second
+  if (now - edDataT < 500) return;
+  edDataT = now;
+  const t = new Date(), z = edZ && edZ.v ? edZ.v : 1;
+  document.getElementById("ed-rd").innerHTML = `<b>${t.toTimeString().slice(0, 8)}</b> · ${edLiveOn ? "LIVE TXT" : edColor ? "COLOR" : "STBY"}`;
+  document.getElementById("ed-bl").innerHTML = `RES <b>${edV.videoWidth || "—"}×${edV.videoHeight || "—"}</b> · ZOOM <b>×${z.toFixed(1)}</b>`;
+  document.getElementById("ed-br").innerHTML = `HDG <b>${edHead == null ? "—" : Math.round((edHead + 360) % 360) + "°"}</b> · TILT <b>${edTilt == null ? "—" : (edTilt > 0 ? "+" : "") + edTilt.toFixed(1) + "°"}</b>`;
+}
 function edDraw() {
   if (!edDrawOn) return;
   requestAnimationFrame(edDraw);
   edOx.clearRect(0, 0, 932, 430);
-  edInstruments(Date.now());
+  edInstruments(Date.now()); edData(Date.now());
   if (!edLiveOn || edBox.classList.contains("frozen")) return;
   const m = edMap(), now = Date.now(), pulse = .55 + .45 * Math.sin(now / 260);
   edOx.lineWidth = 2; edOx.shadowBlur = 8;
@@ -1648,24 +1710,24 @@ function edLiveSet(on) {
   edLiveOn = on; edLines = []; edQR = [];
   document.getElementById("ed-livebtn").classList.toggle("live", on);
   if (on) { edSub("ищу текст…"); edLiveLoop(); }
-  else { clearTimeout(edLiveT); edSub("наведите камеру и нажмите кнопку"); }
+  else { clearTimeout(edLiveT); edSub("наведите камеру"); }
 }
 document.getElementById("ed-livebtn").onclick = () => { buzz(12); edLiveSet(!edLiveOn); };
 document.getElementById("ed-color").onclick = () => {
   buzz(12); edColor = !edColor; edCol = null;
   document.getElementById("ed-color").classList.toggle("live", edColor);
-  edSub(edColor ? "наведите центр прицела на цвет · коснитесь образца — запомнить" : "наведите камеру и нажмите кнопку");
+  edSub(edColor ? "центр прицела — на цвет" : "наведите камеру");
 };
 edBox.addEventListener("pointerdown", (e) => {
   if (!edColor || !edCol || edBox.classList.contains("frozen")) return;
   const p = loc(e);
-  if (p.x < 470 || p.x > 666 || p.y < 228 || p.y > 286) return;
+  if (p.x < 430 || p.x > 626 || p.y < 262 || p.y > 320) return;
   buzz(18); edLock();
   edCard("ЦВЕТ", `${edCol.name}\n${edCol.hex} · RGB ${edCol.c.join(", ")}`, true, { search: false });
 });
 // a tap on a frame: that line (or the QR code) in the card
 edBox.addEventListener("pointerdown", (e) => {
-  if (!edLiveOn || edBox.classList.contains("frozen") || e.target.closest(".ed-side,.ed-card,.ed-top")) return;
+  if (!edLiveOn || edBox.classList.contains("frozen") || e.target.closest(".ed-rail,.ed-card,.ed-top,.ed-log,.ed-ctl")) return;
   const p = loc(e), hit = (o) => o.box && p.x >= o.box[0] - 8 && p.x <= o.box[0] + o.box[2] + 8 && p.y >= o.box[1] - 8 && p.y <= o.box[1] + o.box[3] + 8;
   const q = edQR.find(hit), l = !q && edLines.find(hit);
   if (!q && !l) return;
@@ -1689,7 +1751,7 @@ document.getElementById("ed-torch").onclick = async () => {
   document.getElementById("ed-torch").classList.toggle("on", edTorch);
 };
 const edPts = new Map();
-edBox.addEventListener("pointerdown", (e) => { if (edZ.max > edZ.min && !e.target.closest(".ed-side,.ed-card,.ed-top")) edPts.set(e.pointerId, loc(e)); });
+edBox.addEventListener("pointerdown", (e) => { if (edZ.max > edZ.min && !e.target.closest(".ed-rail,.ed-card,.ed-top,.ed-log,.ed-ctl")) edPts.set(e.pointerId, loc(e)); });
 edBox.addEventListener("pointermove", (e) => {
   if (!edPts.has(e.pointerId)) return;
   edPts.set(e.pointerId, loc(e));
@@ -1743,6 +1805,36 @@ function start() {
   if (P0.get("demo")) { cur = { host: "192.168.1.5", port: 8790, name: "ПК Клима" }; screen = "main"; document.body.className = ""; wsOk = true; ping = 12; chipState(); }
   else if (pc) useMain(pc);
   else showConnect(null);
+  if (P0.get("demo") === "edith") edDemo(P0.get("ed") || "");
+}
+// a dev preview of E.D.I.T.H. without a phone (?demo=edith&ed=live|color|card|busy): a drawn "camera" and fake sensors
+async function edDemo(mode) {
+  const c = document.createElement("canvas"); c.width = 1280; c.height = 720;
+  const g = c.getContext("2d");
+  const paint = () => {
+    const bg = g.createLinearGradient(0, 0, 1280, 720); bg.addColorStop(0, "#3d4650"); bg.addColorStop(1, "#1d232a");
+    g.fillStyle = bg; g.fillRect(0, 0, 1280, 720);
+    g.fillStyle = "#2a3038"; g.fillRect(0, 520, 1280, 200);                                   // a desk
+    g.fillStyle = "#ece6d4"; g.save(); g.translate(250, 170); g.rotate(-.04); g.fillRect(0, 0, 470, 300);   // a page
+    g.fillStyle = "#2a2a2a"; g.font = "bold 34px Arial"; g.fillText("EMERGENCY EXIT", 40, 80);
+    g.font = "26px Arial"; g.fillText("Keep this door closed", 40, 130); g.fillText("www.example.com/help", 40, 175); g.restore();
+    g.fillStyle = "#b8262e"; g.beginPath(); g.ellipse(930, 470, 95, 120, 0, 0, 7); g.fill();            // a red mug
+    g.fillStyle = "#8d1c22"; g.fillRect(835, 350, 190, 30);
+  };
+  paint(); setInterval(paint, 200);
+  const st = c.captureStream(5);
+  navigator.mediaDevices.getUserMedia = async () => st;
+  await edithOpen(true);
+  for (let i = 0; i < 30; i++) {
+    dispatchEvent(new DeviceMotionEvent("devicemotion", { accelerationIncludingGravity: { x: -0.9, y: 9.7, z: 0.4 } }));
+    dispatchEvent(new DeviceOrientationEvent("deviceorientationabsolute", { alpha: 322, beta: 0, gamma: 0, absolute: true }));
+    await new Promise((r) => setTimeout(r, 15));
+  }
+  if (mode === "live") { edLiveOn = true; document.getElementById("ed-livebtn").classList.add("live");
+    edLines = [{ text: "EMERGENCY EXIT", x: .21, y: .27, w: .27, h: .06, t: Date.now() + 1e9 }, { text: "www.example.com/help", x: .22, y: .46, w: .3, h: .05, t: Date.now() + 1e9 }]; }
+  if (mode === "color") document.getElementById("ed-color").click();
+  if (mode === "card") { edFreeze(); edCard("ЧТО ЭТО", "Красная керамическая кружка, примерно 300 мл. Рядом лист с табличкой «Запасной выход».", false, { query: "красная кружка", nolog: true }); }
+  if (mode === "busy") { edFreeze(); edBusy = true; edBox.classList.add("busy"); edSub("смотрю…"); }
 }
 let started = false;
 const go = () => { if (!started) { started = true; start(); } };
