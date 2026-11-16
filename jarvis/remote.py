@@ -28,7 +28,10 @@ Only for Android. Works only inside the home Wi-Fi and only while Settings → �
   plays it (AudioTrack in MainActivity): video, music and games from the PC on the phone;
 - the phone keeps this PC's MAC addresses and the LAN broadcast (WS "hello" -> "wake") and can wake it with a
   Wake-on-LAN magic packet; "act sleep" puts it to sleep. Over Wi-Fi a PC wakes only from sleep, from shutdown only by
-  cable; Settings shows what is ready (`wake_ready`)."""
+  cable; Settings shows what is ready (`wake_ready`);
+- E.D.I.T.H.: POST /see gets a photo from the phone's camera and answers — "what" (AI vision, one short answer),
+  "text" (Windows OCR), "translate" (OCR + the screen translator), "ask" (the user's spoken question about the photo;
+  POST /stt only recognises it, without running it as a command). AI requests happen only on these buttons."""
 import asyncio
 import ctypes
 import hashlib
@@ -249,6 +252,8 @@ class Remote:
         app.router.add_post("/pair/confirm", self._confirm)
         app.router.add_get("/ws", self._ws)
         app.router.add_post("/voice", self._voice)
+        app.router.add_post("/stt", self._stt)
+        app.router.add_post("/see", self._see)
         app.router.add_post("/diag", self._diag)
         app.router.add_get("/apk", self._apk)
         app.router.add_get("/apk/{ver}/{name}", self._apk_file)
@@ -485,6 +490,11 @@ class Remote:
             elif t == "tap":                           # a tap on the live screen = a click at that point
                 self._tap(float(m.get("x", -1)), float(m.get("y", -1)), m.get("b") if m.get("b") in BTN else "left",
                           2 if m.get("n") == 2 else 1)
+            elif t == "clip":                          # E.D.I.T.H.: recognised text into the PC's clipboard
+                s = str(m.get("s") or "")[:20000]
+                if s:
+                    S.clipboard_set(s)
+                    return {"t": "clipped"}
             elif t == "say":                           # a typed phrase from the app = a command, like the UI line
                 s = str(m.get("s") or "").strip()[:300]
                 if s:
@@ -799,6 +809,116 @@ class Remote:
         except Exception as e:
             self.core.log(f"Пульт: распознавание: {e}")
             return ""
+
+    # ================================================================ E.D.I.T.H.: the phone's camera
+    async def _stt(self, request):
+        """A spoken question for E.D.I.T.H.: only recognised, never run as a command."""
+        from aiohttp import web
+        if not self._device(self._token(request)):
+            return web.json_response({"ok": False, "error": "unpaired"}, status=401)
+        raw = await request.read()
+        if len(raw) < 16000 * 2 * 0.3:
+            return web.json_response({"ok": True, "text": ""})
+        audio = np.frombuffer(raw[: len(raw) // 2 * 2], dtype="<i2").astype(np.float32) / 32768.0
+        peak = float(np.abs(audio).max() or 0)
+        if 0 < peak < 0.3:
+            audio = audio * min(4.0, 0.5 / peak)
+        import re
+        text = await asyncio.get_running_loop().run_in_executor(None, self._recognize, audio)
+        text = re.sub(r"^(?:джарвис|jarvis|джарвиз|жарвис|эдит|edith)[,\s]*", "", text or "", flags=re.I).strip()
+        return web.json_response({"ok": True, "text": text})
+
+    async def _see(self, request):
+        from aiohttp import web
+        dev = self._device(self._token(request))
+        if not dev:
+            return web.json_response({"ok": False, "error": "unpaired"}, status=401)
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"ok": False, "error": "bad request"}, status=400)
+        import base64
+        try:
+            jpg = base64.b64decode(str(body.get("img") or "").split(",")[-1])
+        except Exception:
+            jpg = b""
+        if len(jpg) < 500:
+            return web.json_response({"ok": False, "error": "нет снимка"}, status=400)
+        mode = body.get("mode") if body.get("mode") in ("what", "text", "translate", "ask") else "what"
+        q = str(body.get("q") or "").strip()[:300]
+        self.core.log(f"Пульт: E.D.I.T.H. — {({'what': 'что это', 'text': 'текст', 'translate': 'перевод', 'ask': 'вопрос'})[mode]}"
+                      + (f": «{q}»" if q else ""))
+        try:
+            res = await asyncio.get_running_loop().run_in_executor(None, self.see, jpg, mode, q)
+        except Exception as e:
+            self.core.log(f"Пульт: E.D.I.T.H.: {e}")
+            res = {"ok": False, "error": str(e)[:200]}
+        return web.json_response(res)
+
+    def _ocr(self, img):
+        """Text on a photo. Both engines read it; the Russian one turns Latin look-alikes into Cyrillic ("Кеер this"),
+        so Russian wins only when its text really is mostly Cyrillic."""
+        import re
+        from .screentrans import ocr_image
+        got = {}
+        for lang in ("ru", "en"):
+            try:
+                lines = ocr_image(img, (0, 0), lang)
+            except Exception:
+                lines = []
+            lines.sort(key=lambda x: (x["y"] // max(8, x["h"]), x["x"]))
+            got[lang] = "\n".join(x["text"] for x in lines).strip()
+        ru, en = got["ru"], got["en"]
+        cyr, lat = len(re.findall(r"[а-яё]", ru, re.I)), len(re.findall(r"[a-z]", ru, re.I))
+        if ru and cyr >= 0.6 * (cyr + lat):
+            return ru
+        return en or ru
+
+    def see(self, jpg, mode, q=""):
+        """{ok, title, text, [copy]} for the phone. Vision goes to the user's AI only when it can take pictures."""
+        import io
+        from PIL import Image, ImageOps
+        img = ImageOps.exif_transpose(Image.open(io.BytesIO(jpg))).convert("RGB")
+        img.thumbnail((1600, 1600))
+        if mode == "text":
+            text = self._ocr(img)
+            return {"ok": True, "title": "ТЕКСТ", "text": text or "Текста не вижу. Поднесите ближе и держите ровно.", "copy": bool(text)}
+        if mode == "translate":
+            text = self._ocr(img)
+            if not text:
+                return {"ok": True, "title": "ПЕРЕВОД", "text": "Текста не вижу. Поднесите ближе и держите ровно."}
+            try:
+                tr, src = self.core.screentrans.tr.google(text, "ru")
+                if src == "ru":
+                    return {"ok": True, "title": "ПЕРЕВОД", "text": "Это уже по-русски:\n" + text, "copy": True}
+            except Exception:
+                tr = (self.core.ask_ai_once("Переведи на русский, ответь только переводом:\n" + text) or "").strip()
+            return {"ok": True, "title": "ПЕРЕВОД", "text": tr or text, "copy": True, "orig": text}
+        # "what" / "ask": the AI looks at the photo
+        from .llm import vision_ask, vision_supported
+        prov = self.cfg.provider()
+        question = q or "Что это?"
+        prompt = (f"Ты — E.D.I.T.H., помощник в очках. Пользователь навёл камеру телефона и спрашивает: «{question}». "
+                  "Ответь по-русски коротко: 1–2 предложения, самое полезное (что это, и если уместно — одна деталь: "
+                  "марка, вид, для чего, цена порядка). Без вступлений и без markdown.")
+        buf = io.BytesIO()
+        small = img.copy()
+        small.thumbnail((1024, 1024))
+        small.save(buf, "PNG")
+        if vision_supported(prov):
+            try:
+                ans = (vision_ask(prov, prompt, buf.getvalue(), max_tokens=220) or "").strip()
+                if ans:
+                    return {"ok": True, "title": "ЧТО ЭТО" if mode == "what" else "ОТВЕТ", "text": ans}
+            except Exception as e:
+                self.core.log(f"Пульт: E.D.I.T.H. зрение: {e}")
+        # no eyes: answer from the text on the photo, and say so
+        text = self._ocr(img)
+        if text:
+            ans = (self.core.ask_ai_once(f"{prompt}\nКартинку я не вижу, но на ней распознан текст:\n{text[:2000]}") or "").strip()
+            return {"ok": True, "title": "ПО ТЕКСТУ НА ФОТО", "text": ans or text}
+        return {"ok": True, "title": "НЕ ВИЖУ", "text": "Ваш ИИ не принимает картинки. Выберите модель со зрением в Настройках → ИИ, "
+                "а «Текст» и «Перевод» работают и без неё."}
 
     # ================================================================ the app itself
     async def _apk(self, request):

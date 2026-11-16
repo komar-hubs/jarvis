@@ -123,6 +123,30 @@ svg{position:absolute;left:0;top:0;overflow:visible}
 .shotv img{flex:1;min-height:0;width:100%;object-fit:contain;border-radius:8px}
 .shot-bar{display:flex;align-items:center;gap:10px;margin-top:8px;flex:none}
 .shot-bar .p2-title{margin-right:auto}
+/* E.D.I.T.H.: the camera with a HUD over it */
+.edith{position:absolute;inset:0;z-index:9;display:none;background:#000;overflow:hidden}
+.edith.show{display:block;animation:rise .3s ease-out}
+.edith video,.edith canvas.still{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.edith canvas.still{display:none}.edith.frozen canvas.still{display:block}
+.edith .hud{position:absolute;inset:0;pointer-events:none}
+.ed-top{position:absolute;left:18px;top:12px;right:150px;display:flex;align-items:center;gap:10px;pointer-events:none}
+.ed-logo{font:800 13px "Orbitron","Exo 2";letter-spacing:4px;color:#fff;text-shadow:0 0 12px rgba(var(--rgb),.9)}
+.ed-sub{font:600 11px "JetBrains Mono";color:#bff4ff;background:rgba(2,10,16,.55);padding:3px 9px;border-radius:9px;border:1px solid rgba(var(--rgb),.35);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ed-side{position:absolute;right:12px;top:12px;bottom:12px;width:118px;display:flex;flex-direction:column;justify-content:center;gap:8px}
+.ed-side .vbtn{flex:none;height:56px;background:rgba(2,14,22,.62);backdrop-filter:blur(4px)}
+.ed-side .vbtn.hold{border-color:var(--hot);background:rgba(var(--hot-rgb),.3)}
+.ed-scan{position:absolute;left:0;right:142px;height:90px;top:-100px;pointer-events:none;display:none;
+  background:linear-gradient(180deg,transparent,rgba(127,227,255,.28),transparent);box-shadow:0 0 30px rgba(var(--rgb),.25)}
+.edith.busy .ed-scan{display:block;animation:edscan 1.4s linear infinite}
+@keyframes edscan{to{top:110%}}
+.ed-card{position:absolute;left:18px;bottom:16px;width:560px;max-height:220px;display:none;flex-direction:column;padding:12px 16px;border-radius:14px;
+  background:rgba(2,12,20,.86);border:1px solid rgba(var(--rgb),.55);box-shadow:0 0 26px rgba(var(--rgb),.25);backdrop-filter:blur(6px)}
+.ed-card.show{display:flex;animation:rise .25s ease-out}
+.ed-card small{font:700 10px "Orbitron","Exo 2";letter-spacing:3px;color:var(--acc);margin-bottom:5px}
+.ed-card .tx{font:600 16px/1.38 "Exo 2";color:#eafaff;overflow-y:auto;touch-action:pan-y;white-space:pre-wrap;user-select:text;-webkit-user-select:text}
+.ed-act{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.ed-act .btn{height:32px;padding:0 14px;font-size:12px}
+.ed-voice{position:absolute;right:142px;top:12px;pointer-events:auto}
 /* connect screen */
 .conn{position:absolute;inset:0;display:none;padding:22px 26px;background:radial-gradient(120% 95% at 62% 0%,#0d2c46,#04131f 55%,#01060a)}
 .connect .conn{display:block}
@@ -248,6 +272,28 @@ input.addr{width:100%;height:44px;margin:10px 0 4px;border-radius:12px;border:1.
   <div class="note foot">Нет вашего ПК в списке? На компьютере: J.A.R.V.I.S. → Настройки → «Телефон» → «Пульт с телефона» → включить. Телефон и ПК должны быть в одной сети Wi-Fi.</div>
 </div>
 
+<div class="edith" id="edith">
+  <video id="ed-v" autoplay playsinline muted></video><canvas class="still" id="ed-still"></canvas>
+  <svg class="hud" id="ed-hud" viewBox="0 0 932 430" preserveAspectRatio="none">
+    <g fill="none" stroke="#bff4ff" stroke-width="2" stroke-linecap="round" style="filter:drop-shadow(0 0 4px #4fd8ff)">
+      <path d="M14 46V14H46"/><path d="M746 14H778V46"/><path d="M14 384V416H46"/><path d="M746 416H778V384"/></g>
+    <g fill="none" stroke="#4fd8ff" stroke-linecap="round" style="filter:drop-shadow(0 0 3px #4fd8ff)" transform="translate(396 215)">
+      <circle r="58" stroke-opacity=".55" stroke-dasharray="6 7"/><circle r="4" fill="#bff4ff" stroke="none"/>
+      <path d="M-84 0H-66M66 0H84M0 -84V-66M0 66V84" stroke-width="2"/>
+      <path d="M-40 -58A70 70 0 0 1 40 -58" stroke="#bff4ff" stroke-width="2.4"/></g></svg>
+  <div class="ed-scan"></div>
+  <div class="ed-top"><span class="ed-logo">E.D.I.T.H.</span><span class="ed-sub" id="ed-sub">наведите камеру и нажмите кнопку</span></div>
+  <div class="ed-side">
+    <div class="vbtn" id="ed-what"><svg width="18" height="18" viewBox="0 0 24 24"><path class="ico" d="M12 4a8 8 0 1 1 0 16 8 8 0 0 1 0-16 M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7 M12 16.8v.2"/></svg><span>Что это?</span></div>
+    <div class="vbtn" id="ed-text"><svg width="18" height="18" viewBox="0 0 24 24"><path class="ico" d="M5 6h14 M12 6v13 M8 19h8"/></svg><span>Текст</span></div>
+    <div class="vbtn" id="ed-tr"><svg width="18" height="18" viewBox="0 0 24 24"><path class="ico" d="M4 6h9 M8.5 4v2 M6 6c.5 3 2.5 5.5 5 7 M11 6c-.5 3-2.5 5.5-5.5 7 M13 20l4-9 4 9 M14.3 17h5.4"/></svg><span>Перевод</span></div>
+    <div class="vbtn" id="ed-ask"><svg width="18" height="18" viewBox="0 0 24 24"><path class="ico" d="M9 3h6v10a3 3 0 0 1-6 0z M5 11a7 7 0 0 0 14 0 M12 18v3"/></svg><span>Спросить (держать)</span></div>
+    <div class="vbtn x" id="ed-x"><svg width="18" height="18" viewBox="0 0 24 24"><path class="ico" d="M6 6l12 12M18 6L6 18"/></svg><span>Закрыть</span></div>
+  </div>
+  <div class="ed-card" id="ed-card"><small id="ed-ct">ЧТО ЭТО</small><div class="tx" id="ed-cx"></div>
+    <div class="ed-act"><div class="btn ghost" id="ed-copy">Скопировать на ПК</div><div class="btn ghost" id="ed-type">Напечатать на ПК</div><div class="btn ghost" id="ed-say">Озвучить</div><div class="btn" id="ed-live">Дальше</div></div></div>
+</div>
+
 <div class="shade" id="shade"><div class="sheet">
   <h2>НАСТРОЙКИ ПУЛЬТА</h2>
   <div class="srow"><label>Скорость курсора</label><input type="range" id="o-speed" min="0.8" max="4.5" step="0.1"></div>
@@ -266,11 +312,16 @@ const HAS = !!window.Native;
 const P0 = new URLSearchParams(location.search);
 let _id = 0; const _cb = {};
 window.__nat = (id, status, text) => { const f = _cb[id]; delete _cb[id]; if (f) f(status, text); };
-function http(method, url, body, token) {
+function http(method, url, body, token, wait) {
   return new Promise((res) => {
     const done = (s, t) => { let j = null; try { j = JSON.parse(t); } catch (e) {} res({ status: s, json: j }); };
-    if (HAS) { const id = ++_id; _cb[id] = done; Native.http(id, method, url, body ? JSON.stringify(body) : "", token || ""); return; }
-    const ctl = new AbortController(); setTimeout(() => ctl.abort(), 3500);
+    if (HAS) {
+      const id = ++_id; _cb[id] = done;
+      if (wait && Native.http2) Native.http2(id, method, url, body ? JSON.stringify(body) : "", token || "", wait);
+      else Native.http(id, method, url, body ? JSON.stringify(body) : "", token || "");
+      return;
+    }
+    const ctl = new AbortController(); setTimeout(() => ctl.abort(), wait || 3500);
     fetch(url, { method, signal: ctl.signal, headers: { "Content-Type": "application/json", "X-Token": token || "" }, body: body ? JSON.stringify(body) : undefined })
       .then((r) => r.text().then((t) => done(r.status, t))).catch(() => done(0, ""));
   });
@@ -307,6 +358,7 @@ const ICON = {
   shot: "M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4 M12 9.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5", alttab: "M4 6h11v9H4z M9 10h11v9H9",
   min: "M4 5h16v14H4z M8 15h8", close: "M4 5h16v14H4z M9 9l6 6M15 9l-6 6", task: "M4 20V12M9 20V6M14 20v-9M19 20V4", screen: "M3 5h18v11H3z M8 20h8M12 16v4 M7 9l3 2-3 2", lock: "M6 11h12v10H6z M9 11V8a3 3 0 0 1 6 0v3",
   search: "M10.5 4a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13 M15.5 15.5L20 20", folder: "M3 7h7l2 2h9v10H3z",
+  edith: "M2 9.5h20 M4 9.5a4 4 0 0 0 7.5 1.8 M12.5 11.3a4 4 0 0 0 7.5-1.8 M11.5 10.5h1",
   vdown: "M4 10h3l4-4v12l-4-4H4z M15 12h5", vup: "M4 10h3l4-4v12l-4-4H4z M15 12h5M17.5 9.5v5", mute: "M4 10h3l4-4v12l-4-4H4z M15 10l4 4M19 10l-4 4",
   pcsnd: "M4 10h3l4-4v12l-4-4H4z M15 9.5a3.5 3.5 0 0 1 0 5 M17.6 7a7 7 0 0 1 0 10",
   prev: "M7 6v12 M18 6l-9 6 9 6z", play: "M8 6l10 6-10 6z", pause: "M8 6v12M16 6v12", next: "M17 6v12 M6 6l9 6-9 6z" };
@@ -345,7 +397,7 @@ const L = {};
 
 // ================================================================ the half dial (actions) and the JARVIS core (voice)
 const DIAL_IN = [["copy", "Копировать"], ["paste", "Вставить"], ["undo", "Отменить"], ["shot", "Скриншот"], ["alttab", "Alt+Tab"], ["search", "Поиск"]];
-const DIAL_OUT = [["min", "Свернуть"], ["sel", "Выделить"], ["close", "Закрыть"], ["lock", "Блок ПК"], ["screen", "Экран"], ["folder", "Проводник"]];
+const DIAL_OUT = [["min", "Свернуть"], ["sel", "Выделить"], ["close", "Закрыть"], ["lock", "Блок ПК"], ["screen", "Экран"], ["edith", "E.D.I.T.H."]];
 const NAMES = Object.fromEntries([...DIAL_IN, ...DIAL_OUT]);
 let waves = [];
 function drawDial(on) {
@@ -590,6 +642,7 @@ let found = {}, sel = null, code = "", pairMsg = "", pairErr = false, adding = f
 const PC_ICON = `<svg width="20" height="20" viewBox="0 0 24 24" style="position:static"><rect x="3" y="4" width="18" height="12" rx="2" class="ico"/><path class="ico" d="M8 20h8M12 16v4"/></svg>`;
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 function showConnect(pc) {
+  if (edStream || edBox.classList.contains("show")) edithOpen(false);
   if (sndWant || sndOn) soundToggle(false);
   if (scrOn) screenOpen(false);
   screen = "connect"; document.body.className = "connect";
@@ -1020,6 +1073,7 @@ function dialUp(e, cancel) {
   if (!over || over.closest("[data-act]") !== dg) return;
   const a = dg.dataset.act;
   if (a === "screen") { buzz(14); screenOpen(!scrOn); return; }     // the live screen in place of the keyboard
+  if (a === "edith") { buzz(14); edithOpen(true); return; }          // the phone's camera with a HUD
   if (RISKY[a] && (!armed || armed.a !== a || Date.now() - armed.t > 2500)) {
     armed = { a, t: Date.now() }; document.querySelectorAll(".dial.arm").forEach((x) => x.classList.remove("arm"));
     dg.classList.add("arm"); toast(RISKY[a], true);
@@ -1063,6 +1117,7 @@ function stopVoice() {
 window.onLevel = (v) => { if (!listening) return; waves.forEach((w, i) => { w.setAttribute("stroke-opacity", Math.min(1, .25 + v * 2.2) / (i + 1)); w.setAttribute("stroke-width", 2 + v * 3); }); };
 window.onVoice = (j) => {
   let r = null; try { r = typeof j === "string" ? JSON.parse(j) : j; } catch (e) {}
+  if (edAsking) { edVoice(r); return; }
   if (r && r.text) bubble("СЛЫШУ", "«" + esc(r.text) + "»");
   else if (r && r.error === "short") bubble("");
   else bubble("НЕ РАССЛЫШАЛ", r && r.error === "net" ? "ПК не ответил" : "скажите ещё раз, держа круг", true);
@@ -1241,7 +1296,98 @@ document.getElementById("b-upd").onclick = () => {
   toast("Скачиваю новую версию с ПК — откройте файл, когда скачается");
   if (HAS) Native.openUrl(base() + "/apk"); else location.href = base() + "/apk";
 };
+// ================================================================ E.D.I.T.H.: point the phone's camera, ask about it
+let edStream = null, edBusy = false, edAsking = false, edShot = "", edText = "";
+const edV = document.getElementById("ed-v"), edBox = document.getElementById("edith");
+function edSub(t) { document.getElementById("ed-sub").textContent = t; }
+async function edithOpen(on) {
+  if (!on) {
+    edBox.classList.remove("show", "frozen", "busy"); document.getElementById("ed-card").classList.remove("show");
+    if (edStream) edStream.getTracks().forEach((t) => t.stop());
+    edStream = null; edV.srcObject = null; if (HAS && Native.speakStop) Native.speakStop();
+    return;
+  }
+  if (!wsOk) { toast("Нет связи с ПК", true); return; }
+  edBox.classList.add("show"); edSub("включаю камеру…");
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error("камера недоступна в этой версии Android WebView");
+    edStream = await navigator.mediaDevices.getUserMedia({ audio: false,
+      video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } } });
+    edV.srcObject = edStream; await edV.play().catch(() => {});
+    edSub("наведите камеру и нажмите кнопку");
+  } catch (e) {
+    edSub("нет камеры");
+    edCard("НЕТ ДОСТУПА К КАМЕРЕ", (e && e.name === "NotAllowedError") ? "Разрешите пульту камеру: Настройки телефона → Приложения → JARVIS Пульт → Разрешения." : String(e && e.message || e), false);
+  }
+}
+// the current frame: frozen on screen while E.D.I.T.H. thinks, sent to the PC as JPEG
+function edFreeze() {
+  const w = edV.videoWidth, h = edV.videoHeight;
+  if (!w || !h) return "";
+  const k = Math.min(1, 1600 / Math.max(w, h)), c = document.getElementById("ed-still");
+  c.width = Math.round(w * k); c.height = Math.round(h * k);
+  c.getContext("2d").drawImage(edV, 0, 0, c.width, c.height);
+  edBox.classList.add("frozen");
+  return c.toDataURL("image/jpeg", .85);
+}
+function edCard(title, text, copy) {
+  edText = text || "";
+  document.getElementById("ed-ct").textContent = title; document.getElementById("ed-cx").textContent = edText;
+  document.getElementById("ed-copy").style.display = document.getElementById("ed-type").style.display = copy ? "" : "none";
+  document.getElementById("ed-card").classList.add("show");
+}
+async function edSee(mode, q, shot) {
+  if (edBusy) return;
+  const img = shot || edFreeze();
+  if (!img) { toast("Камера ещё не готова", true); return; }
+  edBusy = true; edBox.classList.add("busy"); document.getElementById("ed-card").classList.remove("show");
+  edSub({ what: "смотрю…", text: "читаю текст…", translate: "перевожу…", ask: "думаю над вопросом…" }[mode]);
+  buzz(14);
+  const r = await http("POST", base() + "/see", { img, mode, q: q || "" }, cur.token, 45000);
+  edBusy = false; edBox.classList.remove("busy");
+  if (r.status === 200 && r.json && r.json.ok) {
+    edCard(r.json.title || "ОТВЕТ", r.json.text || "", !!r.json.copy); buzz(30);
+    edSub("готово · «Дальше» — снова камера");
+    if (OPT.edVoice !== false && HAS && Native.speak && mode !== "text") Native.speak(r.json.text || "");
+  } else {
+    edCard("НЕ ВЫШЛО", (r.json && r.json.error) || (r.status ? "ПК ответил ошибкой " + r.status : "ПК не ответил"), false);
+    edSub("ошибка");
+  }
+}
+function edLive() { edBox.classList.remove("frozen"); document.getElementById("ed-card").classList.remove("show"); edSub("наведите камеру и нажмите кнопку"); if (HAS && Native.speakStop) Native.speakStop(); }
+document.getElementById("ed-what").onclick = () => edSee("what");
+document.getElementById("ed-text").onclick = () => edSee("text");
+document.getElementById("ed-tr").onclick = () => edSee("translate");
+document.getElementById("ed-x").onclick = () => { buzz(); edithOpen(false); };
+document.getElementById("ed-live").onclick = () => { buzz(); edLive(); };
+document.getElementById("ed-copy").onclick = () => { buzz(); if (send({ t: "clip", s: edText })) toast("Текст в буфере обмена ПК"); };
+document.getElementById("ed-type").onclick = () => { buzz(); if (send({ t: "text", s: edText })) toast("Печатаю на ПК"); };
+document.getElementById("ed-say").onclick = () => { buzz(); if (HAS && Native.speak) Native.speak(edText); };
+// «Спросить»: hold, ask out loud about what is in the frame; the frame is taken when the finger lands
+const edAsk = document.getElementById("ed-ask");
+let edAskShot = "";
+edAsk.addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  if (edBusy || !HAS) { if (!HAS) toast("Вопрос голосом — только в приложении", true); return; }
+  edAskShot = edFreeze();
+  const r = Native.startVoice();
+  if (r !== "ok") { toast(r === "perm" ? "Разрешите микрофон и удерживайте ещё раз" : "Микрофон занят", true); edLive(); return; }
+  edAsking = true; edAsk.classList.add("hold"); edSub("слушаю вопрос…"); buzz(25);
+});
+const edAskUp = () => {
+  if (!edAsking || !edAsk.classList.contains("hold")) return;
+  edAsk.classList.remove("hold"); edSub("распознаю вопрос…");
+  Native.stopVoice(base() + "/stt", cur.token);
+};
+edAsk.addEventListener("pointerup", edAskUp); edAsk.addEventListener("pointercancel", edAskUp);
+function edVoice(r) {
+  edAsking = false;
+  if (r && r.text) { edSub("«" + r.text + "»"); edSee("ask", r.text, edAskShot); }
+  else { edSub("не расслышал — держите «Спросить» и говорите"); edBox.classList.remove("frozen"); }
+}
+
 window.onBack = () => {           // the Android back button
+  if (edBox.classList.contains("show")) { if (edBox.classList.contains("frozen")) edLive(); else edithOpen(false); return true; }
   if (shade.classList.contains("show")) { shade.classList.remove("show"); return true; }
   if (document.getElementById("shotv").classList.contains("show")) { document.getElementById("shotv").classList.remove("show"); return true; }
   if (scrOn) { const pn = document.getElementById("scr"); if (pn.classList.contains("big")) document.getElementById("scr-big").click(); else screenOpen(false); return true; }
