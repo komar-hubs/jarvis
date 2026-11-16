@@ -206,9 +206,33 @@ async function remotePanel() {
       <div class="sgrid"><label>Адрес ПК</label><span>${esc((r.ips || []).join(", ") || "—")} · порт ${r.port}</span>
         <label>Безопасность</label><span class="dim">только устройства из домашней сети; новый телефон — только по коду с этого экрана; 6 неверных кодов — блокировка на 10 минут</span>
         ${r.sha256 ? `<label>SHA-256 приложения</label><span class="dim" style="word-break:break-all;font-family:var(--mono);font-size:11px">${esc(r.sha256)}</span>` : ""}</div>` : ""}
+    ${r.enabled ? `<div class="s-sub">Включение ПК с телефона</div><div id="rm-wake" class="hint">Проверяю сетевую карту…</div>` : ""}
     ${r.devices.length ? `<div class="s-sub">Привязанные телефоны</div>${r.devices.map((d) => `<div class="row"><span>${I("user", "lead")}${esc(d.name)}</span><span class="dim">${ago(d.last)}</span><button class="btn ghost" data-forget="${esc(d.id)}">${I("trash", "lead")}Забыть</button></div>`).join("")}` : ""}`;
   $("#rm-toggle").onclick = async () => { $("#rm-toggle").disabled = true; await rpc("remote_set", { enabled: !r.enabled }); remotePanel(); if (window.featuresPanel) featuresPanel(); };
   if ($("#rm-send")) $("#rm-send").onclick = async () => { const x = await rpc("remote_send_apk"); toast(x.ok ? "Файл отправлен — откройте его на телефоне в «Загрузках»" : x.error, "Пульт"); };
   box.querySelectorAll("[data-forget]").forEach((b) => b.onclick = () => rpc("remote_forget", { id: b.dataset.forget }).then(remotePanel));
+  if (r.enabled) remoteWake();
   if (window.featChipsFill) featChipsFill();
+}
+
+// «Включить ПК» on the phone = Wake-on-LAN: what is ready here, and what the user still has to allow
+async function remoteWake(fresh) {
+  const box = $("#rm-wake");
+  if (!box) return;
+  let w;
+  try { w = await rpc("remote_wake_state", { fresh: !!fresh }); } catch (e) { box.textContent = "Не удалось проверить сетевую карту."; return; }
+  if (w.error) { box.textContent = "Не удалось проверить сетевую карту: " + w.error; return; }
+  const u = w.used, cable = (w.adapters || []).find((a) => !a.wifi);
+  const ok = (t) => `<span class="ok-t">✓</span> ${t}`, no = (t) => `<span style="color:var(--warn,#ffb347)">✕</span> ${t}`;
+  const lines = [];
+  lines.push(w.ready ? ok("Готово: в пульте «Включить ПК» будит компьютер.") : no("Пока не готово: пульт не сможет разбудить ПК."));
+  if (u) lines.push(`${u.wifi ? "Подключение по Wi-Fi" : "Подключение по кабелю"} (${esc(u.desc)}).` +
+    (u.wifi ? " По Wi-Fi компьютер можно разбудить только <b>из сна</b> (в пульте есть «Усыпить ПК»). Из полного выключения — только по кабелю." : ""));
+  if (u && !u.armed) lines.push(`Карте не разрешено будить компьютер. <button class="btn" id="rm-wake-on">${I("check", "lead")}Разрешить пробуждение</button>
+    <span class="dim">(Windows спросит разрешение администратора)</span><br><span class="dim">Вручную: Диспетчер устройств → Сетевые адаптеры → ${esc(u.desc)} → Управление электропитанием → «Разрешить этому устройству выводить компьютер из ждущего режима».</span>`);
+  if (u && u.magic !== "1") lines.push(`У карты выключено «Пробуждение пакетом Magic Packet»: Диспетчер устройств → ${esc(u.desc)} → Дополнительно.`);
+  if (cable && u && u.wifi) lines.push(`<span class="dim">Чтобы включать ПК и из выключения: подключите кабель (${esc(cable.desc)}), включите Wake on LAN в BIOS${w.fast_startup ? " и выключите «Быстрый запуск» (Панель управления → Электропитание → Действия кнопок питания)" : ""}.</span>`);
+  box.innerHTML = lines.map((l) => `<div style="margin:4px 0">${l}</div>`).join("") + `<button class="btn ghost" id="rm-wake-re">${I("refresh", "lead")}Проверить снова</button>`;
+  if ($("#rm-wake-on")) $("#rm-wake-on").onclick = async () => { const x = await rpc("remote_wake_enable"); toast(x.ok ? "Готово — проверяю…" : x.error, "Пульт"); setTimeout(() => remoteWake(true), 2500); };
+  $("#rm-wake-re").onclick = () => { box.textContent = "Проверяю сетевую карту…"; remoteWake(true); };
 }

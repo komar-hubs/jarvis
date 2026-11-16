@@ -277,6 +277,40 @@ public class MainActivity extends Activity {
             }, "save").start();
         }
 
+        /** Wake-on-LAN: 6x FF + the MAC 16 times, to the LAN broadcasts on ports 9 and 7, three rounds.
+         *  json = {"macs": ["4C-82-..."], "bcast": ["192.168.1.255"]}. Returns how many packets went out. */
+        @JavascriptInterface
+        public int wake(final String json) {
+            int sent = 0;
+            try {
+                JSONObject j = new JSONObject(json);
+                org.json.JSONArray macs = j.optJSONArray("macs"), bc = j.optJSONArray("bcast");
+                Set<String> targets = new HashSet<>();
+                targets.add("255.255.255.255");
+                if (bc != null) for (int i = 0; i < bc.length(); i++) targets.add(bc.getString(i));
+                DatagramSocket sock = new DatagramSocket();
+                sock.setBroadcast(true);
+                for (int round = 0; round < 3; round++) {
+                    for (int m = 0; macs != null && m < macs.length(); m++) {
+                        String[] hx = macs.getString(m).split("[-:]");
+                        if (hx.length != 6) continue;
+                        byte[] mac = new byte[6];
+                        for (int i = 0; i < 6; i++) mac[i] = (byte) Integer.parseInt(hx[i], 16);
+                        byte[] pkt = new byte[102];
+                        for (int i = 0; i < 6; i++) pkt[i] = (byte) 0xFF;
+                        for (int i = 6; i < 102; i += 6) System.arraycopy(mac, 0, pkt, i, 6);
+                        for (String t : targets)
+                            for (int port : new int[]{9, 7})
+                                try { sock.send(new DatagramPacket(pkt, pkt.length, InetAddress.getByName(t), port)); sent++; } catch (Exception ignored) { }
+                    }
+                    try { Thread.sleep(120); } catch (InterruptedException ignored) { }
+                }
+                sock.close();
+            } catch (Exception ignored) {
+            }
+            return sent;
+        }
+
         /** The PC's sound: a raw PCM16 stream (X-Rate, X-Channels) played through an AudioTrack as it comes. Calls
          *  window.onAudio(true) once it plays and window.onAudio(false, reason) when it stops. */
         @JavascriptInterface

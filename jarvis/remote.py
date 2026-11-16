@@ -25,7 +25,10 @@ Only for Android. Works only inside the home Wi-Fi and only while Settings → �
   a tap on it ("tap") clicks that very point; screenshots (the dial's «Скриншот» = the snipping tool, watched in the
   clipboard, or "snap" = the whole monitor at once) are pushed to the phone and served at /shot/<id>;
 - GET /audio streams the PC's sound (WASAPI loopback of the default output, 24 kHz stereo PCM16) while the phone
-  plays it (AudioTrack in MainActivity): video, music and games from the PC on the phone."""
+  plays it (AudioTrack in MainActivity): video, music and games from the PC on the phone;
+- the phone keeps this PC's MAC addresses and the LAN broadcast (WS "hello" -> "wake") and can wake it with a
+  Wake-on-LAN magic packet; "act sleep" puts it to sleep. Over Wi-Fi a PC wakes only from sleep, from shutdown only by
+  cable; Settings shows what is ready (`wake_ready`)."""
 import asyncio
 import ctypes
 import hashlib
@@ -86,6 +89,33 @@ def private_ip(ip):
         return a.is_loopback or a.is_link_local or (a.is_private and not a.is_global)
     except ValueError:
         return False
+
+
+def wake_info():
+    """What the phone needs to wake this PC: the MACs of its real network cards (Wi-Fi and the cable one, even
+    unplugged) and the broadcast addresses of its home networks."""
+    import ipaddress
+    import psutil
+    macs, bcast = [], []
+    stats = psutil.net_if_stats()
+    for name, addrs in psutil.net_if_addrs().items():
+        low = name.lower()
+        if any(w in low for w in ("bluetooth", "vpn", "virtual", "vethernet", "loopback", "teredo", "vmware", "hyper-v", "tap")):
+            continue
+        for a in addrs:
+            if a.family == psutil.AF_LINK:
+                parts = a.address.replace(":", "-").split("-")
+                if len(parts) == 6 and not int(parts[0], 16) & 2 and parts != ["00"] * 6:   # a real, factory MAC
+                    macs.append("-".join(parts).upper())
+            elif a.family == socket.AF_INET and a.netmask and stats.get(name) and stats[name].isup:
+                try:
+                    net = ipaddress.ip_network(f"{a.address}/{a.netmask}", strict=False)
+                    home = any(net.subnet_of(ipaddress.ip_network(h)) for h in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"))
+                    if home and net.prefixlen < 31:
+                        bcast.append(str(net.broadcast_address))
+                except ValueError:
+                    pass
+    return {"macs": sorted(set(macs)), "bcast": sorted(set(bcast))}
 
 
 def apk_version():
@@ -370,6 +400,10 @@ class Remote:
         loop = asyncio.get_running_loop()
         try:
             hello = {"t": "hello", "name": self.pc_name(), "mons": 1, "apk": apk_version()}
+            try:
+                hello["wake"] = wake_info()
+            except Exception:
+                pass
             try:                                    # extras must never break the link itself
                 hello["mons"] = await loop.run_in_executor(self.cap, self._mon_count)
                 hello["vol"] = S.get_volume()
@@ -432,6 +466,10 @@ class Remote:
                 a = m.get("a")
                 if a == "lock":
                     S.lock()
+                elif a == "sleep":                     # «Усыпить ПК»: after a moment, so the phone hears back
+                    self.core.log("Пульт: телефон усыпил ПК")
+                    threading.Timer(1.5, S.sleep_pc).start()
+                    return {"t": "sleeping"}
                 elif a == "snap":                      # the whole monitor, straight to the phone
                     self.cap.submit(self._snap)
                 elif a in ACTIONS:
@@ -809,6 +847,50 @@ class Remote:
 </body>"""
         return web.Response(text=html, content_type="text/html")
 
+    # ================================================================ is this PC ready to be woken by the phone?
+    _ready = (0.0, None)
+
+    def wake_ready(self, fresh=False):
+        """Read-only check (one PowerShell call, cached a minute): which card is in use, can it wake the PC,
+        is fast startup on. Changing any of it is the user's choice (a button with an admin prompt)."""
+        if not fresh and self._ready[1] is not None and time.time() - self._ready[0] < 60:
+            return self._ready[1]
+        import subprocess
+        ps = (r"[Console]::OutputEncoding=[Text.Encoding]::UTF8;"
+              r"$armed=@(powercfg /devicequery wake_armed);"
+              r"$a=@(Get-NetAdapter -Physical | ForEach-Object { $pm=@(Get-NetAdapterAdvancedProperty -Name $_.Name -EA SilentlyContinue);"
+              # cable drivers say *WakeOnMagicPacket=1, some Wi-Fi drivers say DisableWakeOnMagic=0: both mean "on"
+              r"$w=$pm | Where-Object RegistryKeyword -eq '*WakeOnMagicPacket'; $d=$pm | Where-Object RegistryKeyword -eq 'DisableWakeOnMagic';"
+              r"$mg=if($w){[string]($w.RegistryValue -join '')}elseif($d){if(($d.RegistryValue -join '') -eq '0'){'1'}else{'0'}}else{''};"
+              r"[pscustomobject]@{name=$_.Name;desc=$_.InterfaceDescription;up=($_.Status -eq 'Up');"
+              r"wifi=[bool]($_.PhysicalMediaType -match '802\.11');magic=$mg;armed=($armed -contains $_.InterfaceDescription)} });"
+              r"$f=(Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power' -EA SilentlyContinue).HiberbootEnabled;"
+              r"[pscustomobject]@{adapters=$a;fast=[int]$f} | ConvertTo-Json -Depth 4 -Compress")
+        try:
+            out = subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, timeout=15,
+                                 creationflags=0x08000000).stdout.decode("utf-8", "replace").strip()
+            r = json.loads(out)
+            ads = r.get("adapters") or []
+            ads = [ads] if isinstance(ads, dict) else ads
+            used = next((x for x in ads if x.get("up")), None)
+            res = {"adapters": ads, "fast_startup": bool(r.get("fast")), "used": used,
+                   "wifi": bool(used and used.get("wifi")),
+                   "ready": bool(used and used.get("armed") and str(used.get("magic")) == "1")}
+        except Exception as e:
+            res = {"error": str(e)[:200], "adapters": [], "ready": False}
+        self._ready = (time.time(), res)
+        return res
+
+    def rpc_remote_wake_enable(self):
+        """«Разрешить пробуждение»: lets the card in use wake the PC (powercfg /deviceenablewake, admin prompt)."""
+        r = self.wake_ready(fresh=True)
+        used = r.get("used")
+        if not used:
+            return {"ok": False, "error": "Не нашёл подключённую сетевую карту"}
+        rc = ctypes.windll.shell32.ShellExecuteW(None, "runas", "powercfg.exe", f'/deviceenablewake "{used["desc"]}"', None, 0)
+        self._ready = (0.0, None)
+        return {"ok": rc > 32, "error": "" if rc > 32 else "Windows не дал разрешения"}
+
     # ================================================================ RPC for Settings → «Телефон»
     def rpc_remote_state(self):
         devs = [{k: d.get(k) for k in ("id", "name", "added", "last")} for d in self._devices()]
@@ -821,6 +903,9 @@ class Remote:
                 "link": f"http://{ips[0]}:{self.port}/" if ips else "",
                 "code": self.pairing["code"] if self.pairing and time.time() < self.pairing["until"] else "",
                 "kde": bool(getattr(self.core.phone, "device", lambda: None)())}
+
+    def rpc_remote_wake_state(self, fresh=False):
+        return self.wake_ready(fresh)
 
     def rpc_remote_set(self, enabled=None):
         if enabled is not None:

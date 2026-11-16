@@ -143,6 +143,9 @@ svg{position:absolute;left:0;top:0;overflow:visible}
 .pcrow .nm{font:700 16px "Exo 2";white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pcrow .ip{font:600 11.5px "JetBrains Mono";color:#7fbcd2;margin-top:2px;white-space:nowrap}
 .pcrow .st{margin-left:auto;flex:none;font:600 12px "Exo 2";color:var(--ok)}
 .pcrow.off .st{color:#6b8796}
+.pcrow .st.wk{color:var(--hot);animation:blink 1s infinite}
+.wakebtn{margin-left:auto;flex:none;height:32px;padding:0 14px;display:flex;align-items:center;border-radius:10px;font:700 12.5px "Exo 2";color:#02121c;
+  background:linear-gradient(180deg,#ffd27a,#ffb347);box-shadow:0 0 14px rgba(var(--hot-rgb),.45)}
 .empty{font:500 12.5px/1.5 "Exo 2";color:#7fa9ba;padding:8px 2px 12px}
 .add{display:flex;align-items:center;justify-content:center;gap:8px;height:40px;border-radius:14px;border:1px dashed rgba(var(--rgb),.45);font:600 13px "Exo 2";color:#bfefff}
 .codebox{padding:14px 16px;border-radius:18px;border:1px solid rgba(var(--rgb),.45);background:rgba(4,22,34,.7);box-shadow:inset 0 0 30px rgba(var(--rgb),.08);min-height:200px}
@@ -250,8 +253,9 @@ input.addr{width:100%;height:44px;margin:10px 0 4px;border-radius:12px;border:1.
   <div class="srow"><label>Скорость курсора</label><input type="range" id="o-speed" min="0.8" max="4.5" step="0.1"></div>
   <div class="srow"><label>Скорость прокрутки</label><input type="range" id="o-scroll" min="2" max="14" step="0.5"></div>
   <div class="srow"><label>Вибрация</label><div class="tg" id="o-buzz"></div></div>
+  <div class="row2"><div class="btn ghost" id="o-sleep">Усыпить ПК</div><div class="btn ghost" id="o-wake">Включить ПК</div></div>
   <div class="row2"><div class="btn ghost" id="o-pc">Сменить ПК</div><div class="btn" id="o-done">Готово</div></div>
-  <div class="note">J.A.R.V.I.S. Remote — только для Android. Работает внутри домашней сети Wi-Fi. Удерживайте круг JARVIS, чтобы сказать команду; короткое касание — набрать её на клавиатуре. Ctrl, Win, Alt, Shift слева можно зажимать в любых сочетаниях и нажимать букву другим пальцем; касание — для следующей клавиши, двойное — закрепить. Тачпад: три пальца влево/вправо — окна, вверх — все окна, вниз — рабочий стол.</div>
+  <div class="note">J.A.R.V.I.S. Remote — только для Android, в домашней сети Wi-Fi. «Включить ПК» будит его из сна (из выключения — только по кабелю). Удерживайте круг JARVIS, чтобы сказать команду; короткое касание — набрать её на клавиатуре. Ctrl, Win, Alt, Shift слева можно зажимать в любых сочетаниях и нажимать букву другим пальцем; касание — для следующей клавиши, двойное — закрепить. Тачпад: три пальца влево/вправо — окна, вверх — все окна, вниз — рабочий стол.</div>
 </div></div>
 </div>
 
@@ -530,7 +534,9 @@ function openWs() {
   w.onmessage = (e) => {
     let m; try { m = JSON.parse(e.data); } catch (x) { return; }
     if (m.t === "pong") { lastPong = Date.now(); ping = Math.max(1, Date.now() - m.ts); chipState(); }
+    else if (m.t === "sleeping") { toast("ПК засыпает. Разбудить — «Включить ПК» в настройках пульта или на экране подключения"); }
     else if (m.t === "hello") {
+      if (m.wake && m.wake.macs && m.wake.macs.length) { cur.wake = m.wake; savePc(cur); }
       if (m.name && m.name !== cur.name) { cur.name = m.name; savePc(cur); }
       scrMons = m.mons || 1; chipState();
       let mine = 0; try { mine = HAS ? Native.appVersion() : 0; } catch (x) {}
@@ -567,7 +573,8 @@ document.addEventListener("visibilitychange", () => {
 function savedPcs() { return pget("pcs", []); }
 function savePc(pc) {
   const list = savedPcs().filter((p) => !(p.host === pc.host && p.port === pc.port));
-  list.unshift({ host: pc.host, port: pc.port, name: pc.name || "", token: pc.token || "", seen: Date.now() });
+  const old = savedPcs().find((p) => p.host === pc.host && p.port === pc.port) || {};
+  list.unshift({ host: pc.host, port: pc.port, name: pc.name || "", token: pc.token || "", seen: Date.now(), wake: pc.wake || old.wake || null });
   pput("pcs", list.slice(0, 6));
 }
 function useMain(pc) {
@@ -601,9 +608,13 @@ function renderConnect() {
   const pcs = allPcs(), list = document.getElementById("list");
   list.innerHTML = pcs.length ? pcs.map((p, i) => `<div class="pcrow ${p.online ? "" : "off"} ${sel && sel.host === p.host && sel.port === p.port ? "sel" : ""}" data-i="${i}">
       <div class="ic">${PC_ICON}</div><div class="tx"><div class="nm">${esc(p.name || p.host)}</div><div class="ip">${esc(p.host)}${p.version ? " · J.A.R.V.I.S. " + esc(String(p.version).slice(0, 10)) : p.token ? " · привязан" : ""}</div></div>
-      <div class="st">${p.online ? "● в сети" : "не в сети"}</div></div>`).join("")
+      ${p.online ? `<div class="st">● в сети</div>` : waking[p.host] ? `<div class="st wk">бужу…</div>` : p.wake ? `<div class="wakebtn" data-w="${i}">Включить</div>` : `<div class="st">не в сети</div>`}</div>`).join("")
     : `<div class="empty">Ищу компьютеры с J.A.R.V.I.S. в этой сети…</div>`;
-  list.querySelectorAll(".pcrow").forEach((r) => r.onclick = () => { buzz(); pick(pcs[+r.dataset.i]); });
+  list.querySelectorAll(".pcrow").forEach((r) => r.onclick = (e) => {
+    buzz();
+    if (e.target.dataset.w != null) { wakePc(pcs[+e.target.dataset.w]); return; }
+    pick(pcs[+r.dataset.i]);
+  });
   const box = document.getElementById("codebox"), cap = document.getElementById("cap2");
   if (adding) {
     cap.textContent = "АДРЕС ПК";
@@ -1177,12 +1188,53 @@ function openSettings() {
   shade.classList.add("show");
 }
 document.getElementById("gear").onclick = () => { buzz(); openSettings(); };
-document.getElementById("chip").onclick = () => { buzz(); if (!wsOk) recheck(); toast(wsOk ? `${cur.name || cur.host} · ${cur.host}` : "Переподключаюсь…", !wsOk); };
+document.getElementById("chip").onclick = () => {
+  buzz();
+  if (wsOk) { toast(`${cur.name || cur.host} · ${cur.host}`); return; }
+  recheck();
+  if (cur && cur.wake && !waking[cur.host]) wakePc(cur); else toast("Переподключаюсь…", true);
+};
 document.getElementById("o-speed").oninput = (e) => { OPT.speed = +e.target.value; pput("opt", OPT); };
 document.getElementById("o-scroll").oninput = (e) => { OPT.scroll = +e.target.value; pput("opt", OPT); };
 document.getElementById("o-buzz").onclick = (e) => { OPT.buzz = !OPT.buzz; e.currentTarget.classList.toggle("on", OPT.buzz); pput("opt", OPT); buzz(20); };
 document.getElementById("o-done").onclick = () => shade.classList.remove("show");
 document.getElementById("o-pc").onclick = () => { shade.classList.remove("show"); showConnect(null); };
+// ---------------------------------------------------------------- sleep / wake the PC
+const waking = {};
+let sleepArm = 0;
+document.getElementById("o-sleep").onclick = (e) => {
+  buzz();
+  if (Date.now() - sleepArm > 2500) { sleepArm = Date.now(); e.currentTarget.textContent = "Ещё раз — уснуть"; toast("Нажмите ещё раз, чтобы усыпить ПК", true);
+    const b = e.currentTarget; setTimeout(() => b.textContent = "Усыпить ПК", 2500); return; }
+  sleepArm = 0;
+  if (send({ t: "act", a: "sleep" })) shade.classList.remove("show"); else toast("Нет связи с ПК", true);
+};
+document.getElementById("o-wake").onclick = () => { buzz(); shade.classList.remove("show"); if (cur) wakePc(cur); };
+// a magic packet, then knock until the PC answers (it takes 5–60 s to wake and start J.A.R.V.I.S.)
+function wakePc(pc) {
+  const saved = savedPcs().find((p) => p.host === pc.host && p.port === pc.port) || pc;
+  const w = pc.wake || saved.wake;
+  if (!w || !w.macs || !w.macs.length) { toast("Сначала подключитесь к этому ПК хотя бы раз, пока он включён", true); return; }
+  if (!HAS) { toast("Включение ПК работает только в приложении", true); return; }
+  const n = Native.wake(JSON.stringify(w));
+  if (!n) { toast("Не получилось отправить сигнал — телефон в Wi-Fi?", true); return; }
+  waking[pc.host] = Date.now();
+  toast("Бужу ПК… обычно 5–40 секунд");
+  if (screen === "connect") renderConnect();
+  const t0 = Date.now();
+  (function knock() {
+    if (Date.now() - t0 > 120000) { delete waking[pc.host]; if (screen === "connect") renderConnect(); toast("ПК не проснулся. Включено ли пробуждение по сети (Настройки J.A.R.V.I.S. → «Телефон»)?", true); return; }
+    http("GET", `http://${pc.host}:${pc.port}/hello`, null, saved.token).then((r) => {
+      if (r.status === 200 && r.json) {
+        delete waking[pc.host]; buzz(30); toast("ПК проснулся");
+        if (saved.token && r.json.paired) useMain({ ...saved, wake: w }); else if (screen === "connect") renderConnect();
+        return;
+      }
+      if (Date.now() - t0 < 20000) Native.wake(JSON.stringify(w));        // a few more packets while it may be dozing
+      setTimeout(knock, 3000);
+    });
+  })();
+}
 shade.addEventListener("pointerdown", (e) => { if (e.target === shade) shade.classList.remove("show"); });
 document.getElementById("b-upd").onclick = () => {
   buzz();
