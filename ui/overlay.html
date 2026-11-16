@@ -15,47 +15,60 @@
 <head>
 <meta charset="utf-8">
 <title>JARVIS HUD</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
-  :root { --cyan: #4fd8ff; --amber: #ffb347; --text: #d6f4ff; --dim: #7fa6bd; --c: var(--cyan); }
-  html, body { margin: 0; height: 100%; background: #03080f; color: var(--text); overflow: hidden; user-select: none;
-    font-family: "Segoe UI", sans-serif; }
-  body { display: flex; align-items: center; gap: 14px; padding: 0 16px; box-sizing: border-box;
-    border: 1px solid rgba(79, 216, 255, .45); background: radial-gradient(circle at 15% 50%, rgba(79,216,255,.16), #03080f 60%); }
-  body[data-state=thinking] { --c: var(--amber); }
-  body[data-state=listening] { --c: #c8f6ff; }
-  body.dictation { --c: #7dffb3; }
-  body.free[data-state=idle] { --c: #5dffb0; }
-  canvas { width: 76px; height: 76px; flex: none; }
-  .txt { flex: 1; min-width: 0; }
-  .st { font-size: 11px; letter-spacing: 3px; color: var(--c); text-transform: uppercase; font-weight: 700;
-    text-shadow: 0 0 8px var(--c); }
-  .line { font-size: 14.5px; line-height: 1.3; margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical; overflow: hidden; }
-  .heard { color: var(--dim); font-style: italic; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* a small slice of the main window: the same reactor (reactor.js), hex grid, fonts and colours as ui/style.css */
+  :root { --acc: #4fd8ff; --acc2: #a8efff; --acc-rgb: 79, 216, 255; --hot: #ffb347; --green: #5dffb0; --text: #dcf3ff; --dim: #7c9cb3;
+    --c: var(--acc); --font: "Rajdhani", "Segoe UI", sans-serif; --head: "Orbitron", "Rajdhani", "Segoe UI", sans-serif; }
+  html, body { margin: 0; height: 100%; background: #02070d; color: var(--text); overflow: hidden; user-select: none; font-family: var(--font); }
+  body { position: relative; }
+  body[data-state=listening] { --c: #ffffff; }
+  body[data-state=thinking] { --c: var(--hot); }
+  body[data-state=speaking] { --c: var(--acc2); }
+  body.free[data-state=idle], body.dictation { --c: var(--green); }
+  #bg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #reactor { position: absolute; left: 8px; top: 6px; width: 92px; height: 92px; }
+  .frame { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; }
+  .frame .edge { fill: none; stroke: rgba(var(--acc-rgb), .45); }
+  .frame .cn { fill: none; stroke: var(--acc); stroke-width: 1.6; filter: drop-shadow(0 0 3px var(--acc)); }
+  .txt { position: absolute; left: 110px; right: 16px; top: 0; bottom: 0; display: flex; flex-direction: column; justify-content: center; z-index: 3; min-width: 0; }
+  .st { font-family: var(--head); font-size: 11px; letter-spacing: 5px; text-transform: uppercase; color: var(--c);
+    text-shadow: 0 0 12px var(--c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color .4s; }
+  .heard { margin-top: 2px; font-size: 14px; font-weight: 500; font-style: italic; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .heard:empty { display: none; }
+  .line { margin-top: 1px; font-size: 18px; font-weight: 600; line-height: 1.12; color: #fff; text-shadow: 0 0 12px rgba(var(--acc-rgb), .55);
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .line:empty { display: none; }
+  .line.typing::after { content: ""; display: inline-block; width: 7px; height: .9em; margin-left: 3px; vertical-align: -2px;
+    background: var(--acc); box-shadow: 0 0 10px rgba(var(--acc-rgb), .6); animation: blink .8s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
   /* fired reminder / timer card with buttons */
-  .notice { display: none; gap: 8px; margin-top: 6px; }
+  .notice { display: none; gap: 8px; margin-top: 5px; }
   body.has-notice .notice { display: flex; }
-  body.has-notice { --c: var(--amber); animation: pulse 1.6s ease-in-out infinite; }
-  @keyframes pulse { 50% { box-shadow: inset 0 0 22px rgba(255, 179, 71, .35); } }
-  .notice button { flex: 1; font: 600 12.5px "Segoe UI", sans-serif; letter-spacing: .5px; color: var(--text); cursor: pointer;
-    background: rgba(255, 255, 255, .06); border: 1px solid var(--c); padding: 5px 8px; }
-  .notice button:hover { background: rgba(255, 179, 71, .22); }
+  body.has-notice { --c: var(--hot); }
+  body.has-notice .frame .edge { stroke: rgba(255, 179, 71, .6); animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 50% { stroke: rgba(255, 179, 71, 1); } }
+  .notice button { flex: 1; font: 600 13px var(--font); letter-spacing: .5px; color: var(--text); cursor: pointer;
+    background: rgba(255, 179, 71, .08); border: 1px solid var(--c); padding: 3px 8px;
+    clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px); }
+  .notice button:hover { background: rgba(255, 179, 71, .25); }
   body.night { filter: brightness(.62) sepia(.25); }
   /* a hint over the game (jarvis/gamefx.py): the window grows for the time (run.py) */
   .hint { display: none; }
-  body.has-hint { flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 6px; padding: 14px 18px; }
-  body.has-hint canvas, body.has-hint .txt { display: none; }
-  body.has-hint .hint { display: flex; flex-direction: column; gap: 8px; min-height: 0; flex: 1; }
-  .hint-t { font-size: 11px; letter-spacing: 3px; color: var(--c); text-transform: uppercase; font-weight: 700;
-    text-shadow: 0 0 8px var(--c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .hint-x { font-size: 15.5px; line-height: 1.42; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 8; -webkit-box-orient: vertical; }
-  .hint-f { margin-top: auto; font-size: 11.5px; color: var(--dim); display: flex; gap: 10px; align-items: center; }
-  .hint-f button { margin-left: auto; font: 600 12px "Segoe UI", sans-serif; color: var(--text); background: rgba(255,255,255,.06);
-    border: 1px solid var(--c); padding: 3px 10px; cursor: pointer; }
+  body.has-hint #reactor, body.has-hint .txt { display: none; }
+  body.has-hint .hint { position: absolute; inset: 0; z-index: 3; display: flex; flex-direction: column; gap: 8px; padding: 14px 18px; box-sizing: border-box; }
+  .hint-t { font-family: var(--head); font-size: 11px; letter-spacing: 4px; color: var(--c); text-transform: uppercase;
+    text-shadow: 0 0 10px var(--c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hint-x { font-size: 17px; font-weight: 500; line-height: 1.38; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 8; -webkit-box-orient: vertical; }
+  .hint-f { margin-top: auto; font-size: 13px; color: var(--dim); display: flex; gap: 10px; align-items: center; }
+  .hint-f button { margin-left: auto; font: 600 13px var(--font); color: var(--text); background: rgba(var(--acc-rgb), .08);
+    border: 1px solid var(--c); padding: 3px 12px; cursor: pointer; }
 </style>
 </head>
 <body data-state="idle">
-<canvas id="c" width="152" height="152" class="pywebview-drag-region"></canvas>
+<canvas id="bg"></canvas>
+<canvas id="reactor" class="pywebview-drag-region"></canvas>
+<svg class="frame" id="frame"><path class="edge" id="edge"/><path class="cn" id="cn1"/><path class="cn" id="cn2"/></svg>
 <div class="txt">
   <div class="st pywebview-drag-region" id="st">J.A.R.V.I.S.</div>
   <div class="heard" id="heard"></div>
@@ -64,14 +77,25 @@
 </div>
 <div class="hint"><div class="hint-t pywebview-drag-region" id="hint-t"></div><div class="hint-x" id="hint-x"></div>
   <div class="hint-f"><span>«Джарвис, скрой подсказку» · «открой подробнее»</span><button onclick="rpc('hint_hide'); showHint(null)">Скрыть</button></div></div>
+<script src="reactor.js"></script>
 <script>
 const T = new URLSearchParams(location.search).get("t");
 const THEME = { jarvis: "#4fd8ff", mark3: "#ff4b5c", nano: "#9b86ff", emerald: "#3ff0a2", stealth: "#e4ecf2" };
+const $ = (id) => document.getElementById(id);
+// the frame with cut corners follows the window's size (it grows for a game hint)
+function frame() {
+  const w = innerWidth, h = innerHeight;
+  $("frame").setAttribute("viewBox", `0 0 ${w} ${h}`);
+  $("edge").setAttribute("d", `M10.5 .5H${w - .5}V${h - 10.5}L${w - 10.5} ${h - .5}H.5V10.5Z`);
+  $("cn1").setAttribute("d", "M1 24V10L10 1H40");
+  $("cn2").setAttribute("d", `M${w - 1} ${h - 24}V${h - 10}L${w - 10} ${h - 1}H${w - 40}`);
+}
+addEventListener("resize", frame); frame();
 function applyTheme(name) {
-  const c = THEME[name] || THEME.jarvis;
-  document.documentElement.style.setProperty("--cyan", c);
-  document.body.style.borderColor = c + "88";
-  document.body.style.background = `radial-gradient(circle at 15% 50%, ${c}2a, #03080f 60%)`;
+  const c = THEME[name] || THEME.jarvis, n = parseInt(c.slice(1), 16);
+  document.documentElement.style.setProperty("--acc", c);
+  document.documentElement.style.setProperty("--acc-rgb", `${n >> 16 & 255}, ${n >> 8 & 255}, ${n & 255}`);
+  if (window.reactor) reactor.setTheme(c);
 }
 const rpc = (method, params = {}) => fetch("/api/rpc", { method: "POST",
   headers: { "Content-Type": "application/json", "X-Jarvis-Token": T }, body: JSON.stringify({ method, params }) })
@@ -90,11 +114,11 @@ function showHint(h) {
 }
 function notice(action, minutes) { rpc("notice", { action, minutes }); showNotice(null); }
 const LABEL = { idle: "J.A.R.V.I.S.", listening: "Слушаю", thinking: "Думаю", speaking: "Говорю" };
-let state = "idle", mic = 0, voice = 0, dict = false, conv = false, follow = false;
-const $ = (id) => document.getElementById(id);
+let state = "idle", dict = false, conv = false, follow = false;
 function setState(s) {
   state = s; document.body.dataset.state = s;
   document.body.classList.toggle("free", conv || follow);
+  if (window.reactor) reactor.setState(s);
   if (document.body.classList.contains("has-notice")) return;  // the reminder card keeps its title
   $("st").textContent = dict ? "Диктовка" : (s === "idle" && conv) ? "Диалог — без имени" :
     (s === "idle" && follow) ? "Можно без имени" : (LABEL[s] || s);
@@ -113,47 +137,21 @@ function connect() {
     else if (ev.type === "notice") showNotice(ev.kind && ev.hud === false ? null : ev);  // the main window shows it
     else if (ev.type === "night") document.body.classList.toggle("night", !!ev.on);
     else if (ev.type === "hint") showHint(ev.on ? ev : null);
-    else if (ev.type === "mic_level") mic = ev.v;
-    else if (ev.type === "tts_level") voice = Math.min(1, ev.v);
-    else if (ev.type === "transcript") { $("heard").textContent = "«" + ev.text + "»"; $("line").textContent = ""; }
-    else if (ev.type === "jarvis_say") $("line").textContent = ev.text;
-    else if (ev.type === "chat_stream" && ev.state === "start") { $("line").textContent = ""; $("line").dataset.raw = ""; }
+    else if (ev.type === "mic_level") { if (window.reactor) reactor.setMic(ev.v); }
+    else if (ev.type === "tts_level") { if (window.reactor) reactor.setVoice(Math.min(1, ev.v)); }
+    else if (ev.type === "transcript") { $("heard").textContent = "«" + ev.text + "»"; $("line").textContent = ""; $("line").classList.remove("typing"); }
+    else if (ev.type === "jarvis_say") { $("line").textContent = ev.text; $("line").classList.remove("typing"); }
+    else if (ev.type === "chat_stream" && ev.state === "start") { $("line").textContent = ""; $("line").dataset.raw = ""; $("line").classList.add("typing"); }
     else if (ev.type === "chat_stream" && ev.state === "chunk") {
       const t = ($("line").dataset.raw || "") + ev.text;
       $("line").dataset.raw = t;
       $("line").textContent = t.replace(/<jarvis>[\s\S]*?(<\/jarvis>|$)/g, " ").replace(/\{\s*"tool"[\s\S]*?(\}|$)/g, " ")
         .replace(/<(?:j(?:a(?:r(?:v(?:i(?:s)?)?)?)?)?)?$/, "").replace(/\s+/g, " ").slice(-160);
-    } else if (ev.type === "chat_stream" && ev.state === "end") $("line").dataset.raw = "";
+    } else if (ev.type === "chat_stream" && ev.state === "end") { $("line").dataset.raw = ""; $("line").classList.remove("typing"); }
   };
   ws.onclose = () => setTimeout(connect, 1000);
 }
-connect();
-// mini reactor
-const cv = $("c"), x = cv.getContext("2d");
-let t0 = performance.now(), sm = 0;
-function frame(now) {
-  const t = (now - t0) / 1000;
-  const e = state === "speaking" ? voice : state === "listening" ? mic * 1.4 : state === "thinking" ? .4 : mic * .4;
-  sm += (e - sm) * .3;
-  const col = getComputedStyle(document.body).getPropertyValue("--c").trim() || "#4fd8ff";
-  x.clearRect(0, 0, 152, 152);
-  x.save(); x.translate(76, 76);
-  x.globalCompositeOperation = "lighter";
-  const g = x.createRadialGradient(0, 0, 4, 0, 0, 70);
-  g.addColorStop(0, "rgba(255,255,255,.9)"); g.addColorStop(.25, col); g.addColorStop(1, "rgba(0,0,0,0)");
-  x.globalAlpha = .35 + sm * .5; x.fillStyle = g; x.beginPath(); x.arc(0, 0, 70, 0, 6.283); x.fill();
-  x.globalAlpha = 1; x.strokeStyle = col; x.lineCap = "round";
-  const speed = state === "thinking" ? 3 : 1;
-  for (let i = 0; i < 3; i++) {
-    x.lineWidth = 4 - i; x.globalAlpha = .9 - i * .2;
-    const r = 34 + i * 11 + sm * 6, a = t * (i % 2 ? -1 : 1) * (1 + i * .5) * speed;
-    for (let s = 0; s < 3; s++) { x.beginPath(); x.arc(0, 0, r, a + s * 2.094, a + s * 2.094 + 1.4); x.stroke(); }
-  }
-  x.globalAlpha = 1; x.fillStyle = "#fff"; x.beginPath(); x.arc(0, 0, 9 + sm * 6, 0, 6.283); x.fill();
-  x.restore();
-  requestAnimationFrame(frame);
-}
-requestAnimationFrame(frame);
+if (T) connect();
 </script>
 </body>
 </html>
