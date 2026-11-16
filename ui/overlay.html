@@ -17,7 +17,8 @@
 <title>JARVIS HUD</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
-  /* a small slice of the main window: the same reactor (reactor.js), hex grid, fonts and colours as ui/style.css */
+  /* a small slice of the main window: its reactor drawn for this size (the big shader turns to noise at 92 px),
+     its hex grid, fonts and colours (ui/style.css) */
   :root { --acc: #4fd8ff; --acc2: #a8efff; --acc-rgb: 79, 216, 255; --hot: #ffb347; --green: #5dffb0; --text: #dcf3ff; --dim: #7c9cb3;
     --c: var(--acc); --font: "Rajdhani", "Segoe UI", sans-serif; --head: "Orbitron", "Rajdhani", "Segoe UI", sans-serif; }
   html, body { margin: 0; height: 100%; background: #02070d; color: var(--text); overflow: hidden; user-select: none; font-family: var(--font); }
@@ -26,7 +27,7 @@
   body[data-state=thinking] { --c: var(--hot); }
   body[data-state=speaking] { --c: var(--acc2); }
   body.free[data-state=idle], body.dictation { --c: var(--green); }
-  #bg { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .32; }
+  body { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='45' height='78'%3E%3Cpath d='M22.5 0L45 13v26L22.5 52 0 39V13zM22.5 52v26M0 13L-22.5 0M45 13l22.5-13' fill='none' stroke='%234fd8ff' stroke-opacity='.07'/%3E%3C/svg%3E"), radial-gradient(120% 160% at 12% 50%, rgba(var(--acc-rgb), .10), transparent 55%), #02070d; }
   body::before { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(var(--acc-rgb), .07), transparent 45%); pointer-events: none; }
   #reactor { position: absolute; left: 8px; top: 6px; width: 92px; height: 92px; }
   .frame { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; }
@@ -67,7 +68,6 @@
 </style>
 </head>
 <body data-state="idle">
-<canvas id="bg"></canvas>
 <canvas id="reactor" class="pywebview-drag-region"></canvas>
 <svg class="frame" id="frame"><path class="edge" id="edge"/><path class="cn" id="cn1"/><path class="cn" id="cn2"/></svg>
 <div class="txt">
@@ -78,7 +78,64 @@
 </div>
 <div class="hint"><div class="hint-t pywebview-drag-region" id="hint-t"></div><div class="hint-x" id="hint-x"></div>
   <div class="hint-f"><span>«Джарвис, скрой подсказку» · «открой подробнее»</span><button onclick="rpc('hint_hide'); showHint(null)">Скрыть</button></div></div>
-<script src="reactor.js"></script>
+<script>
+// The HUD's own small reactor: the main window's look (plasma core, the Mk II triangle, segmented rings, a tick ring)
+// with line widths made for ~90 px. Same API as reactor.js: setState, setMic, setVoice, setTheme.
+(function () {
+  const cv = document.getElementById("reactor"), x = cv.getContext("2d");
+  const hex = (h) => { const n = parseInt((h || "#4fd8ff").replace("#", ""), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+  const R = window.reactor = { state: "idle", mic: 0, voice: 0, e: 0, base: hex("#4fd8ff"), hot: hex("#ffb347"), col: hex("#4fd8ff"), boot: 0,
+    setState(s) { this.state = s; }, setMic(v) { this.mic = v; }, setVoice(v) { this.voice = v; }, setTheme(h) { this.base = hex(h); } };
+  let S = 92, k = 2, rot = 0, tri = 0, last = performance.now();
+  function size() { const r = cv.getBoundingClientRect(); S = r.width || 92; k = Math.min(3, Math.max(2, devicePixelRatio || 1) * 1.5);
+    cv.width = Math.round(S * k); cv.height = Math.round(S * k); }
+  size(); addEventListener("resize", size);
+  const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+  function arc(r, a0, a1, w, c, a) { x.beginPath(); x.arc(0, 0, r, a0, a1); x.lineWidth = w; x.strokeStyle = rgba(c, a); x.stroke(); }
+  function frame(now) {
+    requestAnimationFrame(frame);
+    if (document.hidden) return;
+    const dt = Math.min(.05, (now - last) / 1000); last = now;
+    R.boot = Math.min(1, R.boot + dt * 1.5);
+    const st = R.state, want = st === "speaking" ? R.voice * 1.2 : st === "listening" ? R.mic * 1.6 : st === "thinking" ? .3 + .1 * Math.sin(now / 160) : R.mic * .4;
+    R.e += (Math.min(1, want) - R.e) * .2;
+    const tgt = st === "listening" ? R.base.map((v) => Math.min(255, v * .6 + 115)) : st === "thinking" ? R.base.map((v, i) => v * .4 + R.hot[i] * .6) : R.base;
+    for (let i = 0; i < 3; i++) R.col[i] += (tgt[i] - R.col[i]) * .08;
+    const sp = st === "thinking" ? 3 : st === "listening" ? 1.6 : 1;
+    rot += dt * .5 * sp; tri += dt * .35 * sp;
+    const c = R.col, e = R.e, b = R.boot, m = S / 92;           // m: everything below is in 92-px units
+    x.setTransform(k, 0, 0, k, S * k / 2, S * k / 2); x.clearRect(-S, -S, S * 2, S * 2);
+    x.scale(m, m); x.lineCap = "round";
+    // halo
+    const h = x.createRadialGradient(0, 0, 4, 0, 0, 46);
+    h.addColorStop(0, rgba(c, .30 + e * .25)); h.addColorStop(1, rgba(c, 0));
+    x.fillStyle = h; x.globalAlpha = b; x.beginPath(); x.arc(0, 0, 46, 0, 6.283); x.fill();
+    // tick ring: 60 short ticks, every 5th longer and brighter
+    for (let i = 0; i < 60; i++) { const a = i * Math.PI / 30, big = i % 5 === 0, r0 = big ? 40 : 42;
+      x.beginPath(); x.moveTo(Math.cos(a) * r0, Math.sin(a) * r0); x.lineTo(Math.cos(a) * 44.5, Math.sin(a) * 44.5);
+      x.lineWidth = big ? 1.4 : .8; x.strokeStyle = rgba(c, big ? .75 : .32); x.stroke(); }
+    // outer segmented ring (3 arcs) and a thin full ring
+    for (let s = 0; s < 3; s++) { const a = rot * .6 + s * 2.094; arc(35, a, a + 1.5, 2.6, c, .85); }
+    arc(30.5, 0, 6.283, .8, c, .4);
+    // inner ring: 12 short dashes turning the other way
+    for (let s = 0; s < 12; s++) { const a = -rot * .9 + s * .5236; arc(26, a, a + .3, 2, c, .55); }
+    // voice / mic: a soft ring that breathes with the level
+    if (e > .02) arc(30.5 + e * 3, 0, 6.283, 1.2 + e * 2, c, .25 + e * .5);
+    // plasma core
+    const g = x.createRadialGradient(0, 0, 0, 0, 0, 17 + e * 3);
+    g.addColorStop(0, "rgba(255,255,255,.95)"); g.addColorStop(.35, rgba(c.map((v) => v * .5 + 127), .85)); g.addColorStop(1, rgba(c, 0));
+    x.fillStyle = g; x.beginPath(); x.arc(0, 0, 17 + e * 3, 0, 6.283); x.fill();
+    // the Mk II triangle
+    x.save(); x.rotate(tri); x.beginPath();
+    for (let i = 0; i < 3; i++) { const a = -Math.PI / 2 + i * 2.094; x[i ? "lineTo" : "moveTo"](Math.cos(a) * 19, Math.sin(a) * 19); }
+    x.closePath(); x.shadowColor = rgba(c, .9); x.shadowBlur = 6; x.lineJoin = "round";
+    x.lineWidth = 2.2; x.strokeStyle = rgba(c, .95); x.stroke();
+    x.shadowBlur = 0; x.lineWidth = .8; x.strokeStyle = "rgba(255,255,255,.75)"; x.stroke(); x.restore();
+    x.globalAlpha = 1;
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
 <script>
 const T = new URLSearchParams(location.search).get("t");
 const THEME = { jarvis: "#4fd8ff", mark3: "#ff4b5c", nano: "#9b86ff", emerald: "#3ff0a2", stealth: "#e4ecf2" };
