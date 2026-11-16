@@ -23,7 +23,9 @@ Only for Android. Works only inside the home Wi-Fi and only while Settings → �
   (an MJPEG stream kept breaking in the Android WebView: a black screen between reconnects). A toast on the PC says
   when a phone starts watching,
   a tap on it ("tap") clicks that very point; screenshots (the dial's «Скриншот» = the snipping tool, watched in the
-  clipboard, or "snap" = the whole monitor at once) are pushed to the phone and served at /shot/<id>."""
+  clipboard, or "snap" = the whole monitor at once) are pushed to the phone and served at /shot/<id>;
+- GET /audio streams the PC's sound (WASAPI loopback of the default output, 24 kHz stereo PCM16) while the phone
+  plays it (AudioTrack in MainActivity): video, music and games from the PC on the phone."""
 import asyncio
 import ctypes
 import hashlib
@@ -167,6 +169,7 @@ class Remote:
         self.mon = None               # (left, top, width, height) of the monitor the phone watches
         self.watch_t = 0.0            # the last frame asked for: a new "смотрит экран" only after a pause
         self.seen = {}                # device hash -> last connect time (no toast on every reconnect)
+        self.listeners = 0            # phones playing the PC's sound right now
         self.diag_t = []              # times of the phone's diagnostic lines (30 a minute at most)
         self.clip_watch = 0.0
         self.locked_until = 0.0
@@ -220,6 +223,7 @@ class Remote:
         app.router.add_get("/apk", self._apk)
         app.router.add_get("/apk/{ver}/{name}", self._apk_file)
         app.router.add_get("/frame", self._frame)
+        app.router.add_get("/audio", self._audio)
         app.router.add_get("/shot/{id}", self._shot)
         app.router.add_get("/", self._apk_page)
         try:
@@ -522,6 +526,113 @@ class Remote:
         except Exception:
             return 1
 
+    # ================================================================ the PC's sound on the phone
+    AUDIO_RATE = 24000
+
+    async def _audio(self, request):
+        """Raw PCM16 stereo at 24 kHz, as long as the phone keeps reading. Nothing comes while nothing plays
+        (WASAPI loopback is silent then); the phone's AudioTrack simply waits."""
+        from aiohttp import web
+        dev = self._device(self._token(request))
+        if not dev:
+            return web.Response(status=401)
+        if self.listeners >= 2:
+            return web.Response(status=429, text="busy")
+        loop = asyncio.get_running_loop()
+        q = asyncio.Queue(maxsize=40)                   # ~0.8 s; older chunks are dropped, never delayed
+        stop = threading.Event()
+
+        def push(chunk):
+            if q.full():
+                try:
+                    q.get_nowait()
+                except asyncio.QueueEmpty:
+                    pass
+            q.put_nowait(chunk)
+
+        try:
+            close = await loop.run_in_executor(None, self._loopback, lambda c: loop.call_soon_threadsafe(push, c), stop)
+        except Exception as e:
+            self.core.log(f"Пульт: звук ПК недоступен: {e}")
+            return web.Response(status=503, text=str(e)[:200])
+        resp = web.StreamResponse(headers={"Content-Type": "application/octet-stream", "Cache-Control": "no-store",
+                                           "X-Rate": str(self.AUDIO_RATE), "X-Channels": "2"})
+        await resp.prepare(request)
+        self.listeners += 1
+        self.core.log(f"Пульт: «{dev.get('name')}» слушает звук ПК")
+        self.core.emit("toast", title="Пульт с телефона", text=f"Звук ПК идёт на {dev.get('name')}")
+        try:
+            while self.loop and not stop.is_set():
+                try:
+                    chunk = await asyncio.wait_for(q.get(), 5)
+                except asyncio.TimeoutError:
+                    continue                            # silence on the PC: keep the link, nothing to send
+                await resp.write(chunk)
+        except (ConnectionResetError, asyncio.CancelledError, RuntimeError):
+            pass
+        finally:
+            stop.set()
+            self.listeners -= 1
+            await loop.run_in_executor(None, close)
+        return resp
+
+    def _loopback(self, sink, stop):
+        """Opens the default output device's loopback; sink(bytes) gets 20 ms of 24 kHz stereo PCM16.
+        Returns a function that closes it."""
+        import pyaudiowpatch as pa
+        p = pa.PyAudio()
+        try:
+            dev = p.get_default_wasapi_loopback()
+        except Exception:
+            p.terminate()
+            raise
+        rate, ch = int(dev["defaultSampleRate"]), max(1, int(dev["maxInputChannels"]))
+        step = rate / self.AUDIO_RATE
+        st8 = {"pos": 0.0, "prev": None}
+
+        def resample(x):
+            """Continuous linear resampling: the phase and the last sample carry over, so chunk edges never click.
+            Going down (48 kHz -> 24 kHz) a 2-tap average first keeps the hiss of aliasing away."""
+            if st8["prev"] is not None:
+                x = np.vstack([st8["prev"], x])
+            if step >= 1.5 and len(x) > 1:
+                x = np.vstack([x[:1], (x[1:] + x[:-1]) * .5])
+            n = len(x)
+            idx = np.arange(st8["pos"], n - 1, step)
+            st8["prev"] = x[-1:]
+            if not len(idx):
+                st8["pos"] -= n - 1
+                return np.zeros((0, 2), np.float32)
+            i0 = idx.astype(np.int64)
+            fr = (idx - i0)[:, None]
+            st8["pos"] = idx[-1] + step - (n - 1)
+            return x[i0] * (1 - fr) + x[i0 + 1] * fr
+
+        def cb(data, frames, info, status):
+            if stop.is_set():
+                return (None, pa.paComplete)
+            try:
+                x = np.frombuffer(data, np.int16).reshape(-1, ch).astype(np.float32)
+                st = x[:, :2] if ch >= 2 else np.repeat(x, 2, axis=1)       # 5.1 and more: front left/right
+                y = resample(st) if step != 1 else st
+                sink(np.clip(y, -32768, 32767).astype("<i2").tobytes())
+            except Exception:
+                pass
+            return (None, pa.paContinue)
+
+        stream = p.open(format=pa.paInt16, channels=ch, rate=rate, input=True, input_device_index=dev["index"],
+                        frames_per_buffer=max(1, rate // 50), stream_callback=cb)
+        stream.start_stream()
+
+        def close():
+            try:
+                stream.stop_stream()
+                stream.close()
+            except Exception:
+                pass
+            p.terminate()
+        return close
+
     def _tap(self, x, y, button, n):
         if not (0 <= x <= 1 and 0 <= y <= 1) or not self.mon:
             return
@@ -706,7 +817,7 @@ class Remote:
                 "error": self.error, "port": self.port, "ips": ips, "name": self.pc_name(), "devices": devs,
                 "clients": len(self.clients), "apk": APK.exists(),
                 "apk_size": APK.stat().st_size if APK.exists() else 0, "sha256": apk_sha256(), "github": GITHUB_APK,
-                "locked": max(0, int(self.locked_until - time.time())),
+                "locked": max(0, int(self.locked_until - time.time())), "listeners": self.listeners,
                 "link": f"http://{ips[0]}:{self.port}/" if ips else "",
                 "code": self.pairing["code"] if self.pairing and time.time() < self.pairing["until"] else "",
                 "kde": bool(getattr(self.core.phone, "device", lambda: None)())}

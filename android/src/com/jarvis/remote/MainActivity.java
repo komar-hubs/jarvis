@@ -12,8 +12,10 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.media.AudioAttributes;
 import android.media.AudioFormat;
 import android.media.AudioRecord;
+import android.media.AudioTrack;
 import android.media.MediaRecorder;
 import android.net.wifi.WifiManager;
 import android.os.Build;
@@ -50,6 +52,8 @@ public class MainActivity extends Activity {
     private volatile boolean recording = false;
     private ByteArrayOutputStream pcm;
     private Thread recThread;
+    private volatile boolean playing = false;
+    private volatile HttpURLConnection soundConn;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -271,6 +275,69 @@ public class MainActivity extends Activity {
                 }
                 js("window.onSaved && window.onSaved(" + ok + ")");
             }, "save").start();
+        }
+
+        /** The PC's sound: a raw PCM16 stream (X-Rate, X-Channels) played through an AudioTrack as it comes. Calls
+         *  window.onAudio(true) once it plays and window.onAudio(false, reason) when it stops. */
+        @JavascriptInterface
+        public void audioStart(final String url) {
+            if (playing) return;
+            playing = true;
+            new Thread(() -> {
+                AudioTrack track = null;
+                String why = "stop";
+                try {
+                    HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+                    soundConn = c;
+                    c.setConnectTimeout(3000);
+                    c.setReadTimeout(0);                    // silence on the PC sends nothing for a while
+                    int st = c.getResponseCode();
+                    if (st != 200) { why = st == 401 ? "auth" : st == 429 ? "busy" : "pc"; throw new java.io.IOException("http " + st); }
+                    int rate = Integer.parseInt(c.getHeaderField("X-Rate") == null ? "24000" : c.getHeaderField("X-Rate"));
+                    int ch = "1".equals(c.getHeaderField("X-Channels")) ? AudioFormat.CHANNEL_OUT_MONO : AudioFormat.CHANNEL_OUT_STEREO;
+                    int bytesPerSec = rate * 2 * (ch == AudioFormat.CHANNEL_OUT_MONO ? 1 : 2);
+                    int min = AudioTrack.getMinBufferSize(rate, ch, AudioFormat.ENCODING_PCM_16BIT);
+                    track = new AudioTrack.Builder()
+                            .setAudioAttributes(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
+                                    .setContentType(AudioAttributes.CONTENT_TYPE_MOVIE).build())
+                            .setAudioFormat(new AudioFormat.Builder().setSampleRate(rate).setChannelMask(ch)
+                                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT).build())
+                            .setBufferSizeInBytes(Math.max(min * 2, bytesPerSec / 5))          // ~200 ms
+                            .setTransferMode(AudioTrack.MODE_STREAM).build();
+                    track.play();
+                    js("window.onAudio && window.onAudio(true)");
+                    InputStream in = c.getInputStream();
+                    byte[] buf = new byte[4096];
+                    int carry = 0;
+                    while (playing) {
+                        int n = in.read(buf, carry, buf.length - carry);
+                        if (n < 0) { why = "pc"; break; }
+                        n += carry;
+                        int whole = n - n % 4;              // never split a stereo frame
+                        // fell behind (a Wi-Fi hiccup): skip what piled up instead of playing it late
+                        if (in.available() > bytesPerSec / 2) { in.skip(in.available() - in.available() % 4); carry = 0; continue; }
+                        if (whole > 0) track.write(buf, 0, whole);
+                        carry = n - whole;
+                        if (carry > 0) System.arraycopy(buf, whole, buf, 0, carry);
+                    }
+                    c.disconnect();
+                } catch (Exception e) {
+                    if (playing && "stop".equals(why)) why = "net";
+                } finally {
+                    if (track != null) { try { track.stop(); } catch (Exception ignored) { } track.release(); }
+                    boolean wasOn = playing;
+                    playing = false;
+                    soundConn = null;
+                    js("window.onAudio && window.onAudio(false, " + q(wasOn ? why : "stop") + ")");
+                }
+            }, "pc-sound").start();
+        }
+
+        @JavascriptInterface
+        public void audioStop() {
+            playing = false;
+            HttpURLConnection c = soundConn;
+            if (c != null) new Thread(() -> { try { c.disconnect(); } catch (Exception ignored) { } }).start();
         }
 
         /** "ok", "perm" (asked for the microphone, hold again) or "busy". */

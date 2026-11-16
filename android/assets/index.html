@@ -108,6 +108,7 @@ svg{position:absolute;left:0;top:0;overflow:visible}
   border:1px solid rgba(var(--rgb),.5);background:linear-gradient(180deg,rgba(var(--rgb),.2),rgba(var(--rgb),.05));box-shadow:inset 0 0 14px rgba(var(--rgb),.08),0 0 10px rgba(var(--rgb),.08)}
 .vbtn svg{position:static}
 .vbtn:active{background:rgba(var(--hot-rgb),.32);border-color:var(--hot)}
+.vbtn.on{background:rgba(var(--rgb),.36);border-color:var(--acc2);color:#fff;box-shadow:0 0 14px rgba(var(--rgb),.4)}
 .vbtn.x{border-color:rgba(255,130,110,.5);color:#ffd9d0}
 .vbtn.x .ico{stroke:#ffb8a8}
 .panel2.scrp.big{left:0;top:0;width:932px;height:430px;padding:10px 12px;gap:12px;z-index:6;background:radial-gradient(90% 90% at 40% 50%,#06192a,#01060a 70%)}
@@ -221,6 +222,7 @@ input.addr{width:100%;height:44px;margin:10px 0 4px;border-radius:12px;border:1.
       <div class="vbtn" id="scr-big"><svg width="18" height="18" viewBox="0 0 24 24"><path class="ico" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><span>Во весь экран</span></div>
       <div class="vbtn" id="scr-snap"><svg width="18" height="18" viewBox="0 0 24 24"><path class="ico" d="M4 8h3l2-3h6l2 3h3v11H4z M12 10.5a3 3 0 1 1 0 6 3 3 0 0 1 0-6"/></svg><span>Снимок</span></div>
       <div class="vbtn" id="scr-mon"><svg width="18" height="18" viewBox="0 0 24 24"><path class="ico" d="M2 5h12v8H2z M10 11h12v8H10z"/></svg><span>Монитор</span></div>
+      <div class="vbtn" id="scr-snd"><svg width="18" height="18" viewBox="0 0 24 24"><path class="ico" d="M4 10h3l4-4v12l-4-4H4z M15 9.5a3.5 3.5 0 0 1 0 5 M17.6 7a7 7 0 0 1 0 10"/></svg><span>Звук</span></div>
       <div class="vbtn x" id="scr-x"><svg width="18" height="18" viewBox="0 0 24 24"><path class="ico" d="M6 6l12 12M18 6L6 18"/></svg><span>Закрыть</span></div>
     </div></div>
   <div class="shotv" id="shotv"><img id="shot-img" alt=""><div class="shot-bar"><span class="p2-title" id="shot-cap">СНИМОК ЭКРАНА</span><div class="btn ghost" id="shot-save">Сохранить на телефон</div><div class="btn" id="shot-x">Закрыть</div></div></div>
@@ -302,6 +304,7 @@ const ICON = {
   min: "M4 5h16v14H4z M8 15h8", close: "M4 5h16v14H4z M9 9l6 6M15 9l-6 6", task: "M4 20V12M9 20V6M14 20v-9M19 20V4", screen: "M3 5h18v11H3z M8 20h8M12 16v4 M7 9l3 2-3 2", lock: "M6 11h12v10H6z M9 11V8a3 3 0 0 1 6 0v3",
   search: "M10.5 4a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13 M15.5 15.5L20 20", folder: "M3 7h7l2 2h9v10H3z",
   vdown: "M4 10h3l4-4v12l-4-4H4z M15 12h5", vup: "M4 10h3l4-4v12l-4-4H4z M15 12h5M17.5 9.5v5", mute: "M4 10h3l4-4v12l-4-4H4z M15 10l4 4M19 10l-4 4",
+  pcsnd: "M4 10h3l4-4v12l-4-4H4z M15 9.5a3.5 3.5 0 0 1 0 5 M17.6 7a7 7 0 0 1 0 10",
   prev: "M7 6v12 M18 6l-9 6 9 6z", play: "M8 6l10 6-10 6z", pause: "M8 6v12M16 6v12", next: "M17 6v12 M6 6l9 6-9 6z" };
 function icon(name, x, y, s, p, cls = "ico") {
   const g = el("g", { transform: `translate(${x - s / 2} ${y - s / 2}) scale(${s / 24})` }, p);
@@ -397,7 +400,7 @@ function drawKeyboard() {
   const letters = (s, ri) => s.split("").map((c, i) => ({ kind: "ch", ch: c, code: CODES[ri][i] }));
   const strip = [{ kind: "media", a: "vdown", icon: "vdown" }, { kind: "media", a: "mute", icon: "mute" }, { kind: "media", a: "vup", icon: "vup" },
     { kind: "media", a: "prev", icon: "prev" }, { kind: "media", a: "play", icon: "pause" }, { kind: "media", a: "next", icon: "next" },
-    { kind: "fn", t: "F1–F12", cls: "s fn" + (KB.fn ? " latch" : ""), w: 2 }].map((k) => ({ cls: "fn", ...k }));
+    { kind: "pcsnd", t: "Звук ПК", cls: "s fn" + (sndOn || sndWant ? " latch" : ""), w: 1.6 }, { kind: "fn", t: "F1–F12", cls: "s fn" + (KB.fn ? " latch" : ""), w: 1.6 }].map((k) => ({ cls: "fn", ...k }));
   const digits = KB.fn
     ? Array.from({ length: 12 }, (_, i) => ({ kind: "key", k: "f" + (i + 1), t: "F" + (i + 1), cls: "s" }))
     : [{ kind: "key", k: "esc", t: "Esc", cls: "s", w: 1.2 }, ..."1234567890".split("").map((c, i) => ({ kind: "ch", ch: c, code: c, digit: true, i, sub: SUBS[KB.lang][i] })), { kind: "key", k: "delete", t: "Del", cls: "s", w: 1.2, rep: true }];
@@ -580,6 +583,7 @@ let found = {}, sel = null, code = "", pairMsg = "", pairErr = false, adding = f
 const PC_ICON = `<svg width="20" height="20" viewBox="0 0 24 24" style="position:static"><rect x="3" y="4" width="18" height="12" rx="2" class="ico"/><path class="ico" d="M8 20h8M12 16v4"/></svg>`;
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 function showConnect(pc) {
+  if (sndWant || sndOn) soundToggle(false);
   if (scrOn) screenOpen(false);
   screen = "connect"; document.body.className = "connect";
   if (ws) { ws.onclose = null; try { ws.close(); } catch (e) {} ws = null; wsOk = false; }
@@ -791,6 +795,7 @@ function press(k) {
   else if (k.kind === "lang") { KB.lang = KB.lang === "ru" ? "en" : "ru"; pput("lang", KB.lang); drawKeyboard(); toast(KB.lang === "ru" ? "Русская раскладка" : "Английская раскладка"); }
   else if (k.kind === "fn") { KB.fn = !KB.fn; drawKeyboard(); }
   else if (k.kind === "media") send({ t: "media", a: k.a });
+  else if (k.kind === "pcsnd") soundToggle();
 }
 function showPop(k) {
   L.pop.innerHTML = "";
@@ -949,6 +954,32 @@ scrView.addEventListener("pointerup", (e) => {
   tapP = null;
 });
 scrView.addEventListener("pointercancel", () => { clearTimeout(tapT); tapP = null; });
+
+// ================================================================ the PC's sound on the phone (MainActivity plays it)
+let sndOn = false, sndWant = false, sndRetry = null;
+function sndUI() {
+  KEYS.forEach((k) => { if (k.kind === "pcsnd") k.g.classList.toggle("latch", sndOn || sndWant); });
+  document.getElementById("scr-snd").classList.toggle("on", sndOn || sndWant);
+}
+function soundToggle(force) {
+  const on = force === undefined ? !(sndOn || sndWant) : force;
+  if (on && !HAS) { toast("Звук ПК работает только в приложении", true); return; }
+  if (on && !wsOk) { toast("Нет связи с ПК", true); return; }
+  sndWant = on; clearTimeout(sndRetry);
+  if (on) { Native.audioStart(`${base()}/audio?token=${encodeURIComponent(cur.token)}`); toast("Звук ПК — на телефон"); }
+  else { if (HAS) Native.audioStop(); sndOn = false; toast("Звук ПК выключен"); }
+  sndUI(); buzz(12);
+}
+window.onAudio = (on, why) => {
+  sndOn = !!on;
+  if (!on && sndWant && why !== "stop") {
+    if (why === "busy") { sndWant = false; toast("Звук ПК уже слушает другой телефон", true); }
+    else if (why === "auth") { sndWant = false; toast("ПК не узнал телефон", true); }
+    else { diag(`звук ПК прервался (${why}), подключаю снова`); sndRetry = setTimeout(() => { if (sndWant && wsOk) Native.audioStart(`${base()}/audio?token=${encodeURIComponent(cur.token)}`); }, 2000); }
+  }
+  sndUI();
+};
+document.getElementById("scr-snd").onclick = () => soundToggle();
 
 // screenshots from the PC: «Скриншот» on the dial (the cut-out area) or «Снимок» (the whole monitor)
 let shotUrl = "";
