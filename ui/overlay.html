@@ -26,21 +26,22 @@
   body[data-state=thinking] { --c: var(--hot); }
   body[data-state=speaking] { --c: var(--acc2); }
   body.free[data-state=idle], body.dictation { --c: var(--green); }
-  #bg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #bg { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .32; }
+  body::before { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(var(--acc-rgb), .07), transparent 45%); pointer-events: none; }
   #reactor { position: absolute; left: 8px; top: 6px; width: 92px; height: 92px; }
   .frame { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; }
-  .frame .edge { fill: none; stroke: rgba(var(--acc-rgb), .45); }
-  .frame .cn { fill: none; stroke: var(--acc); stroke-width: 1.6; filter: drop-shadow(0 0 3px var(--acc)); }
+  .frame .edge { fill: none; stroke: rgba(var(--acc-rgb), .28); }
+  .frame .cn { fill: none; stroke: rgba(var(--acc-rgb), .75); stroke-width: 1.4; }
   .txt { position: absolute; left: 110px; right: 16px; top: 0; bottom: 0; display: flex; flex-direction: column; justify-content: center; z-index: 3; min-width: 0; }
-  .st { font-family: var(--head); font-size: 11px; letter-spacing: 5px; text-transform: uppercase; color: var(--c);
-    text-shadow: 0 0 12px var(--c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color .4s; }
-  .heard { margin-top: 2px; font-size: 14px; font-weight: 500; font-style: italic; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .st { font-family: var(--head); font-size: 10px; letter-spacing: 3.5px; text-transform: uppercase; color: var(--c); opacity: .85;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color .4s; }
+  .heard { margin-top: 3px; font-size: 14px; font-weight: 500; color: #6f8fa3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .heard:empty { display: none; }
-  .line { margin-top: 1px; font-size: 18px; font-weight: 600; line-height: 1.12; color: #fff; text-shadow: 0 0 12px rgba(var(--acc-rgb), .55);
+  .line { margin-top: 1px; font-size: 17px; font-weight: 500; line-height: 1.15; color: #cfe6f2;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .line:empty { display: none; }
   .line.typing::after { content: ""; display: inline-block; width: 7px; height: .9em; margin-left: 3px; vertical-align: -2px;
-    background: var(--acc); box-shadow: 0 0 10px rgba(var(--acc-rgb), .6); animation: blink .8s steps(1) infinite; }
+    background: rgba(var(--acc-rgb), .7); animation: blink .8s steps(1) infinite; }
   @keyframes blink { 50% { opacity: 0; } }
   /* fired reminder / timer card with buttons */
   .notice { display: none; gap: 8px; margin-top: 5px; }
