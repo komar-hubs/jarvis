@@ -209,6 +209,7 @@ svg{position:absolute;left:0;top:0;overflow:visible}
 .ed-zbar .tr{position:absolute;left:30px;top:8px;bottom:8px;width:2px;background:linear-gradient(rgba(var(--e),.15),rgba(var(--e),.6),rgba(var(--e),.15))}
 .ed-zbar .mk{position:absolute;right:0;width:44px;height:16px;margin-top:-8px;display:flex;align-items:center;justify-content:flex-end;gap:4px;
   font:700 9.5px "JetBrains Mono";color:rgba(191,244,255,.75);text-shadow:0 0 4px #000}
+.ed-zbar .mk.near{color:transparent;text-shadow:none}
 .ed-zbar .mk::after{content:"";width:10px;height:1.5px;background:rgba(191,244,255,.8);margin-right:7px}
 .ed-zbar .th{position:absolute;left:19px;width:24px;height:16px;margin-top:-8px;border-radius:8px;background:var(--hot);box-shadow:0 0 12px rgba(var(--hot-rgb),.8);
   border:1.5px solid #ffe2b0;transition:top .08s}
@@ -1405,7 +1406,7 @@ async function edithOpen(on) {
   if (!on) {
     if (edLiveOn) edLiveSet(false);
     edDrawOn = false; edTorch = false; document.getElementById("ed-torch").classList.remove("on");
-    edV.style.transform = ""; edZ = { hw: false, min: 1, max: 8, v: 1 };
+    edV.style.transform = ""; edZ = { hw: false, hwMin: 1, hwMax: 1, min: 1, max: 8, v: 1 };
     edSensors(false); edColor = false; document.getElementById("ed-color").classList.remove("live"); edLogShow(false);
     edBox.classList.remove("show", "frozen", "busy"); document.getElementById("ed-card").classList.remove("show");
     if (edStream) edStream.getTracks().forEach((t) => t.stop());
@@ -1431,12 +1432,17 @@ async function edithOpen(on) {
 // The camera's own zoom when it has one, else a digital zoom around the reticle (up to x8). Everything sent to the PC is
 // the part of the frame that is visible right now, so a zoomed-in sign is read as you see it.
 const ZO = { x: 396, y: 215 };
-let edZ = { hw: false, min: 1, max: 8, v: 1 }, edZT = 0;
+let edZ = { hw: false, hwMin: 1, hwMax: 1, min: 1, max: 8, v: 1 }, edZT = 0;
 function edMap() {           // frame px -> stage px for a video shown with object-fit: cover (before the digital zoom)
   const vw = edV.videoWidth || 16, vh = edV.videoHeight || 9, k = Math.max(932 / vw, 430 / vh);
   return { vw, vh, k, ox: (932 - vw * k) / 2, oy: (430 - vh * k) / 2 };
 }
-const edDZ = () => (edZ.hw ? 1 : edZ.v);
+const edHW = (v) => Math.max(edZ.hwMin, Math.min(edZ.hwMax, v));              // the camera's part of a zoom
+const edDZ = () => (edZ.hw ? edZ.v / edHW(edZ.v) : edZ.v);                    // the digital part (<1 = whole frame)
+function edFull() {          // the zoom at which the whole camera frame fits the screen (letterboxed)
+  const vw = edV.videoWidth || 16, vh = edV.videoHeight || 9;
+  return Math.min(1, Math.min(932 / vw, 430 / vh) / Math.max(932 / vw, 430 / vh));
+}
 function edToScreen(fx, fy) { const m = edMap(), d = edDZ(); return [ZO.x + (m.ox + fx * m.k - ZO.x) * d, ZO.y + (m.oy + fy * m.k - ZO.y) * d]; }
 function edVis() {           // the visible part of the frame, in frame px
   const m = edMap(), d = edDZ();
@@ -1468,25 +1474,29 @@ function edZoomUI() {
   const bar = document.getElementById("ed-zbar"), top = 8, h = 216 - 16, t = edZ.max > edZ.min ? ZT(edZ.v) : 0;
   bar.style.display = edZ.max > edZ.min ? "" : "none";
   bar.querySelectorAll(".mk").forEach((m) => m.remove());
-  [1, 2, 4, 8].filter((v) => v >= edZ.min - 1e-6 && v <= edZ.max + 1e-6).forEach((v) => {
-    const m = document.createElement("div"); m.className = "mk"; m.textContent = "×" + v; m.dataset.v = v;
+  const marks = [0.5, 1, 2, 4, 8].filter((v) => v >= edZ.min - 1e-6 && v <= edZ.max + 1e-6);
+  if (edZ.min < 0.95 && !marks.some((v) => Math.abs(v - edZ.min) < 0.15)) marks.unshift(+edZ.min.toFixed(2));   // "the whole frame"
+  marks.forEach((v) => {
+    const m = document.createElement("div"); m.className = "mk"; m.textContent = "×" + (v < 1 ? v.toFixed(1) : v); m.dataset.v = v;
     m.style.top = (top + h - ZT(v) * h) + "px"; bar.appendChild(m);
   });
   const y = top + h - t * h;
+  // the mark the thumb sits on hides its number: the thumb's own value is shown there
+  bar.querySelectorAll(".mk").forEach((m) => m.classList.toggle("near", Math.abs(parseFloat(m.style.top) - y) < 14));
   document.getElementById("ed-zth").style.top = y + "px";
   const vl = document.getElementById("ed-zvl"); vl.style.top = y + "px"; vl.textContent = "×" + edZ.v.toFixed(1);
-  document.getElementById("ed-zoom").textContent = edZ.v > 1.05 ? "×" + edZ.v.toFixed(1) + (edZ.hw ? "" : " цифр.") : "";
+  const dz = edDZ();
+  document.getElementById("ed-zoom").textContent = Math.abs(edZ.v - 1) > 0.04 ? "×" + edZ.v.toFixed(1) + (dz < 0.99 ? " весь кадр" : dz > 1.01 ? " цифр." : edZ.v < 1 ? " широкий" : "") : "";
 }
 function edSetZoom(v) {
   edZ.v = Math.max(edZ.min, Math.min(edZ.max, v));
   if (edZ.hw) {
-    edV.style.transform = "";
     const now = Date.now();
-    if (now - edZT > 60 && edTrack) { edZT = now; edTrack.applyConstraints({ advanced: [{ zoom: edZ.v }] }).catch(() => {}); }
-  } else {
-    edV.style.transformOrigin = `${ZO.x}px ${ZO.y}px`;
-    edV.style.transform = edZ.v > 1.001 ? `scale(${edZ.v})` : "";
+    if (now - edZT > 60 && edTrack) { edZT = now; edTrack.applyConstraints({ advanced: [{ zoom: edHW(edZ.v) }] }).catch(() => {}); }
   }
+  const dz = edDZ();
+  edV.style.transformOrigin = `${ZO.x}px ${ZO.y}px`;
+  edV.style.transform = Math.abs(dz - 1) > 0.001 ? `scale(${dz})` : "";
   edLines = []; edQR = [];                        // the frames of text belong to the old zoom
   edZoomUI();
 }
@@ -1816,10 +1826,10 @@ function edTools() {
   edTrack = edStream && edStream.getVideoTracks()[0];
   const caps = (edTrack && edTrack.getCapabilities && edTrack.getCapabilities()) || {};
   document.getElementById("ed-torch").classList.toggle("has", !!caps.torch);
-  const hw = caps.zoom && (caps.zoom.max || 1) >= 2;
-  edZ = hw ? { hw: true, min: caps.zoom.min || 1, max: Math.min(caps.zoom.max, 10), v: (edTrack.getSettings().zoom || caps.zoom.min || 1) }
-           : { hw: false, min: 1, max: 8, v: 1 };
-  edSetZoom(edZ.v);
+  const z = caps.zoom, hw = !!z && ((z.max || 1) >= 2 || (z.min || 1) < 1);       // a zoom lens or an ultra-wide one
+  const hwMin = hw ? (z.min || 1) : 1, hwMax = hw ? Math.min(z.max || 1, 10) : 1, full = edFull();
+  edZ = { hw, hwMin, hwMax, min: +(hwMin * full).toFixed(2), max: Math.max(8, hwMax), v: 1 };
+  edSetZoom(1);
 }
 document.getElementById("ed-torch").onclick = async () => {
   buzz(); edTorch = !edTorch;
@@ -1911,6 +1921,7 @@ async function edDemo(mode) {
   if (mode === "color") document.getElementById("ed-color").click();
   if (mode === "card") { edFreeze(); edCard("ЧТО ЭТО", "Красная керамическая кружка, примерно 300 мл. Рядом лист с табличкой «Запасной выход».", false, { query: "красная кружка", nolog: true }); }
   if (mode === "busy") { edFreeze(); edBusy = true; edBox.classList.add("busy"); edSub("смотрю…"); }
+  if (mode === "wide") { edSetZoom(edZ.min); }
   if (mode === "zoom") { edSetZoom(2.6); edLiveOn = true; document.getElementById("ed-livebtn").classList.add("live");
     const r = edVis(); edLines = [{ text: "www.example.com/help", r, x: (288 - r.x) / r.w, y: (318 - r.y) / r.h, w: 300 / r.w, h: 36 / r.h, t: Date.now() + 1e9 }]; }
 }
