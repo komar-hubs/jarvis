@@ -292,8 +292,10 @@ class Core:
         self.filesearch = FileSearch(self)  # "найди файл про …": documents indexed by their words and meaning
         from .standin import StandIn
         self.standin = StandIn(self)       # «подмени меня»: the user's phrases spoken into a Discord call
+        from .mods import Mods
+        self.mods = Mods(self)             # «Моды»: add-ons switched on or off in their own tab (keyboard, E.D.I.T.H.)
         from .remote import Remote
-        self.remote = Remote(self)         # J.A.R.V.I.S. Remote: the Android app as a touchpad and keyboard
+        self.remote = Remote(self)        # J.A.R.V.I.S. Remote: the Android app as a touchpad and keyboard
         from .vk import VK
         self.vk = VK(self)                 # ВКонтакте API: groups' posts, conversations, sending (key in vk.token)
         from .insights import Insights
@@ -2098,7 +2100,7 @@ class Core:
                                                           self.gamevoice, self.features, self.diag, self.gamefx,
                                                           self.voiceid, self.stress, self.school, self.screentrans,
                                                           self.audiomem, self.filesearch, self.winnotify, self.goals,
-                                                          self.insights, self.vk, self.standin, self.remote)
+                                                          self.insights, self.vk, self.standin, self.remote, self.mods)
                    if hasattr(o, "rpc_" + method)), None)
         if not fn:
             raise ValueError(f"unknown method {method}")

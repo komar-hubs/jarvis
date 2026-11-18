@@ -407,7 +407,7 @@ class Remote:
         self.core.emit("remote_clients", n=len(self.clients))
         loop = asyncio.get_running_loop()
         try:
-            hello = {"t": "hello", "name": self.pc_name(), "mons": 1, "apk": apk_version()}
+            hello = {"t": "hello", "name": self.pc_name(), "mons": 1, "apk": apk_version(), "mods": self._mods()}
             try:
                 hello["wake"] = wake_info()
             except Exception:
@@ -715,6 +715,14 @@ class Remote:
             self.shots.popitem(last=False)
         self._broadcast({"t": "shot", "id": sid, "w": w, "h": h, "kind": kind})
 
+    def _mods(self):
+        mods = getattr(self.core, "mods", None)
+        return mods.state() if mods else {"keyboard": True, "edith": False}
+
+    def mods_changed(self):
+        """A switch in the «Моды» tab: the connected phones redraw at once."""
+        self._broadcast({"t": "mods", "mods": self._mods()})
+
     def _broadcast(self, msg):
         loop = self.loop
         if not loop:
@@ -847,6 +855,8 @@ class Remote:
         dev = self._device(self._token(request))
         if not dev:
             return web.json_response({"ok": False, "error": "unpaired"}, status=401)
+        if not self._mods().get("edith"):
+            return web.json_response({"ok": False, "error": "E.D.I.T.H. выключен: Джарвис → вкладка «Моды»"}, status=403)
         try:
             body = await request.json()
         except Exception:

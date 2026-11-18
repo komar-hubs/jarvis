@@ -70,6 +70,7 @@ svg{position:absolute;left:0;top:0;overflow:visible}
 .hbtn.on{background:rgba(var(--rgb),.32);border-color:var(--acc2);color:#fff;box-shadow:0 0 14px rgba(var(--rgb),.45)}
 #L-kb,#L-pop{transition:opacity .25s,transform .3s}
 .kb-away #L-kb,.kb-away #L-pop{opacity:0;transform:translateY(-36px);pointer-events:none}
+.no-kb #L-kb,.no-kb #L-pop{display:none}
 .panel2{position:absolute;left:236px;top:34px;width:684px;height:288px;display:none;flex-direction:column;border-radius:16px;border:1px solid rgba(var(--rgb),.45);background:linear-gradient(180deg,rgba(6,30,46,.92),rgba(2,12,20,.95));box-shadow:0 0 30px rgba(var(--rgb),.18),inset 0 0 30px rgba(var(--rgb),.06);padding:8px 10px 10px}
 .panel2.show{display:flex;animation:rise .3s ease-out}
 @keyframes rise{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:none}}
@@ -498,8 +499,11 @@ const L = {};
 ["head", "dial", "kb", "pad", "pop"].forEach((n) => L[n] = el("g", { id: "L-" + n }));
 
 // ================================================================ the half dial (actions) and the JARVIS core (voice)
+// «Моды» on the PC: the keyboard (on by default) and E.D.I.T.H. (off by default) are add-ons the user switches there
+let ADDONS = Object.assign({ keyboard: true, edith: false }, pget("mods", {}));
+const PADR = { y: 328, h: 96 };      // the touchpad: a strip under the keyboard, or the whole right side without it
 const DIAL_IN = [["copy", "Копировать"], ["paste", "Вставить"], ["undo", "Отменить"], ["shot", "Скриншот"], ["alttab", "Alt+Tab"], ["search", "Поиск"]];
-const DIAL_OUT = [["min", "Свернуть"], ["sel", "Выделить"], ["close", "Закрыть"], ["lock", "Блок ПК"], ["screen", "Экран"], ["edith", "E.D.I.T.H."]];
+const DIAL_OUT = [["min", "Свернуть"], ["sel", "Выделить"], ["close", "Закрыть"], ["lock", "Блок ПК"], ["screen", "Экран"], ADDONS.edith ? ["edith", "E.D.I.T.H."] : ["folder", "Проводник"]];
 const NAMES = Object.fromEntries([...DIAL_IN, ...DIAL_OUT]);
 let waves = [];
 function drawDial(on) {
@@ -618,7 +622,7 @@ function keyAt(x, y) {
 let thumb = null;
 function drawPad() {
   L.pad.innerHTML = "";
-  const x = 296, y = 328, h = 96, padW = 498, X2 = x + padW + 8, g = L.pad;
+  const x = 296, y = PADR.y, h = PADR.h, padW = 498, X2 = x + padW + 8, g = L.pad;
   el("rect", { x, y, width: padW, height: h, rx: 14, fill: "url(#tpg)", stroke: "#4fd8ff", "stroke-opacity": .55 }, g);
   el("rect", { x: x + 1, y: y + 1, width: padW - 2, height: h - 2, rx: 13, fill: "url(#dots)" }, g);
   el("path", { d: `M${x + 14} ${y + 1.5} H${x + padW - 14}`, stroke: "#bff4ff", "stroke-opacity": .35 }, g);
@@ -638,16 +642,36 @@ function drawPad() {
   el("rect", { x: sx, y, width: sw, height: h, rx: 14, fill: "url(#tpg)", stroke: "#4fd8ff", "stroke-opacity": .55 }, g);
   el("path", { d: `M${sx + sw / 2 - 6} ${y + 15} l6 -6 l6 6 M${sx + sw / 2 - 6} ${y + h - 15} l6 6 l6 -6`, fill: "none", stroke: "#bff4ff", "stroke-width": 1.8, "stroke-linecap": "round", "stroke-linejoin": "round" }, g);
   thumb = el("g", {}, g);
-  el("rect", { x: sx + sw / 2 - 9, y: y + 31, width: 18, height: 34, rx: 9, fill: "#4fd8ff", "fill-opacity": .32, stroke: "#bff4ff", "stroke-opacity": .6 }, thumb);
-  for (let i = 0; i < 3; i++) el("line", { x1: sx + sw / 2 - 4, y1: y + 42 + i * 6, x2: sx + sw / 2 + 4, y2: y + 42 + i * 6, stroke: "#e6faff", "stroke-opacity": .8 }, thumb);
+  el("rect", { x: sx + sw / 2 - 9, y: y + h / 2 - 17, width: 18, height: 34, rx: 9, fill: "#4fd8ff", "fill-opacity": .32, stroke: "#bff4ff", "stroke-opacity": .6 }, thumb);
+  for (let i = 0; i < 3; i++) el("line", { x1: sx + sw / 2 - 4, y1: y + h / 2 - 6 + i * 6, x2: sx + sw / 2 + 4, y2: y + h / 2 - 6 + i * 6, stroke: "#e6faff", "stroke-opacity": .8 }, thumb);
 }
 
 function drawAll() {
   L.head.innerHTML = "";
   T(250, 25, "J.A.R.V.I.S. · ПУЛЬТ", "lbl", L.head);
+  stage.classList.toggle("no-kb", !ADDONS.keyboard);
   drawDial(listening);
   drawKeyboard();
+  padGeom();
+}
+// the touch zones follow the drawn pad: big while there is no keyboard and no screen panel in its place
+function padGeom() {
+  const big = !ADDONS.keyboard && !stage.classList.contains("kb-away");
+  PADR.y = big ? 44 : 328; PADR.h = big ? 380 : 96;
+  ["pad", "trail", "rail"].forEach((id) => { const z = document.getElementById(id); z.style.top = PADR.y + "px"; z.style.height = PADR.h + "px"; });
+  document.getElementById("mbl").style.top = PADR.y + "px";
+  try { sizeTrail(); } catch (e) {}
   drawPad();
+}
+function applyMods(m, quiet) {
+  const was = ADDONS;
+  ADDONS = Object.assign({ keyboard: true, edith: false }, m || {}); pput("mods", ADDONS);
+  DIAL_OUT[5] = ADDONS.edith ? ["edith", "E.D.I.T.H."] : ["folder", "Проводник"]; NAMES[DIAL_OUT[5][0]] = DIAL_OUT[5][1];
+  if (!ADDONS.edith && edBox.classList.contains("show")) edithOpen(false);
+  drawAll();
+  if (quiet) return;
+  if (was.edith !== ADDONS.edith) toast(ADDONS.edith ? "Мод E.D.I.T.H. включён — он на круге" : "Мод E.D.I.T.H. выключен");
+  else if (was.keyboard !== ADDONS.keyboard) toast(ADDONS.keyboard ? "Мод «Клавиатура» включён" : "Клавиатура выключена — тачпад во всю ширину");
 }
 
 // ================================================================ the link to the PC
@@ -693,10 +717,12 @@ function openWs() {
       if (m.wake && m.wake.macs && m.wake.macs.length) { cur.wake = m.wake; savePc(cur); }
       if (m.name && m.name !== cur.name) { cur.name = m.name; savePc(cur); }
       scrMons = m.mons || 1; chipState();
+      if (m.mods) applyMods(m.mods, true);
       let mine = 0; try { mine = HAS ? Native.appVersion() : 0; } catch (x) {}
       document.getElementById("b-upd").classList.toggle("show", !!(HAS && m.apk && mine && m.apk > mine));
     }
     else if (m.t === "shot") showShot(m);
+    else if (m.t === "mods") applyMods(m.mods);
     else if (m.t === "vol" && m.vol != null) toast(`Громкость ${m.vol}%`);
   };
   w.onclose = (e) => {
@@ -984,7 +1010,7 @@ svg.addEventListener("pointerdown", (e) => {
   const dg = e.target.closest("[data-act]");
   if (dg) { e.preventDefault(); dialDown(e, dg); return; }
   if (e.target.closest("[data-core]")) { e.preventDefault(); coreDown(e); return; }
-  if (stage.classList.contains("kb-away")) return;
+  if (stage.classList.contains("kb-away") || !ADDONS.keyboard) return;
   const p = loc(e), k = keyAt(p.x, p.y);
   if (!k) return;
   e.preventDefault();
@@ -1017,6 +1043,7 @@ addEventListener("pointercancel", (e) => { keyUp(e, true); dialUp(e, true); core
 
 function panelsAway() {
   stage.classList.toggle("kb-away", scrOn);
+  padGeom();
   const cell = document.querySelector('[data-act="screen"]');
   if (cell) cell.classList.toggle("live", scrOn);
 }
@@ -1288,7 +1315,7 @@ rail.addEventListener("pointermove", (e) => {
 });
 function railUp(e) {
   if (!railP) return;
-  if (railP.moved < 6) { const p = loc(e); send({ t: "scroll", dy: p.y < 328 + 48 ? 120 : -120 }); }
+  if (railP.moved < 6) { const p = loc(e); send({ t: "scroll", dy: p.y < PADR.y + PADR.h / 2 ? 120 : -120 }); }
   railP = null; thumb.setAttribute("transform", "");
 }
 rail.addEventListener("pointerup", railUp); rail.addEventListener("pointercancel", railUp);
@@ -1307,15 +1334,15 @@ const cvs = document.getElementById("trail"), cx2 = cvs.getContext("2d");
 let trail = [];
 function sizeTrail() {
   const k = Math.min(3, (devicePixelRatio || 1) * SC);
-  cvs.width = Math.round(498 * k); cvs.height = Math.round(96 * k);
-  cx2.setTransform(k, 0, 0, k, -296 * k, -328 * k);
+  cvs.width = Math.round(498 * k); cvs.height = Math.round(PADR.h * k);
+  cx2.setTransform(k, 0, 0, k, -296 * k, -PADR.y * k);
 }
 function trailAdd(x, y, fresh) { if (fresh) trail.push(null); trail.push({ x, y, t: performance.now() }); if (trail.length > 80) trail.splice(0, trail.length - 80); }
 function trailDraw() {
   const now = performance.now();
   trail = trail.filter((p) => !p || now - p.t < 420);
   while (trail.length && !trail[0]) trail.shift();
-  cx2.clearRect(296, 328, 498, 96);
+  cx2.clearRect(296, PADR.y, 498, PADR.h);
   if (!trail.length) return;
   cx2.lineCap = "round"; cx2.lineJoin = "round";
   for (let i = 1; i < trail.length; i++) {
@@ -1891,6 +1918,7 @@ function start() {
   if (P0.get("demo")) { cur = { host: "192.168.1.5", port: 8790, name: "ПК Клима" }; screen = "main"; document.body.className = ""; wsOk = true; ping = 12; chipState(); }
   else if (pc) useMain(pc);
   else showConnect(null);
+  if (P0.get("nokb")) applyMods({ keyboard: false }, true);
   if (P0.get("demo") === "edith") edDemo(P0.get("ed") || "");
 }
 // a dev preview of E.D.I.T.H. without a phone (?demo=edith&ed=live|color|card|busy): a drawn "camera" and fake sensors
