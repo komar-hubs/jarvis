@@ -11,22 +11,97 @@
 
 """LLM providers with streaming: OpenAI-compatible, Ollama native, Anthropic Messages, and agent CLI bridges."""
 import json
+import socket
+import threading
 import time
 
 import requests
+
+FIRST_S = 75     # no text at all this long after the answer started -> give up
+IDLE_S = 40      # the text stopped in the middle for this long -> give up
 
 
 class LLMError(Exception):
     pass
 
 
-def _sse_lines(resp):
+def _sock_of(resp):
+    """The socket under a streamed requests response (urllib3 1.x and 2.x keep it in different places)."""
+    raw = getattr(resp, "raw", None)
+    for path in (("_connection", "sock"), ("_fp", "fp", "raw", "_sock")):
+        cur = raw
+        try:
+            for a in path:
+                cur = getattr(cur, a)
+        except Exception:
+            continue
+        if isinstance(cur, socket.socket) or hasattr(cur, "shutdown"):
+            return cur
+    return None
+
+
+class _Watch:
+    """Ends a stream that hangs. The read timeout fires only on full silence, and some relays keep a dead request
+    alive with keep-alive pings (or reasoning without text) for ever: the "ДУМАЮ" plate then never went away. A side
+    thread closes the response when no text came in time or a stop was asked: that unblocks the read at once."""
+
+    def __init__(self, resp, cancel):
+        self.resp, self.cancel = resp, cancel
+        self.sock = _sock_of(resp)
+        self.t0 = self.last = time.time()
+        self.got, self.why, self.pings, self.done = False, "", 0, False
+        threading.Thread(target=self._run, daemon=True, name="llm-watch").start()
+
+    def text(self):
+        self.got, self.last = True, time.time()
+
+    def _run(self):
+        while not self.done:
+            time.sleep(0.25)
+            now = time.time()
+            if self.cancel():
+                self.why = "cancel"
+            elif not self.got and now - self.t0 > FIRST_S:
+                self.why = "first"
+            elif self.got and now - self.last > IDLE_S:
+                self.why = "idle"
+            else:
+                continue
+            try:                      # closing the response alone does not wake a read blocked in recv()
+                if self.sock is not None:
+                    self.sock.shutdown(socket.SHUT_RDWR)
+            except Exception:
+                pass
+            try:
+                self.resp.close()
+            except Exception:
+                pass
+            return
+
+    def end(self, err=None):
+        """After the loop (err = what the closed read raised). Returns True when the user stopped it."""
+        self.done = True
+        if self.why == "first":
+            raise LLMError(f"ИИ не начал отвечать за {FIRST_S} с" + (f": сервер присылал только служебные пинги ({self.pings})"
+                                                                     if self.pings else ""))
+        if self.why == "idle":
+            raise LLMError(f"ИИ замолчал посреди ответа больше чем на {IDLE_S} с")
+        if self.why == "cancel":
+            return True
+        if err is not None:
+            raise err
+        return False
+
+
+def _sse_lines(resp, watch=None):
     for raw in resp.iter_lines(decode_unicode=False):
         if not raw:
             continue
         line = raw.decode("utf-8", "replace")
         if line.startswith("data:"):
             yield line[5:].strip()
+        elif watch:
+            watch.pings += 1          # ": keep-alive", "event: ping" …
 
 
 def stream_chat(prov, messages, temperature=0.6, max_tokens=1500, bridges=None, cancel=lambda: False):
@@ -54,24 +129,35 @@ def stream_chat(prov, messages, temperature=0.6, max_tokens=1500, bridges=None, 
                 # small context keeps a 7-9B model fully on a 12 GB GPU next to Whisper and XTTS
                 "options": {"temperature": temperature, "num_predict": max_tokens, "num_ctx": int(prov.get("num_ctx") or 4096)},
                 "keep_alive": "5m"}  # free VRAM soon after the chat goes quiet
-        with requests.post(base + "/api/chat", json=body, stream=True, timeout=(5, 90)) as r:
+        with requests.post(base + "/api/chat", json=body, stream=True, timeout=(5, 60)) as r:
             if r.status_code == 400 and "think" in r.text:
                 body.pop("think")
-                r = requests.post(base + "/api/chat", json=body, stream=True, timeout=(5, 90))
+                r = requests.post(base + "/api/chat", json=body, stream=True, timeout=(5, 60))
             _check(r)
-            for line in r.iter_lines():
-                if cancel():
-                    return
-                if not line:
-                    continue
-                d = json.loads(line)
-                if d.get("error"):
-                    raise LLMError(d["error"])
-                c = (d.get("message") or {}).get("content")
-                if c:
-                    yield c
-                if d.get("done"):
-                    break
+            w = _Watch(r, cancel)
+            try:
+                for line in r.iter_lines():
+                    if cancel() or w.why:
+                        break
+                    if not line:
+                        continue
+                    d = json.loads(line)
+                    if d.get("error"):
+                        raise LLMError(d["error"])
+                    c = (d.get("message") or {}).get("content")
+                    if c:
+                        w.text()
+                        yield c
+                    else:
+                        w.pings += 1
+                    if d.get("done"):
+                        break
+            except LLMError:
+                w.done = True
+                raise
+            except Exception as e:
+                w.end(e)
+            w.end()
         return
 
     if kind == "anthropic":
@@ -81,19 +167,30 @@ def stream_chat(prov, messages, temperature=0.6, max_tokens=1500, bridges=None, 
         if system:
             body["system"] = system
         headers = {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"}
-        with requests.post(base + "/v1/messages", json=body, headers=headers, stream=True, timeout=(10, 90)) as r:
+        with requests.post(base + "/v1/messages", json=body, headers=headers, stream=True, timeout=(10, 60)) as r:
             _check(r)
-            for data in _sse_lines(r):
-                if cancel():
-                    return
-                try:
-                    ev = json.loads(data)
-                except Exception:
-                    continue
-                if ev.get("type") == "content_block_delta" and ev["delta"].get("type") == "text_delta":
-                    yield ev["delta"]["text"]
-                elif ev.get("type") == "error":
-                    raise LLMError(ev.get("error", {}).get("message", "error"))
+            w = _Watch(r, cancel)
+            try:
+                for data in _sse_lines(r, w):
+                    if cancel() or w.why:
+                        break
+                    try:
+                        ev = json.loads(data)
+                    except Exception:
+                        continue
+                    if ev.get("type") == "content_block_delta" and ev["delta"].get("type") == "text_delta":
+                        w.text()
+                        yield ev["delta"]["text"]
+                    elif ev.get("type") == "error":
+                        raise LLMError(ev.get("error", {}).get("message", "error"))
+                    else:
+                        w.pings += 1
+            except LLMError:
+                w.done = True
+                raise
+            except Exception as e:
+                w.end(e)
+            w.end()
         return
 
     # OpenAI-compatible
@@ -103,34 +200,45 @@ def stream_chat(prov, messages, temperature=0.6, max_tokens=1500, bridges=None, 
     if "openrouter" in base:
         headers.update({"HTTP-Referer": "https://github.com/jarvis-assistant", "X-Title": "JARVIS"})
     body = {"model": model, "messages": messages, "stream": True, "temperature": temperature, "max_tokens": max_tokens}
-    with requests.post(base + "/chat/completions", json=body, headers=headers, stream=True, timeout=(10, 90)) as r:
+    with requests.post(base + "/chat/completions", json=body, headers=headers, stream=True, timeout=(10, 60)) as r:
         if r.status_code == 400 and "max_tokens" in r.text:
             body.pop("max_tokens")
             body["max_completion_tokens"] = max_tokens
-            r = requests.post(base + "/chat/completions", json=body, headers=headers, stream=True, timeout=(10, 90))
+            r = requests.post(base + "/chat/completions", json=body, headers=headers, stream=True, timeout=(10, 60))
         if r.status_code == 400 and "temperature" in r.text:
             body.pop("temperature")
-            r = requests.post(base + "/chat/completions", json=body, headers=headers, stream=True, timeout=(10, 90))
+            r = requests.post(base + "/chat/completions", json=body, headers=headers, stream=True, timeout=(10, 60))
         if r.status_code in (429, 502, 503, 504) and not cancel():
             # a busy proxy ("HTTP 503: No channel is available for model …") usually answers a second later
             time.sleep(2)
-            r = requests.post(base + "/chat/completions", json=body, headers=headers, stream=True, timeout=(10, 90))
+            r = requests.post(base + "/chat/completions", json=body, headers=headers, stream=True, timeout=(10, 60))
         _check(r)
-        for data in _sse_lines(r):
-            if cancel():
-                return
-            if data == "[DONE]":
-                break
-            try:
-                ev = json.loads(data)
-            except Exception:
-                continue
-            if ev.get("error"):
-                raise LLMError(str(ev["error"]))
-            ch = (ev.get("choices") or [{}])[0]
-            c = (ch.get("delta") or {}).get("content")
-            if c:
-                yield c
+        w = _Watch(r, cancel)
+        try:
+            for data in _sse_lines(r, w):
+                if cancel() or w.why:
+                    break
+                if data == "[DONE]":
+                    break
+                try:
+                    ev = json.loads(data)
+                except Exception:
+                    continue
+                if ev.get("error"):
+                    raise LLMError(str(ev["error"]))
+                ch = (ev.get("choices") or [{}])[0]
+                c = (ch.get("delta") or {}).get("content")
+                if c:
+                    w.text()
+                    yield c
+                else:
+                    w.pings += 1      # role-only deltas, reasoning, usage
+        except LLMError:
+            w.done = True
+            raise
+        except Exception as e:
+            w.end(e)
+        w.end()
 
 
 def _check(r):

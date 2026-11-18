@@ -1151,6 +1151,9 @@ class Core:
                            else "Ollama не установлена на этом ПК. Настройки → Искусственный интеллект → «Бесплатный локальный ИИ в один клик».")
             elif "Read timed out" in err:
                 err = f"«{prov.get('title')}» слишком долго не отвечает — запрос прерван."
+            elif "не начал отвечать" in err or "замолчал посреди" in err:     # llm._Watch: a hung stream was cut
+                self.log(f"ИИ завис: {err}", "warn")
+                err = f"«{prov.get('title')}»: {err} — запрос прерван. Повторите вопрос или выберите другую модель."
             self.emit("chat_stream", state="error", text=err)
             self._chat_add("assistant", err, "error")
             self.say("Модуль ИИ не ответил вовремя, сэр. Попробуйте ещё раз." if "прерван" in err
