@@ -1,6 +1,6 @@
 """«Моды»: add-ons the user switches on or off in their own tab.
 
-A mod is a whole piece of the app that not everybody needs (the phone remote's holographic keyboard, E.D.I.T.H.).
+A mod is a whole piece of the app that not everybody needs (the phone remote's holographic keyboard).
 Off means gone: no buttons, no endpoints answering. The state lives in config `mods.<id>`; a mod that was never
 touched keeps its default. The phone remote gets the state in its hello and a WS "mods" message on every switch.
 """
@@ -12,11 +12,6 @@ MODS = [
      "inside": ["Точное попадание: клавиша срабатывает, когда отпускаете палец", "Ctrl, Alt, Shift, Win: касание, двойное касание, зажим",
                 "Цифры, F-клавиши, стрелки, Del, Esc", "Полоса медиа: громкость, пауза, треки, «Звук ПК»"],
      "off": "Без неё тачпад занимает всю правую половину пульта."},
-    {"id": "edith", "title": "E.D.I.T.H.", "where": "Пульт с телефона", "icon": "eye", "default": False,
-     "what": "Камера телефона с HUD: наводите на предмет или текст — Джарвис распознаёт и помогает.",
-     "inside": ["«Что это?», текст с камеры, перевод, вопрос голосом", "Живой текст с рамками, QR-коды, ссылки на ПК",
-                "Фото и скан документа прямо на ПК, «В домашку»", "Пипетка цвета, горизонт, компас, фонарик, зум ×0.5–×8"],
-     "off": "Кнопка на круге пульта снова становится «Проводник»."},
 ]
 
 

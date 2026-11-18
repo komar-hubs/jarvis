@@ -25,8 +25,6 @@ import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
-import android.speech.tts.TextToSpeech;
-import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -55,10 +53,6 @@ public class MainActivity extends Activity {
     private ByteArrayOutputStream pcm;
     private Thread recThread;
     private volatile boolean playing = false;
-    private PermissionRequest pendingCam;
-    private TextToSpeech tts;
-    private boolean ttsReady = false;
-    private String ttsPending;
     private volatile HttpURLConnection soundConn;
 
     @Override
@@ -75,20 +69,7 @@ public class MainActivity extends Activity {
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setTextZoom(100);
         web.setWebViewClient(new WebViewClient());
-        web.setWebChromeClient(new WebChromeClient() {
-            // E.D.I.T.H.: the page asks for the camera (getUserMedia); Android asks the user once
-            @Override
-            public void onPermissionRequest(final PermissionRequest req) {
-                runOnUiThread(() -> {
-                    boolean cam = false;
-                    for (String r : req.getResources()) if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(r)) cam = true;
-                    if (!cam) { req.deny(); return; }
-                    if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
-                        req.grant(new String[]{PermissionRequest.RESOURCE_VIDEO_CAPTURE});
-                    else { pendingCam = req; requestPermissions(new String[]{Manifest.permission.CAMERA}, 2); }
-                });
-            }
-        });
+        web.setWebChromeClient(new WebChromeClient());
         web.setHapticFeedbackEnabled(true);
         web.addJavascriptInterface(new Bridge(), "Native");
         setContentView(web);
@@ -113,23 +94,6 @@ public class MainActivity extends Activity {
         web.evaluateJavascript("window.onBack && window.onBack()", v -> {
             if (!"true".equals(v)) MainActivity.super.onBackPressed();
         });
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int code, String[] perms, int[] res) {
-        super.onRequestPermissionsResult(code, perms, res);
-        if (code == 2 && pendingCam != null) {
-            if (res.length > 0 && res[0] == PackageManager.PERMISSION_GRANTED)
-                pendingCam.grant(new String[]{PermissionRequest.RESOURCE_VIDEO_CAPTURE});
-            else pendingCam.deny();
-            pendingCam = null;
-        }
-    }
-
-    @Override
-    protected void onDestroy() {
-        if (tts != null) tts.shutdown();
-        super.onDestroy();
     }
 
     @Override
@@ -199,7 +163,7 @@ public class MainActivity extends Activity {
             http2(id, method, url, body, token, 5000);
         }
 
-        /** The same with a longer wait (E.D.I.T.H.: the AI looks at a photo for up to half a minute). */
+        /** The same with a custom read timeout. */
         @JavascriptInterface
         public void http2(final int id, final String method, final String url, final String body, final String token, final int timeoutMs) {
             new Thread(() -> {
@@ -317,30 +281,6 @@ public class MainActivity extends Activity {
                 }
                 js("window.onSaved && window.onSaved(" + ok + ")");
             }, "save").start();
-        }
-
-        /** E.D.I.T.H. reads its answer with the phone's own voice (Russian if the phone has it). */
-        @JavascriptInterface
-        public void speak(final String text) {
-            runOnUiThread(() -> {
-                if (tts == null) {
-                    ttsPending = text;
-                    tts = new TextToSpeech(MainActivity.this, st -> {
-                        if (st == TextToSpeech.SUCCESS) {
-                            tts.setLanguage(new java.util.Locale("ru", "RU"));
-                            ttsReady = true;
-                            if (ttsPending != null) tts.speak(ttsPending, TextToSpeech.QUEUE_FLUSH, null, "edith");
-                            ttsPending = null;
-                        }
-                    });
-                } else if (ttsReady) tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "edith");
-                else ttsPending = text;
-            });
-        }
-
-        @JavascriptInterface
-        public void speakStop() {
-            runOnUiThread(() -> { if (tts != null && ttsReady) tts.stop(); ttsPending = null; });
         }
 
         /** Wake-on-LAN: 6x FF + the MAC 16 times, to the LAN broadcasts on ports 9 and 7, three rounds.

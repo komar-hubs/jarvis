@@ -293,7 +293,7 @@ class Core:
         from .standin import StandIn
         self.standin = StandIn(self)       # «подмени меня»: the user's phrases spoken into a Discord call
         from .mods import Mods
-        self.mods = Mods(self)             # «Моды»: add-ons switched on or off in their own tab (keyboard, E.D.I.T.H.)
+        self.mods = Mods(self)             # «Моды»: add-ons switched on or off in their own tab (the remote's keyboard)
         from .remote import Remote
         self.remote = Remote(self)        # J.A.R.V.I.S. Remote: the Android app as a touchpad and keyboard
         from .vk import VK

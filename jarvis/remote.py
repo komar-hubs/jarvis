@@ -28,17 +28,12 @@ Only for Android. Works only inside the home Wi-Fi and only while Settings → �
   plays it (AudioTrack in MainActivity): video, music and games from the PC on the phone;
 - the phone keeps this PC's MAC addresses and the LAN broadcast (WS "hello" -> "wake") and can wake it with a
   Wake-on-LAN magic packet; "act sleep" puts it to sleep. Over Wi-Fi a PC wakes only from sleep, from shutdown only by
-  cable; Settings shows what is ready (`wake_ready`);
-- E.D.I.T.H.: POST /see gets a photo from the phone's camera and answers — "what" (AI vision, one short answer),
-  "text" (Windows OCR), "translate" (OCR + the screen translator), "ask" (the user's spoken question about the photo;
-  POST /stt only recognises it, without running it as a command). AI requests happen only on these buttons."""
+  cable; Settings shows what is ready (`wake_ready`);"""
 import asyncio
 import ctypes
 import hashlib
 import json
-import os
 import random
-import re
 import secrets
 import socket
 import threading
@@ -49,7 +44,6 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 
 from . import system as S
-from pathlib import Path
 
 from .config import ROOT
 
@@ -255,8 +249,6 @@ class Remote:
         app.router.add_post("/pair/confirm", self._confirm)
         app.router.add_get("/ws", self._ws)
         app.router.add_post("/voice", self._voice)
-        app.router.add_post("/stt", self._stt)
-        app.router.add_post("/see", self._see)
         app.router.add_post("/diag", self._diag)
         app.router.add_get("/apk", self._apk)
         app.router.add_get("/apk/{ver}/{name}", self._apk_file)
@@ -493,22 +485,6 @@ class Remote:
             elif t == "tap":                           # a tap on the live screen = a click at that point
                 self._tap(float(m.get("x", -1)), float(m.get("y", -1)), m.get("b") if m.get("b") in BTN else "left",
                           2 if m.get("n") == 2 else 1)
-            elif t == "open":                          # E.D.I.T.H.: a link from a sign or a QR code, in the PC's browser
-                url = str(m.get("url") or "").strip()
-                if re.match(r"(?i)^https?://[^\s]{3,2000}$", url):
-                    S.open_target(url)
-                    return {"t": "opened"}
-            elif t == "search":                        # E.D.I.T.H.: «Найти в интернете» on the PC
-                q = str(m.get("q") or "").strip()[:300]
-                if q:
-                    from urllib.parse import quote_plus
-                    S.open_target("https://www.google.com/search?q=" + quote_plus(q))
-                    return {"t": "opened"}
-            elif t == "clip":                          # E.D.I.T.H.: recognised text into the PC's clipboard
-                s = str(m.get("s") or "")[:20000]
-                if s:
-                    S.clipboard_set(s)
-                    return {"t": "clipped"}
             elif t == "say":                           # a typed phrase from the app = a command, like the UI line
                 s = str(m.get("s") or "").strip()[:300]
                 if s:
@@ -717,7 +693,7 @@ class Remote:
 
     def _mods(self):
         mods = getattr(self.core, "mods", None)
-        return mods.state() if mods else {"keyboard": True, "edith": False}
+        return mods.state() if mods else {"keyboard": True}
 
     def mods_changed(self):
         """A switch in the «Моды» tab: the connected phones redraw at once."""
@@ -831,220 +807,6 @@ class Remote:
         except Exception as e:
             self.core.log(f"Пульт: распознавание: {e}")
             return ""
-
-    # ================================================================ E.D.I.T.H.: the phone's camera
-    async def _stt(self, request):
-        """A spoken question for E.D.I.T.H.: only recognised, never run as a command."""
-        from aiohttp import web
-        if not self._device(self._token(request)):
-            return web.json_response({"ok": False, "error": "unpaired"}, status=401)
-        raw = await request.read()
-        if len(raw) < 16000 * 2 * 0.3:
-            return web.json_response({"ok": True, "text": ""})
-        audio = np.frombuffer(raw[: len(raw) // 2 * 2], dtype="<i2").astype(np.float32) / 32768.0
-        peak = float(np.abs(audio).max() or 0)
-        if 0 < peak < 0.3:
-            audio = audio * min(4.0, 0.5 / peak)
-        import re
-        text = await asyncio.get_running_loop().run_in_executor(None, self._recognize, audio)
-        text = re.sub(r"^(?:джарвис|jarvis|джарвиз|жарвис|эдит|edith)[,\s]*", "", text or "", flags=re.I).strip()
-        return web.json_response({"ok": True, "text": text})
-
-    async def _see(self, request):
-        from aiohttp import web
-        dev = self._device(self._token(request))
-        if not dev:
-            return web.json_response({"ok": False, "error": "unpaired"}, status=401)
-        if not self._mods().get("edith"):
-            return web.json_response({"ok": False, "error": "E.D.I.T.H. выключен: Джарвис → вкладка «Моды»"}, status=403)
-        try:
-            body = await request.json()
-        except Exception:
-            return web.json_response({"ok": False, "error": "bad request"}, status=400)
-        if body.get("mode") == "tr":         # one line picked in the live mode: translate the text itself
-            q = str(body.get("q") or "").strip()[:2000]
-            return web.json_response(await asyncio.get_running_loop().run_in_executor(None, self._translate, q))
-        if body.get("mode") == "hw":         # «В домашку»: recognised text becomes a homework task
-            q = str(body.get("q") or "").strip()[:1000]
-            return web.json_response(await asyncio.get_running_loop().run_in_executor(None, self._homework, q))
-        import base64
-        try:
-            jpg = base64.b64decode(str(body.get("img") or "").split(",")[-1])
-        except Exception:
-            jpg = b""
-        if len(jpg) < 500:
-            return web.json_response({"ok": False, "error": "нет снимка"}, status=400)
-        mode = body.get("mode") if body.get("mode") in ("what", "text", "translate", "ask", "boxes", "photo", "scan") else "what"
-        q = str(body.get("q") or "").strip()[:300]
-        if mode != "boxes":                  # the live text mode asks every second or two: not worth a log line
-            self.core.log(f"Пульт: E.D.I.T.H. — {({'what': 'что это', 'text': 'текст', 'translate': 'перевод', 'ask': 'вопрос', 'photo': 'фото на ПК', 'scan': 'скан'})[mode]}"
-                      + (f": «{q}»" if q else ""))
-        try:
-            res = await asyncio.get_running_loop().run_in_executor(None, self.see, jpg, mode, q)
-        except Exception as e:
-            self.core.log(f"Пульт: E.D.I.T.H.: {e}")
-            res = {"ok": False, "error": str(e)[:200]}
-        return web.json_response(res)
-
-    def _ocr_lines(self, img):
-        """Lines of text on a photo with their boxes. Both engines read it; the Russian one turns Latin look-alikes
-        into Cyrillic ("Кеер this"), so Russian wins only when its text really is mostly Cyrillic."""
-        import re
-        from .screentrans import ocr_image
-        got = {}
-        for lang in ("ru", "en"):
-            try:
-                lines = ocr_image(img, (0, 0), lang)
-            except Exception:
-                lines = []
-            lines.sort(key=lambda x: (x["y"] // max(8, x["h"]), x["x"]))
-            got[lang] = lines
-        text = {k: "\n".join(x["text"] for x in v).strip() for k, v in got.items()}
-        cyr, lat = len(re.findall(r"[а-яё]", text["ru"], re.I)), len(re.findall(r"[a-z]", text["ru"], re.I))
-        lang = "ru" if text["ru"] and cyr >= 0.6 * (cyr + lat) else ("en" if text["en"] else "ru")
-        return got[lang], text[lang]
-
-    def _ocr(self, img):
-        return self._ocr_lines(img)[1]
-
-    @staticmethod
-    def _clip_image(img):
-        """A picture into the Windows clipboard (CF_DIB): Ctrl+V pastes it into Telegram, Discord, Word, Paint."""
-        import io
-        import win32clipboard
-        buf = io.BytesIO()
-        img.convert("RGB").save(buf, "BMP")
-        win32clipboard.OpenClipboard()
-        try:
-            win32clipboard.EmptyClipboard()
-            win32clipboard.SetClipboardData(win32clipboard.CF_DIB, buf.getvalue()[14:])
-        finally:
-            win32clipboard.CloseClipboard()
-
-    def _homework(self, text):
-        sch = getattr(self.core, "school", None)
-        if not text or not sch:
-            return {"ok": False, "error": "нет текста"}
-        subject = sch.canon(text)
-        t, new = sch.add_hw(subject, text, src="E.D.I.T.H.")
-        due = (t.get("due") or "")[:10]
-        what = t["text"].split(": ", 1)[0]
-        return {"ok": True, "title": "ДОМАШКА", "copy": False,
-                "text": (f"Записал: {what}" if new else f"Уже было: {what}") + (f", сдать {due[8:10]}.{due[5:7]}" if due else "")
-                + ". Смотрите вкладку «Учёба»."}
-
-    def _translate(self, text):
-        if not text:
-            return {"ok": False, "error": "нет текста"}
-        try:
-            tr, src = self.core.screentrans.tr.google(text, "ru")
-            if src == "ru":
-                return {"ok": True, "title": "ПЕРЕВОД", "text": "Это уже по-русски:\n" + text, "copy": True}
-        except Exception:
-            tr = (self.core.ask_ai_once("Переведи на русский, ответь только переводом:\n" + text) or "").strip()
-        return {"ok": True, "title": "ПЕРЕВОД", "text": tr or text, "copy": True, "orig": text}
-
-    def _keep(self, img, mode):
-        """«Фото на ПК»: the photo as it is -> Pictures\\JARVIS + the clipboard. «Скан»: a clean black-and-white page
-        -> Documents\\Сканы, its text next to it (.txt, so «найди файл про…» finds it), the page in the clipboard."""
-        import datetime as dt
-        from PIL import Image, ImageFilter
-        stamp = dt.datetime.now().strftime("%Y-%m-%d %H-%M-%S")
-        if mode == "photo":
-            folder = Path.home() / "Pictures" / "JARVIS"
-            folder.mkdir(parents=True, exist_ok=True)
-            path = folder / f"Фото {stamp}.jpg"
-            img.save(path, "JPEG", quality=92)
-            try:
-                self._clip_image(img)
-                clip = " и в буфере обмена — Ctrl+V вставит его в Telegram, Discord, документ"
-            except Exception as e:
-                self.core.log(f"Пульт: картинка в буфер: {e}")
-                clip = ""
-            self.core.emit("toast", title="E.D.I.T.H.", text="Фото с телефона на ПК" + (" и в буфере обмена" if clip else ""))
-            return {"ok": True, "title": "ФОТО НА ПК", "text": f"Сохранил в «Изображения\\JARVIS»{clip}.", "copy": False, "path": str(path)}
-        # scan: grey, even light (a big blur divides out shadows and the paper's tone), strong contrast, a little sharpness
-        g = img.convert("L")
-        if max(g.size) > 2400:
-            g.thumbnail((2400, 2400))
-        bg = g.filter(ImageFilter.GaussianBlur(max(8, max(g.size) // 40)))
-        import numpy as _np
-        a = _np.asarray(g, _np.float32) / _np.maximum(_np.asarray(bg, _np.float32), 1) * 235   # paper ~235 everywhere
-        lo = min(float(_np.percentile(a, 0.5)), 150.0)                                          # the ink
-        a = (a - lo) / max(1.0, 222 - lo) * 255                                                  # paper -> white, ink -> black
-        page = Image.fromarray(_np.clip(a, 0, 255).astype("uint8")).filter(ImageFilter.UnsharpMask(1.5, 60, 2))
-        folder = Path.home() / "Documents" / "Сканы"
-        folder.mkdir(parents=True, exist_ok=True)
-        path = folder / f"Скан {stamp}.jpg"
-        page.save(path, "JPEG", quality=90)
-        small = img.copy()
-        small.thumbnail((1600, 1600))
-        text = self._ocr(small)
-        if text:
-            path.with_suffix(".txt").write_text(text, encoding="utf-8")
-        try:
-            self._clip_image(page)
-        except Exception:
-            pass
-        self.core.emit("toast", title="E.D.I.T.H.", text=f"Скан сохранён: Документы\\Сканы\\{path.name}")
-        lines = len(text.splitlines()) if text else 0
-        return {"ok": True, "title": "СКАН", "copy": bool(text), "path": str(path),
-                "text": f"Сохранил в «Документы\\Сканы» ({path.name}) и в буфер обмена."
-                        + (f" Текст ({lines} стр.) — рядом в .txt:\n\n{text}" if text else " Текста на нём не нашёл.")}
-
-    def see(self, jpg, mode, q=""):
-        """{ok, title, text, [copy]} for the phone. Vision goes to the user's AI only when it can take pictures."""
-        import io
-        from PIL import Image, ImageOps
-        img = ImageOps.exif_transpose(Image.open(io.BytesIO(jpg))).convert("RGB")
-        if mode in ("photo", "scan"):
-            return self._keep(img, mode)
-        img.thumbnail((1600, 1600))
-        if mode == "boxes":                  # live AR text: where the lines are, in 0..1 of the frame
-            lines, _ = self._ocr_lines(img)
-            W, H = img.size
-            return {"ok": True, "lines": [{"text": x["text"], "x": round(x["x"] / W, 4), "y": round(x["y"] / H, 4),
-                                           "w": round(x["w"] / W, 4), "h": round(x["h"] / H, 4)}
-                                          for x in lines if len(x["text"].strip()) >= 2][:40]}
-        if mode == "text":
-            text = self._ocr(img)
-            return {"ok": True, "title": "ТЕКСТ", "text": text or "Текста не вижу. Поднесите ближе и держите ровно.", "copy": bool(text)}
-        if mode == "translate":
-            text = self._ocr(img)
-            if not text:
-                return {"ok": True, "title": "ПЕРЕВОД", "text": "Текста не вижу. Поднесите ближе и держите ровно."}
-            try:
-                tr, src = self.core.screentrans.tr.google(text, "ru")
-                if src == "ru":
-                    return {"ok": True, "title": "ПЕРЕВОД", "text": "Это уже по-русски:\n" + text, "copy": True}
-            except Exception:
-                tr = (self.core.ask_ai_once("Переведи на русский, ответь только переводом:\n" + text) or "").strip()
-            return {"ok": True, "title": "ПЕРЕВОД", "text": tr or text, "copy": True, "orig": text}
-        # "what" / "ask": the AI looks at the photo
-        from .llm import vision_ask, vision_supported
-        prov = self.cfg.provider()
-        question = q or "Что это?"
-        prompt = (f"Ты — E.D.I.T.H., помощник в очках. Пользователь навёл камеру телефона и спрашивает: «{question}». "
-                  "Ответь по-русски коротко: 1–2 предложения, самое полезное (что это, и если уместно — одна деталь: "
-                  "марка, вид, для чего, цена порядка). Без вступлений и без markdown.")
-        buf = io.BytesIO()
-        small = img.copy()
-        small.thumbnail((1024, 1024))
-        small.save(buf, "PNG")
-        if vision_supported(prov):
-            try:
-                ans = (vision_ask(prov, prompt, buf.getvalue(), max_tokens=220) or "").strip()
-                if ans:
-                    return {"ok": True, "title": "ЧТО ЭТО" if mode == "what" else "ОТВЕТ", "text": ans}
-            except Exception as e:
-                self.core.log(f"Пульт: E.D.I.T.H. зрение: {e}")
-        # no eyes: answer from the text on the photo, and say so
-        text = self._ocr(img)
-        if text:
-            ans = (self.core.ask_ai_once(f"{prompt}\nКартинку я не вижу, но на ней распознан текст:\n{text[:2000]}") or "").strip()
-            return {"ok": True, "title": "ПО ТЕКСТУ НА ФОТО", "text": ans or text}
-        return {"ok": True, "title": "НЕ ВИЖУ", "text": "Ваш ИИ не принимает картинки. Выберите модель со зрением в Настройках → ИИ, "
-                "а «Текст» и «Перевод» работают и без неё."}
 
     # ================================================================ the app itself
     async def _apk(self, request):
