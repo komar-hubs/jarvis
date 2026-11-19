@@ -38,6 +38,7 @@ from pathlib import Path
 import psutil
 
 from . import system as S
+from .planner import plural
 from .config import DATA, JsonStore
 
 CREATE_NO_WINDOW = 0x08000000
@@ -502,16 +503,31 @@ class Sentinel:
             return
         who = ""
         try:
-            r = subprocess.run(["nvidia-smi", "--query-compute-apps=pid,process_name,used_memory", "--format=csv,noheader"],
-                               capture_output=True, text=True, timeout=5, creationflags=CREATE_NO_WINDOW)
-            names = [Path(x.split(",")[1].strip()).name for x in r.stdout.strip().splitlines() if "," in x]
-            names = [n for n in names if n.lower() not in HEAVY_OK]
-            if not names:
-                return  # a known heavy app (rendering, a local AI model) is doing it
-            who = names[0]
+            top = [(p, n) for p, n in _gpu_top() if p >= 5]
         except Exception:
-            pass
-        self._say("gpu_idle", f"Пока вас не было, видеокарта загружена на {g['util']} процентов"
+            top = []
+        if top:                       # Windows' per-process counters: the real consumer
+            if top[0][1].lower() in HEAVY_OK:
+                return  # a known heavy app (rendering, a local AI model) is doing it
+            who = top[0][1]
+        else:
+            try:                      # no counters: nvidia-smi, where the names often come back as "[Insufficient Permissions]"
+                r = subprocess.run(["nvidia-smi", "--query-compute-apps=pid,process_name,used_memory", "--format=csv,noheader"],
+                                   capture_output=True, text=True, timeout=5, creationflags=CREATE_NO_WINDOW)
+                names = [n for n in (_gpu_proc_name(x) for x in r.stdout.strip().splitlines()) if n]
+                names = [n for n in names if n.lower() not in HEAVY_OK]
+                if not names:
+                    return
+                who = names[0] if len(names) == 1 else ""      # a list of every GPU user says nothing about who loads it
+            except Exception:
+                pass
+        if who:
+            try:
+                who = self.core.extras.app_info(who)[0] or who      # "chrome.exe" -> "Google Chrome"
+            except Exception:
+                pass
+        u = int(g["util"])
+        self._say("gpu_idle", f"Пока вас не было, видеокарта загружена на {u} {plural(u, 'процент', 'процента', 'процентов')}"
                               + (f" — это {who}" if who else "") + ". Если вы ничего не запускали, это подозрительно: "
                               "так выглядят майнеры.", priority=3, cooldown_min=120)
 
@@ -694,6 +710,50 @@ def register(R, core):
     def _lvl1(m, t):
         core.cfg.set("initiative.level", 1)
         return "Хорошо. Первым заговорю только если что-то критичное."
+
+
+def _gpu_top():
+    """[(percent, exe)] of the processes that load the GPU most, from Windows' own per-process counters
+    (\\GPU Engine(pid_…)\\Utilization Percentage, all engines summed per pid). nvidia-smi on Windows lists every
+    process with a GPU context (explorer, the start menu…), not the ones that load it. [] if counters are absent."""
+    import csv
+    import io
+    r = subprocess.run(["typeperf", r"\GPU Engine(*)\Utilization Percentage", "-sc", "1"], capture_output=True,
+                       encoding="oem", errors="replace", timeout=20, creationflags=CREATE_NO_WINDOW)
+    rows = [x for x in csv.reader(io.StringIO(r.stdout)) if len(x) > 2]
+    if len(rows) < 2:
+        return []
+    load = collections.Counter()
+    for head, val in zip(rows[0][1:], rows[1][1:]):
+        m = re.search(r"pid_(\d+)_", head)
+        try:
+            v = float(val)
+        except ValueError:
+            continue
+        if m and v > 0:
+            load[int(m.group(1))] += v
+    out = []
+    for pid, v in load.most_common(5):
+        try:
+            out.append((round(v), psutil.Process(pid).name()))
+        except Exception:
+            continue
+    return out
+
+
+def _gpu_proc_name(line):
+    """One line of `nvidia-smi --query-compute-apps=pid,process_name,…`. On Windows (WDDM) the name is often
+    "[Insufficient Permissions]" or "[N/A]": the pid is still right, so the name comes from it. None if unknown."""
+    parts = [p.strip() for p in line.split(",")]
+    if len(parts) < 2:
+        return None
+    name = Path(parts[1]).name if parts[1] and not parts[1].startswith("[") else ""
+    if not name:
+        try:
+            name = psutil.Process(int(parts[0])).name()
+        except Exception:
+            return None
+    return name or None
 
 
 def plural_events(n):
